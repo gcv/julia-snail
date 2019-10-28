@@ -1,0 +1,14 @@
+* Julia Snail
+
+Snail is a "superior" REPL interaction mode for Julia in the spirit of Common Lisp's [[https://common-lisp.net/project/slime/][SLIME]] and Clojure's [[https://cider.mx][CIDER]].
+
+
+** Planned features
+
+- REPL interaction
+- Emacs [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Xref.html][xref]] support
+
+
+** Requirements
+
+- [[https://github.com/akermu/emacs-libvterm][emacs-libvterm]]
