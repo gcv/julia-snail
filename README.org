@@ -11,4 +11,6 @@ Snail is a "superior" REPL interaction mode for Julia in the spirit of Common Li
 
 ** Requirements
 
+- [[https://github.com/JuliaEditorSupport/julia-emacs][julia-mode]]
 - [[https://github.com/akermu/emacs-libvterm][emacs-libvterm]]
+- [[https://github.com/magnars/s.el][s.el]]
