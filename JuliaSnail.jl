@@ -1,4 +1,4 @@
-module Snail
+module JuliaSnail
 
 import Sockets
 
