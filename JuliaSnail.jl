@@ -56,8 +56,8 @@ function start(port=2001)
          push!(client_sockets, client)
          @async while Sockets.isopen(client)
             line = readline(client, keep=true)
-            in = eval(Meta.parse(line))
-            res = eval_in_module(in.ns, in.expr)
+            input = eval(Meta.parse(line))
+            res = eval_in_module(input.ns, input.expr)
          end
       end
       close(server_socket)
