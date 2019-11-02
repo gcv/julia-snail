@@ -55,9 +55,15 @@ function start(port=2001)
          client = Sockets.accept(server_socket)
          push!(client_sockets, client)
          @async while Sockets.isopen(client)
+            # FIXME: Use EOF instead of newlines to separate input.
             line = readline(client, keep=true)
             input = eval(Meta.parse(line))
-            res = eval_in_module(input.ns, input.expr)
+            expr = Meta.parse(input.code)
+            # FIXME: Intercept stdout and stderr, and write them back,
+            # individually, to the socket?
+            redirect_stderr(
+               () -> redirect_stdout(() -> eval_in_module(input.ns, expr), client),
+               client)
          end
       end
       close(server_socket)

@@ -76,7 +76,9 @@
           (setf sleep-total (+ sleep-total 20)))))))
 
 
-(defun julia-snail--send-via-tmp-file (buf text-raw)
+(defun julia-snail--send-to-repl-via-tmp-file (repl-buf text-raw)
+  (unless repl-buf
+    (error "no REPL buffer given"))
   (let ((text (s-trim text-raw))
         (tmpfile (make-temp-file
                   (expand-file-name "julia-tmp"
@@ -86,11 +88,20 @@
         (progn
           (with-temp-file tmpfile
             (insert text))
-          (julia-snail--send-to-repl buf
+          (julia-snail--send-to-repl repl-buf
             (format "include(\"%s\");" tmpfile)
             :async nil))
       ;; cleanup
       (delete-file tmpfile))))
+
+
+(defun julia-snail--send-to-server (repl-buf str)
+  (declare (indent defun))
+  (unless repl-buf
+    (error "no REPL buffer given"))
+  (let ((client-buf (get-buffer (julia-snail--client-buffer-name repl-buf)))
+        (msg (format "(ns = [:Main], code = %s)\n" (prin1-to-string str))))
+    (process-send-string client-buf msg)))
 
 
 (defun julia-snail--enable ()
@@ -101,8 +112,13 @@
       (persp-add-buffer client-buf))
     (with-current-buffer client-buf
       (unless julia-snail--client
-        (julia-snail--send-to-repl repl-buf
-          (format "include(\"%s\");" julia-snail--server-file))
+        ;; XXX: This is currently necessary because there does not appear to be
+        ;; a way to pass arguments to an interactive Julia session. This does
+        ;; not work: `julia -L JuliaSnail.jl -- $PORT`.
+        ;; https://github.com/JuliaLang/julia/issues/10226 refers to this
+        ;; problem and supposedly fixes it, but it does not work for me with
+        ;; Julia 1.0.4.
+        ;; TODO: Follow-up on https://github.com/JuliaLang/julia/issues/33752
         (julia-snail--send-to-repl repl-buf
           (format "JuliaSnail.start(%d);" julia-snail-port)
           :async nil)
@@ -123,7 +139,8 @@
   (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
     (if repl-buf
         (pop-to-buffer-same-window repl-buf)
-      (let ((vterm-shell julia-snail-executable))
+      ;; run Julia in a vterm and load the Snail server file
+      (let ((vterm-shell (format "%s -L %s" julia-snail-executable julia-snail--server-file)))
         (vterm julia-snail-repl-buffer)
         (julia-snail-mode)))))
 
@@ -144,7 +161,7 @@
   (let ((repl-buf (get-buffer julia-snail-repl-buffer))
         (filename buffer-file-name))
     (when repl-buf
-      (julia-snail--send-to-repl repl-buf
+      (julia-snail--send-to-server repl-buf
         (format "include(\"%s\");" filename)))))
 
 
@@ -154,32 +171,19 @@
   (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
     (when (and repl-buf (use-region-p))
       (let ((text (buffer-substring-no-properties (region-beginning) (region-end))))
-        (julia-snail--send-via-tmp-file repl-buf text)))))
+        (julia-snail--send-to-repl-via-tmp-file repl-buf text)))))
 
 
 (defun julia-snail-send-top-level-form ()
   "FIXME: Write this."
   (interactive)
-  (let* ((repl-buf (get-buffer julia-snail-repl-buffer)))
+  ;; FIXME: Convert to sending by socket.
+  ;; TODO: Use a Julia parser and support module context.
+  (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
     (when repl-buf
-      (let ((starting-point (point)))
-        (save-excursion
-          (beginning-of-line)
-          (unless (= 1 starting-point) (left-char))
-          (let* ((ending-raw (re-search-forward "\nend\n\n" nil t))
-                 ;; subtract two trailing newlines
-                 (ending (- (or ending-raw 0) 2))
-                 (beginning-raw (re-search-backward
-                                 (concat "\\(\nfunction\\)\\|"
-                                         "\\(\ntype\\)")))
-                 ;; add one leading newline
-                 (beginning (+ beginning-raw 1)))
-            (if (or (not (and ending-raw beginning-raw))
-                    (< starting-point beginning)
-                    (> starting-point ending))
-                (message "no suitable top-level form found")
-              (let ((text (buffer-substring-no-properties beginning ending)))
-                (julia-snail--send-via-tmp-file repl-buf text)))))))))
+      (let ((form (s-trim (thing-at-point 'defun t))))
+        (julia-snail--send-to-repl repl-buf
+          form)))))
 
 
 ;;; --- mode definition
