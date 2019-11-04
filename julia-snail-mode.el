@@ -45,6 +45,9 @@
 (defvar julia-snail--server-file
   (concat (file-name-directory load-file-name) "JuliaSnail.jl"))
 
+(defvar julia-snail--requests
+  (make-hash-table :test #'equal))
+
 
 ;;; --- supporting functions
 
@@ -55,56 +58,13 @@
     (format "%s client" (buffer-name (get-buffer real-buf)))))
 
 
+;;; --- connection management functions
+
 (defun julia-snail--cleanup ()
   (let ((client-buf (get-buffer (julia-snail--client-buffer-name (current-buffer)))))
     (when client-buf
       (kill-buffer client-buf)))
   (setq julia-snail--client nil))
-
-
-(cl-defun julia-snail--send-to-repl (repl-buf str &key (async t))
-  (declare (indent defun))
-  (unless repl-buf
-    (error "no REPL buffer given"))
-  (with-current-buffer repl-buf
-    (vterm-send-string str)
-    (vterm-send-return)
-    (unless async
-      (sleep-for 0 20)
-      ;; wait for the inclusion to succeed (i.e., the prompt prints)
-      (let ((sleep-total 0))
-        (while (and (< sleep-total 5000)
-                    (not (string-equal "julia>" (current-word))))
-          (sleep-for 0 20)
-          (setf sleep-total (+ sleep-total 20)))))))
-
-
-(defun julia-snail--send-to-repl-via-tmp-file (repl-buf text-raw)
-  (unless repl-buf
-    (error "no REPL buffer given"))
-  (let ((text (s-trim text-raw))
-        (tmpfile (make-temp-file
-                  (expand-file-name "julia-tmp"
-                                    (or small-temporary-file-directory
-                                        temporary-file-directory)))))
-    (unwind-protect
-        (progn
-          (with-temp-file tmpfile
-            (insert text))
-          (julia-snail--send-to-repl repl-buf
-            (format "include(\"%s\");" tmpfile)
-            :async nil))
-      ;; cleanup
-      (delete-file tmpfile))))
-
-
-(defun julia-snail--send-to-server (repl-buf str)
-  (declare (indent defun))
-  (unless repl-buf
-    (error "no REPL buffer given"))
-  (let ((client-buf (get-buffer (julia-snail--client-buffer-name repl-buf)))
-        (msg (format "(ns = [:Main], code = %s)\n" (json-encode-string str))))
-    (process-send-string client-buf msg)))
 
 
 (defun julia-snail--enable ()
@@ -132,6 +92,86 @@
 
 (defun julia-snail--disable ()
   (julia-snail--cleanup))
+
+
+;;; --- Julia REPL and Snail server interaction functions
+
+(cl-defun julia-snail--send-to-repl (repl-buf str &key (async t))
+  "Insert str directly into the REPL buffer. When :async is nil,
+wait for the REPL prompt to return, otherwise return immediately."
+  (declare (indent defun))
+  (unless repl-buf
+    (error "no REPL buffer given"))
+  (with-current-buffer repl-buf
+    (vterm-send-string str)
+    (vterm-send-return)
+    (unless async
+      (sleep-for 0 20)
+      ;; wait for the inclusion to succeed (i.e., the prompt prints)
+      (let ((sleep-total 0))
+        (while (and (< sleep-total 5000)
+                    (not (string-equal "julia>" (current-word))))
+          (sleep-for 0 20)
+          (setf sleep-total (+ sleep-total 20)))))))
+
+
+(defun julia-snail--send-to-server (repl-buf str)
+  "Send str to Snail server."
+  (declare (indent defun))
+  (unless repl-buf
+    (error "no REPL buffer given"))
+  (let* ((client-buf (get-buffer (julia-snail--client-buffer-name repl-buf)))
+         ;; FIXME: Support other namespaces!
+         (reqid (format "%04x%04x" (random (expt 16 4)) (random (expt 16 4))))
+         (msg (format "(ns = [:Main], reqid = \"%s\", code = %s)\n"
+                      reqid
+                      (json-encode-string str))))
+    (with-current-buffer client-buf
+      (insert msg))
+    (process-send-string client-buf msg)
+    (puthash reqid :nothing julia-snail--requests)
+    reqid))
+
+
+(defun julia-snail--send-to-server-via-tmp-file (repl-buf str)
+  "Send str to server by first writing it to a tmpfile, calling
+Julia include on the tmpfile, and then deleting the file."
+  (unless repl-buf
+    (error "no REPL buffer given"))
+  (let ((text (s-trim str))
+        (tmpfile (make-temp-file
+                  (expand-file-name "julia-tmp"
+                                    (or small-temporary-file-directory
+                                        temporary-file-directory)))))
+    (unwind-protect
+        (progn
+          (with-temp-file tmpfile
+            (insert text))
+          (let ((reqid (julia-snail--send-to-server
+                         repl-buf (format "include(\"%s\");" tmpfile))))
+            (puthash reqid tmpfile julia-snail--requests))))))
+
+
+;;; --- Snail server response handling functions
+
+(defun julia-snail--response-base (reqid)
+  (let ((request-info (gethash reqid julia-snail--requests)))
+    (when request-info
+      ;; tmpfile
+      (when (stringp request-info)
+        (delete-file request-info))
+      ;; remove request ID from requests hash
+      (remhash reqid julia-snail--requests))))
+
+
+(defun julia-snail--response-done (reqid)
+  (julia-snail--response-base reqid))
+
+
+(defun julia-snail--response-error (reqid error-message error-stack)
+  (julia-snail--response-base reqid)
+  ;; FIXME: Make this much nicer.
+  (message (format "something broke: %s" error-message)))
 
 
 ;;; --- commands
@@ -174,7 +214,7 @@
   (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
     (when (and repl-buf (use-region-p))
       (let ((text (buffer-substring-no-properties (region-beginning) (region-end))))
-        (julia-snail--send-to-repl-via-tmp-file repl-buf text)))))
+        (julia-snail--send-to-server-via-tmp-file repl-buf text)))))
 
 
 (defun julia-snail-send-top-level-form ()
