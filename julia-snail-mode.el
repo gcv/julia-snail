@@ -38,6 +38,14 @@
   :type 'string)
 
 
+(defcustom julia-snail-show-error-window t
+  "When t, show compilation errors in separate window. When nil,
+just display them in the minibuffer."
+  :tag "Show compilation errors in separate window"
+  :group 'julia-snail
+  :type 'boolean)
+
+
 ;;; --- variables
 
 (defvar-local julia-snail--process nil)
@@ -56,6 +64,13 @@
     (unless real-buf
       (error "no REPL buffer found"))
     (format "%s process" (buffer-name (get-buffer real-buf)))))
+
+
+(defun julia-snail--error-buffer-name (repl-buf)
+  (let ((real-buf (get-buffer repl-buf)))
+    (unless real-buf
+      (error "no REPL buffer found"))
+    (format "%s error" (buffer-name (get-buffer real-buf)))))
 
 
 ;;; --- connection management functions
@@ -182,8 +197,17 @@ Julia include on the tmpfile, and then deleting the file."
 
 (defun julia-snail--response-error (reqid error-message error-stack)
   (julia-snail--response-base reqid)
-  ;; FIXME: Make this much nicer.
-  (message (format "something broke: %s" error-message)))
+  (if (not julia-snail-show-error-window)
+      (message error-message)
+    ;; TODO: This needs to change to properly support multiple REPLs.
+    (let ((error-buffer (get-buffer-create (julia-snail--error-buffer-name julia-snail-repl-buffer))))
+      (with-current-buffer error-buffer
+        (insert error-message)
+        (insert "\n\n")
+        (insert (s-join "\n" error-stack))
+        (goto-char (point-min))
+        (read-only-mode))
+      (display-buffer error-buffer))))
 
 
 ;;; --- commands
