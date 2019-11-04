@@ -31,7 +31,7 @@
   :type 'integer)
 
 
-(defcustom julia-snail-repl-buffer "*julia-repl*"
+(defcustom julia-snail-repl-buffer "*julia*"
   "Buffer to use for Julia REPL interaction."
   :tag "Julia REPL buffer"
   :group 'julia-snail
@@ -40,7 +40,7 @@
 
 ;;; --- variables
 
-(defvar-local julia-snail--client nil)
+(defvar-local julia-snail--process nil)
 
 (defvar julia-snail--server-file
   (concat (file-name-directory load-file-name) "JuliaSnail.jl"))
@@ -51,30 +51,30 @@
 
 ;;; --- supporting functions
 
-(defun julia-snail--client-buffer-name (repl-buf)
+(defun julia-snail--process-buffer-name (repl-buf)
   (let ((real-buf (get-buffer repl-buf)))
     (unless real-buf
       (error "no REPL buffer found"))
-    (format "%s client" (buffer-name (get-buffer real-buf)))))
+    (format "%s process" (buffer-name (get-buffer real-buf)))))
 
 
 ;;; --- connection management functions
 
 (defun julia-snail--cleanup ()
-  (let ((client-buf (get-buffer (julia-snail--client-buffer-name (current-buffer)))))
-    (when client-buf
-      (kill-buffer client-buf)))
-  (setq julia-snail--client nil))
+  (let ((process-buf (get-buffer (julia-snail--process-buffer-name (current-buffer)))))
+    (when process-buf
+      (kill-buffer process-buf)))
+  (setq julia-snail--process nil))
 
 
 (defun julia-snail--enable ()
   (add-hook 'kill-buffer-hook #'julia-snail--cleanup nil t)
   (let ((repl-buf (current-buffer))
-        (client-buf (get-buffer-create (julia-snail--client-buffer-name (current-buffer)))))
+        (process-buf (get-buffer-create (julia-snail--process-buffer-name (current-buffer)))))
     (when (fboundp #'persp-add-buffer) ; perspective-el support
-      (persp-add-buffer client-buf))
-    (with-current-buffer client-buf
-      (unless julia-snail--client
+      (persp-add-buffer process-buf))
+    (with-current-buffer process-buf
+      (unless julia-snail--process
         ;; XXX: This is currently necessary because there does not appear to be
         ;; a way to pass arguments to an interactive Julia session. This does
         ;; not work: `julia -L JuliaSnail.jl -- $PORT`.
@@ -86,9 +86,9 @@
           (format "JuliaSnail.start(%d);" julia-snail-port)
           :async nil)
         (with-current-buffer repl-buf
-          (setq julia-snail--client ; NB: buffer-local variable!
-                (open-network-stream "julia-client" client-buf "localhost" julia-snail-port))
-          (set-process-filter julia-snail--client #'julia-snail--server-response-filter))))))
+          (setq julia-snail--process ; NB: buffer-local variable!
+                (open-network-stream "julia-process" process-buf "localhost" julia-snail-port))
+          (set-process-filter julia-snail--process #'julia-snail--server-response-filter))))))
 
 
 (defun julia-snail--disable ()
@@ -121,16 +121,16 @@ wait for the REPL prompt to return, otherwise return immediately."
   (declare (indent defun))
   (unless repl-buf
     (error "no REPL buffer given"))
-  (let* ((client-buf (get-buffer (julia-snail--client-buffer-name repl-buf)))
+  (let* ((process-buf (get-buffer (julia-snail--process-buffer-name repl-buf)))
          ;; FIXME: Support other namespaces!
          (reqid (format "%04x%04x" (random (expt 16 4)) (random (expt 16 4))))
          (msg (format "(ns = [:Main], reqid = \"%s\", code = %s)\n"
                       reqid
                       (json-encode-string str))))
-    (with-current-buffer client-buf
+    (with-current-buffer process-buf
       (goto-char (point-max))
       (insert msg))
-    (process-send-string client-buf msg)
+    (process-send-string process-buf msg)
     (puthash reqid :nothing julia-snail--requests)
     reqid))
 
