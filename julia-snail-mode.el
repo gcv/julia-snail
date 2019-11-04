@@ -4,8 +4,11 @@
 ;;; --- requirements
 
 (require 'cl-lib)
+(require 'cl-macs)
 (require 'json)
 (require 's)
+(require 'spinner)
+(require 'subr-x)
 (require 'thingatpt)
 (require 'vterm)
 
@@ -55,6 +58,14 @@ just display them in the minibuffer."
 
 (defvar julia-snail--requests
   (make-hash-table :test #'equal))
+
+
+;;; --- Snail protocol request tracking data structure
+
+(cl-defstruct julia-snail--request-tracker
+  repl-buf
+  originating-buf
+  tmpfile)
 
 
 ;;; --- supporting functions
@@ -146,7 +157,12 @@ wait for the REPL prompt to return, otherwise return immediately."
       (goto-char (point-max))
       (insert msg))
     (process-send-string process-buf msg)
-    (puthash reqid :nothing julia-snail--requests)
+    (spinner-start 'progress-bar)
+    (puthash reqid
+             (make-julia-snail--request-tracker
+              :repl-buf repl-buf
+              :originating-buf (current-buffer))
+             julia-snail--requests)
     reqid))
 
 
@@ -165,7 +181,12 @@ Julia include on the tmpfile, and then deleting the file."
         (insert text))
       (let ((reqid (julia-snail--send-to-server
                      repl-buf (format "include(\"%s\");" tmpfile))))
-        (puthash reqid tmpfile julia-snail--requests)))))
+        (puthash reqid
+                 (make-julia-snail--request-tracker
+                  :repl-buf repl-buf
+                  :originating-buf (current-buffer)
+                  :tmpfile tmpfile)
+                 julia-snail--requests)))))
 
 
 (defun julia-snail--server-response-filter (proc str)
@@ -185,8 +206,11 @@ Julia include on the tmpfile, and then deleting the file."
   (let ((request-info (gethash reqid julia-snail--requests)))
     (when request-info
       ;; tmpfile
-      (when (stringp request-info)
-        (delete-file request-info))
+      (when-let (tmpfile (julia-snail--request-tracker-tmpfile request-info))
+        (delete-file tmpfile))
+      ;; stop spinner
+      (with-current-buffer (julia-snail--request-tracker-originating-buf request-info)
+        (spinner-stop))
       ;; remove request ID from requests hash
       (remhash reqid julia-snail--requests))))
 
@@ -196,18 +220,19 @@ Julia include on the tmpfile, and then deleting the file."
 
 
 (defun julia-snail--response-error (reqid error-message error-stack)
-  (julia-snail--response-base reqid)
   (if (not julia-snail-show-error-window)
       (message error-message)
-    ;; TODO: This needs to change to properly support multiple REPLs.
-    (let ((error-buffer (get-buffer-create (julia-snail--error-buffer-name julia-snail-repl-buffer))))
+    (let* ((request-info (gethash reqid julia-snail--requests))
+           (repl-buf (julia-snail--request-tracker-repl-buf request-info))
+           (error-buffer (get-buffer-create (julia-snail--error-buffer-name repl-buf))))
       (with-current-buffer error-buffer
         (insert error-message)
         (insert "\n\n")
         (insert (s-join "\n" error-stack))
         (goto-char (point-min))
         (read-only-mode))
-      (display-buffer error-buffer))))
+      (display-buffer error-buffer)))
+  (julia-snail--response-base reqid))
 
 
 ;;; --- commands
