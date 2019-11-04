@@ -87,7 +87,8 @@
           :async nil)
         (with-current-buffer repl-buf
           (setq julia-snail--client ; NB: buffer-local variable!
-                (open-network-stream "julia-client" client-buf "localhost" julia-snail-port)))))))
+                (open-network-stream "julia-client" client-buf "localhost" julia-snail-port))
+          (set-process-filter julia-snail--client #'julia-snail--server-response-filter))))))
 
 
 (defun julia-snail--disable ()
@@ -127,6 +128,7 @@ wait for the REPL prompt to return, otherwise return immediately."
                       reqid
                       (json-encode-string str))))
     (with-current-buffer client-buf
+      (goto-char (point-max))
       (insert msg))
     (process-send-string client-buf msg)
     (puthash reqid :nothing julia-snail--requests)
@@ -143,16 +145,26 @@ Julia include on the tmpfile, and then deleting the file."
                   (expand-file-name "julia-tmp"
                                     (or small-temporary-file-directory
                                         temporary-file-directory)))))
-    (unwind-protect
-        (progn
-          (with-temp-file tmpfile
-            (insert text))
-          (let ((reqid (julia-snail--send-to-server
-                         repl-buf (format "include(\"%s\");" tmpfile))))
-            (puthash reqid tmpfile julia-snail--requests))))))
+    (progn
+      (with-temp-file tmpfile
+        (insert text))
+      (let ((reqid (julia-snail--send-to-server
+                     repl-buf (format "include(\"%s\");" tmpfile))))
+        (puthash reqid tmpfile julia-snail--requests)))))
 
 
-;;; --- Snail server response handling functions
+(defun julia-snail--server-response-filter (proc str)
+  (when (buffer-live-p (process-buffer proc))
+    (with-current-buffer (process-buffer proc)
+      ;; insert at the end unconditionally
+      (goto-char (point-max))
+      (insert str)
+      (set-marker (process-mark proc) (point))
+      ;; scary
+      (eval (read str)))))
+
+
+ ;;; --- Snail server response handling functions
 
 (defun julia-snail--response-base (reqid)
   (let ((request-info (gethash reqid julia-snail--requests)))

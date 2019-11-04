@@ -112,13 +112,18 @@ function start(port=2001)
          push!(client_sockets, client)
          @async while Sockets.isopen(client)
             command = readline(client, keep=true)
+            input = nothing
             try
                input = eval(Meta.parse(command))
                expr = Meta.parse(input.code)
                eval_in_module(input.ns, expr)
+               # report successful evaluation back to client
+               resp = elexpr((Symbol("julia-snail--response-done"), input.reqid))
+               println(client, resp)
             catch err
                try
                   resp = elexpr((Symbol("julia-snail--response-error"),
+                                 input.reqid,
                                  sprint(showerror, err),
                                  string.(stacktrace(catch_backtrace()))))
                   println(client, resp)
@@ -128,7 +133,7 @@ function start(port=2001)
                      # client connection was probably closed, clean it up
                      deleteat!(client_sockets, findall(x -> x == client, client_sockets))
                   else
-                     println("JuliaSnail: something broke", sprint(showerror, err2))
+                     println("JuliaSnail: something broke: ", sprint(showerror, err2))
                   end
                end
             end
