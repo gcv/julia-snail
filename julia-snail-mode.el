@@ -4,7 +4,9 @@
 ;;; --- requirements
 
 (require 'cl-lib)
+(require 'json)
 (require 's)
+(require 'thingatpt)
 (require 'vterm)
 
 
@@ -40,7 +42,8 @@
 
 (defvar-local julia-snail--client nil)
 
-(defvar julia-snail--server-file (concat default-directory "JuliaSnail.jl"))
+(defvar julia-snail--server-file
+  (concat (file-name-directory load-file-name) "JuliaSnail.jl"))
 
 
 ;;; --- supporting functions
@@ -100,7 +103,7 @@
   (unless repl-buf
     (error "no REPL buffer given"))
   (let ((client-buf (get-buffer (julia-snail--client-buffer-name repl-buf)))
-        (msg (format "(ns = [:Main], code = %s)\n" (prin1-to-string str))))
+        (msg (format "(ns = [:Main], code = %s)\n" (json-encode-string str))))
     (process-send-string client-buf msg)))
 
 
