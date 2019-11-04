@@ -1,4 +1,4 @@
-;;; julia-snail-mode.el --- Julia Snail -*- lexical-binding: t -*-
+;;; julia-snail.el --- Julia Snail -*- lexical-binding: t -*-
 
 
 ;;; --- requirements
@@ -237,6 +237,7 @@ Julia include on the tmpfile, and then deleting the file."
 
 ;;; --- commands
 
+;;;###autoload
 (defun julia-snail ()
   "FIXME: Write this."
   (interactive)
@@ -292,7 +293,6 @@ Julia include on the tmpfile, and then deleting the file."
 
 ;;; --- mode definition
 
-;;;###autoload
 (define-minor-mode julia-snail-mode
   "A minor mode for interactive Julia development. Should only be
 turned on in REPL buffers."
@@ -303,4 +303,4 @@ turned on in REPL buffers."
       (julia-snail--enable)
     (julia-snail--disable)))
 
-(provide 'julia-snail-mode)
+(provide 'julia-snail)
