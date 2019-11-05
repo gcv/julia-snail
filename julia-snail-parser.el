@@ -1,3 +1,7 @@
+;;; julia-snail-parser.el --- Julia Snail Parser -*- lexical-binding: t -*-
+
+
+(require 'dash)
 (require 'parsec)
 
 
@@ -40,21 +44,22 @@
      (parsec-re "#.*?$")))))
 
 (defun jsp-end ()
-  ;; FIXME: Deal with [1, 2, 3][end] expressions.
   (parsec-and
    (jsp-whitespace)
-   (parsec-str "end")))
+   (jsp-*pq (parsec-re "end") :end)))
 
 (defun jsp-other ()
   (parsec-and
    (jsp-whitespace)
    (parsec-many-till-as-string
-    (parsec-any-ch)
+    (parsec-or
+     (parsec-re "\\[.*?end.*?\\]") ; deal with Julia end syntax in brackets
+     (parsec-any-ch))
     (parsec-lookahead
      (parsec-or (parsec-try (jsp-end))
                 (parsec-try (jsp-comment))
                 (parsec-try (jsp-string))
-                ;;(jsp-block)
+                (parsec-try (jsp-block))
                 (parsec-eof))))))
 
 (defun jsp-expression ()
@@ -63,30 +68,43 @@
    (parsec-or (parsec-eof)
               (jsp-comment)
               (jsp-string)
-              ;;(jsp-block)
-              (jsp-other)
-              )))
+              (jsp-block)
+              (jsp-other))))
 
-(defun jsp-module ()
-  (parsec-collect
-   (parsec-str "module")
+(defun jsp-start-module ()
+  (-snoc
+   (jsp-*pq (parsec-str "module") :module)
    (jsp-identifier)))
 
-(defun jsp-function ()
-  (parsec-collect
-   (parsec-str "function")
+(defun jsp-start-function ()
+  (-snoc
+   (jsp-*pq (parsec-str "function") :function)
    (jsp-identifier)))
 
 (defun jsp-block ()
   (parsec-and
    (jsp-whitespace)
    (parsec-collect*
-    (parsec-or (jsp-module)
-               (jsp-function))
+    (parsec-or (jsp-start-module)
+               (jsp-start-function))
     (parsec-many-till
      (parsec-try (jsp-expression))
      (parsec-lookahead (parsec-try (jsp-end))))
     (jsp-end))))
+
+
+(defmacro jsp-*pq (parser &optional placeholder)
+  "Similar to parsec-query, but always returns the point position
+at which the parser started matching. If placeholder is given,
+replace the result of the parser with it."
+  (let ((start (gensym))
+        (res (gensym))
+        (ph (gensym)))
+    `(let ((,start (point))
+           (,res ,parser)
+           (,ph ,placeholder))
+       (list (if ,ph ,ph ,res)
+             ,start))))
 
 
 (provide 'julia-snail-parser)

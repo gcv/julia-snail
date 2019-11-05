@@ -2,7 +2,7 @@
 (require 'ert)
 
 
-(ert-deftest jsp--test-strings ()
+(ert-deftest jsp-test-strings ()
   (should
    (equal
     "one"
@@ -31,7 +31,7 @@ three\"\"\"
       (jsp-string)))))
 
 
-(ert-deftest jsp--test-comments ()
+(ert-deftest jsp-test-comments ()
   (should
    (equal
     "# one"
@@ -51,7 +51,7 @@ three\"\"\"
       (jsp-comment-multiline)))))
 
 
-(ert-deftest jsp--expressions ()
+(ert-deftest jsp-test-expressions ()
   (should
    (endp
     (parsec-with-input ""
@@ -78,7 +78,8 @@ three\"\"\"
       (jsp-expression))))
   (should
    (equal
-    '("alpha" "end")
+    '("alpha"
+      (:end 7))
     (parsec-with-input "alpha end"
       (parsec-collect (jsp-expression)
                       (jsp-end)))))
@@ -137,21 +138,45 @@ echo
       (jsp-expression)))))
 
 
-(ert-deftest jsp--blocks ()
+(ert-deftest jsp-test-blocks ()
   (should
    (equal
-    '(("module" "Alpha")
+    '((:module 1 "Alpha")
       ("# bravo"
        "charlie"
        "delta + echo\nfoxtrot = golf()"
        "# hotel")
-      "end")
+      (:end 70))
     (parsec-with-input "module Alpha
 # bravo
 \"charlie\"
 delta + echo
 foxtrot = golf()
 # hotel
+end
+"
+      (jsp-block))))
+  (should
+   (equal
+    '((:module 1 "Alpha")
+      ("# comment"
+       ((:function 26 "t1")
+        ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:end]")
+        (:end 77))
+       "println(" "hi" ")")
+      (:end 97))
+    (parsec-with-input "module Alpha
+
+# comment
+
+function t1(x)
+  x + 10
+  a = [1, 2, 3]
+  a[1:end]
+end
+
+println(\"hi\")
+
 end
 "
       (jsp-block)))))
