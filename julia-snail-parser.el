@@ -92,6 +92,10 @@
      (parsec-lookahead (parsec-try (jsp-end))))
     (jsp-end))))
 
+(defun jsp-file ()
+  (parsec-many
+   (parsec-try (jsp-expression))))
+
 
 (defmacro jsp-*pq (parser &optional placeholder)
   "Similar to parsec-query, but always returns the point position

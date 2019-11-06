@@ -180,3 +180,35 @@ println(\"hi\")
 end
 "
       (jsp-block)))))
+
+
+(ert-deftest jsp-test-files ()
+  (should
+   (equal
+    '(((:module 1 "Alpha")
+       ("# comment"
+        ((:function 24 "t1")
+         ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:end]")
+         (:end 75))
+        "println(" "hi" ")")
+       (:end 93))
+      ((:module 98 "Bravo")
+       (((:function 111 "t2")
+         ("(y)")
+         (:end 126)))
+       (:end 130)))
+    (parsec-with-input "module Alpha
+# comment
+function t1(x)
+  x + 10
+  a = [1, 2, 3]
+  a[1:end]
+end
+println(\"hi\")
+end
+
+module Bravo
+function t2(y)
+end
+end"
+      (jsp-file)))))
