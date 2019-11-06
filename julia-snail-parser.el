@@ -14,6 +14,9 @@
    (jsp-whitespace)
    (parsec-re "[_[:alnum:]]+")))
 
+(defmacro jsp-keyword (kw)
+  `(parsec-re (concatenate 'string ,kw "[^[:alnum:]]")))
+
 (defun jsp-string-tq ()
   (parsec-and
    (jsp-whitespace)
@@ -73,20 +76,93 @@
 
 (defun jsp-start-module ()
   (-snoc
-   (jsp-*pq (parsec-str "module") :module)
+   (jsp-*pq (parsec-or
+             (jsp-keyword "module")
+             (jsp-keyword "baremodule"))
+            :module)
    (jsp-identifier)))
 
 (defun jsp-start-function ()
   (-snoc
-   (jsp-*pq (parsec-str "function") :function)
+   (jsp-*pq (jsp-keyword "function") :function)
    (jsp-identifier)))
+
+(defun jsp-start-macro ()
+  (-snoc
+   (jsp-*pq (jsp-keyword "macro") :macro)
+   (jsp-identifier)))
+
+(defun jsp-start-type ()
+  (-snoc
+   (jsp-*pq (parsec-or
+             (jsp-keyword "abstract type")
+             (jsp-keyword "primitive type"))
+            :type)
+   (jsp-identifier)))
+
+(defun jsp-start-struct ()
+  (-snoc
+   (jsp-*pq (parsec-or
+             (jsp-keyword "struct")
+             (jsp-keyword "mutable struct"))
+            :struct)
+   (jsp-identifier)))
+
+(defun jsp-start-if ()
+  (jsp-*pq (jsp-keyword "if") :if))
+
+(defun jsp-start-while ()
+  (-snoc
+   (jsp-*pq (jsp-keyword "while") :while)
+   ;; FIXME:
+   ))
+
+(defun jsp-start-for ()
+  (-snoc
+   (jsp-*pq (jsp-keyword "for") :for)
+   ;; FIXME:
+   ))
+
+(defun jsp-start-begin ()
+  (-snoc
+   (jsp-*pq (jsp-keyword "begin") :begin)
+   ;; FIXME:
+   ))
+
+(defun jsp-start-quote ()
+  (-snoc
+   (jsp-*pq (jsp-keyword "quote") :quote)
+   ;; FIXME:
+   ))
+
+(defun jsp-start-try ()
+  (-snoc
+   (jsp-*pq (jsp-keyword "try") :try)
+   ;; FIXME:
+   ))
+
+(defun jsp-start-let ()
+  (-snoc
+   (jsp-*pq (jsp-keyword "let") :let)
+   ;; FIXME:
+   ))
 
 (defun jsp-block ()
   (parsec-and
    (jsp-whitespace)
    (parsec-collect*
     (parsec-or (jsp-start-module)
-               (jsp-start-function))
+               (jsp-start-function)
+               (jsp-start-macro)
+               (jsp-start-type)
+               (jsp-start-struct)
+               (jsp-start-if)
+               (jsp-start-while)
+               (jsp-start-for)
+               (jsp-start-begin)
+               (jsp-start-quote)
+               (jsp-start-try)
+               (jsp-start-let))
     (parsec-many-till
      (jsp-expression)
      (parsec-lookahead
