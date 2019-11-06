@@ -247,3 +247,83 @@ function t2(y)
 end
 "
       (jsp-file)))))
+
+
+(ert-deftest jsp-test-all-blocks ()
+  (should
+   (equal
+    '(((:struct 2 "Point")
+       ("x\n  y")
+       (:end 23))
+      ((:macro 28 "m1")
+       ("(x)\n  x")
+       (:end 44))
+      ((:struct 49 "Vector")
+       ("x\n  y\n  z")
+       (:end 75))
+      ((:function 80 "t1")
+       ("(x)"
+        ((:try 97)
+         (((:if 105)
+           ("alpha\n      i = 0"
+            ((:while 132)
+             ("i < 10"
+              ((:for 153)
+               ("x in 1:3\n          println(x * i)")
+               (:end 199)))
+             (:end 209))
+            "ex ="
+            ((:quote 224)
+             ("x + 3")
+             (:end 250)))
+           (:end 258))
+          "catch\n    z = 10"
+          ((:begin 285)
+           (((:let 297)
+             ("w = z * 4\n        println(w)")
+             (:end 336)))
+           (:end 344))
+          "finally\n    stuff()")
+         (:end 372)))
+       (:end 376)))
+    (parsec-with-input "
+struct Point
+  x
+  y
+end
+
+macro m1(x)
+  x
+end
+
+struct Vector
+  x
+  y
+  z
+end
+
+function t1(x)
+  try
+    if alpha
+      i = 0
+      while i < 10
+        for x in 1:3
+          println(x * i)
+        end
+      end
+      ex = quote
+        x + 3
+      end
+    end
+  catch
+    z = 10
+    begin
+      let w = z * 4
+        println(w)
+      end
+    end
+  finally
+    stuff()
+  end
+end"
+      (jsp-file)))))

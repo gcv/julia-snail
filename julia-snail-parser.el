@@ -112,40 +112,22 @@
   (jsp-*pq (jsp-keyword "if") :if))
 
 (defun jsp-start-while ()
-  (-snoc
-   (jsp-*pq (jsp-keyword "while") :while)
-   ;; FIXME:
-   ))
+  (jsp-*pq (jsp-keyword "while") :while))
 
 (defun jsp-start-for ()
-  (-snoc
-   (jsp-*pq (jsp-keyword "for") :for)
-   ;; FIXME:
-   ))
+  (jsp-*pq (jsp-keyword "for") :for))
 
 (defun jsp-start-begin ()
-  (-snoc
-   (jsp-*pq (jsp-keyword "begin") :begin)
-   ;; FIXME:
-   ))
+  (jsp-*pq (jsp-keyword "begin") :begin))
 
 (defun jsp-start-quote ()
-  (-snoc
-   (jsp-*pq (jsp-keyword "quote") :quote)
-   ;; FIXME:
-   ))
+  (jsp-*pq (jsp-keyword "quote") :quote))
 
 (defun jsp-start-try ()
-  (-snoc
-   (jsp-*pq (jsp-keyword "try") :try)
-   ;; FIXME:
-   ))
+  (jsp-*pq (jsp-keyword "try") :try))
 
 (defun jsp-start-let ()
-  (-snoc
-   (jsp-*pq (jsp-keyword "let") :let)
-   ;; FIXME:
-   ))
+  (jsp-*pq (jsp-keyword "let") :let))
 
 (defun jsp-block ()
   (parsec-and
