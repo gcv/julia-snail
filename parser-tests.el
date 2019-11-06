@@ -53,10 +53,6 @@ three\"\"\"
 
 (ert-deftest jsp-test-expressions ()
   (should
-   (endp
-    (parsec-with-input ""
-      (jsp-expression))))
-  (should
    (equal
     "one"
     (parsec-with-input "\"one\""
@@ -179,6 +175,23 @@ println(\"hi\")
 
 end
 "
+      (jsp-block))))
+  ;; unterminated blocks
+  (should
+   (parsec-error-p
+    (parsec-with-input "module Alpha"
+      (jsp-block))))
+  (should
+   (parsec-error-p
+    (parsec-with-input "module Alpha
+alpha"
+      (jsp-block))))
+    (should
+   (parsec-error-p
+    (parsec-with-input "module Alpha
+alpha
+function t1()
+end"
       (jsp-block)))))
 
 
@@ -187,16 +200,38 @@ end
    (equal
     '(((:module 1 "Alpha")
        ("# comment"
-        ((:function 24 "t1")
+        "echo"
+        ((:function 29 "t1")
          ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:end]")
-         (:end 75))
+         (:end 80))
         "println(" "hi" ")")
-       (:end 93))
-      ((:module 98 "Bravo")
-       (((:function 111 "t2")
+       (:end 98))
+      ((:module 103 "Bravo")
+       (((:function 116 "t2")
          ("(y)")
-         (:end 126)))
-       (:end 130)))
+         (:end 131)))
+       (:end 135))
+      "")
+    (parsec-with-input "module Alpha
+# comment
+echo
+function t1(x)
+  x + 10
+  a = [1, 2, 3]
+  a[1:end]
+end
+println(\"hi\")
+end
+
+module Bravo
+function t2(y)
+end
+end
+"
+      (jsp-file))))
+  ;; missing terminating 'end'
+  (should
+   (parsec-error-p
     (parsec-with-input "module Alpha
 # comment
 function t1(x)
@@ -210,5 +245,5 @@ end
 module Bravo
 function t2(y)
 end
-end"
+"
       (jsp-file)))))
