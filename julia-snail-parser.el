@@ -154,8 +154,16 @@
     (jsp-end))))
 
 (defun jsp-file ()
-  (parsec-many
-   (jsp-expression)))
+  ;; XXX: This should be simply:
+  ;; (parsec-many
+  ;;  (jsp-expression))
+  ;; but that causes infinte loops with stray "end"s at the end of the file. :(
+  (parsec-many-till
+   (jsp-expression)
+   (parsec-lookahead
+    (parsec-or
+     (parsec-eof)
+     (parsec-try (jsp-end))))))
 
 
 (defmacro jsp-*pq (parser &optional placeholder)

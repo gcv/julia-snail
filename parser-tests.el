@@ -229,7 +229,7 @@ end
 end
 "
       (jsp-file))))
-  ;; missing terminating 'end'
+  ;; missing terminating "end"
   (should
    (parsec-error-p
     (parsec-with-input "module Alpha
@@ -246,6 +246,19 @@ module Bravo
 function t2(y)
 end
 "
+      (jsp-file))))
+  ;; too many "end"s
+  (should
+   (equal
+    '(((:module 1 "Alpha")
+       (:end 14)))
+    (parsec-with-input "module Alpha
+end
+end"
+      (jsp-file))))
+  (should
+   (endp
+    (parsec-with-input "end"
       (jsp-file)))))
 
 
