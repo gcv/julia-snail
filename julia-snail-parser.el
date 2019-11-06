@@ -56,17 +56,17 @@
      (parsec-re "\\[.*?end.*?\\]") ; deal with Julia end syntax in brackets
      (parsec-any-ch))
     (parsec-lookahead
-     (parsec-or (parsec-try (jsp-end))
-                (parsec-try (jsp-comment))
-                (parsec-try (jsp-string))
-                (parsec-try (jsp-block))
-                (parsec-eof))))))
+     (parsec-or
+      (parsec-try (parsec-eof))
+      (parsec-try (jsp-end))
+      (parsec-try (jsp-comment))
+      (parsec-try (jsp-string))
+      (parsec-try (jsp-block)))))))
 
 (defun jsp-expression ()
   (parsec-and
    (jsp-whitespace)
-   (parsec-or (parsec-eof)
-              (jsp-comment)
+   (parsec-or (jsp-comment)
               (jsp-string)
               (jsp-block)
               (jsp-other))))
@@ -88,13 +88,16 @@
     (parsec-or (jsp-start-module)
                (jsp-start-function))
     (parsec-many-till
-     (parsec-try (jsp-expression))
-     (parsec-lookahead (parsec-try (jsp-end))))
+     (jsp-expression)
+     (parsec-lookahead
+      (parsec-or
+       (parsec-eof)
+       (parsec-try (jsp-end)))))
     (jsp-end))))
 
 (defun jsp-file ()
   (parsec-many
-   (parsec-try (jsp-expression))))
+   (jsp-expression)))
 
 
 (defmacro jsp-*pq (parser &optional placeholder)
