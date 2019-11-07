@@ -1,4 +1,4 @@
-;;; parser.el --- Julia Snail Parser -*- lexical-binding: t -*-
+;;; parser.el --- Julia Snail parser -*- lexical-binding: t -*-
 
 
 (require 'dash)

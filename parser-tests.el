@@ -1,3 +1,6 @@
+;;; julia-snail/parser-tests.el --- Julia Snail parser tests -*- lexical-binding: t -*-
+
+
 (require 'ert)
 
 (require 'julia-snail-parser "parser.el")
