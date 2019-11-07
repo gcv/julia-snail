@@ -12,7 +12,7 @@
 (defun julia-snail-parser-*identifier ()
   (parsec-and
    (julia-snail-parser-*whitespace)
-   (parsec-re "[_[:alnum:]]+")))
+   (parsec-re "[._[:alnum:]]+")))
 
 (defmacro julia-snail-parser-*keyword (kw)
   `(parsec-re (concatenate 'string ,kw "[^[:alnum:]]")))
