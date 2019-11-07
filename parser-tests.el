@@ -11,7 +11,7 @@
 \"one\"
 \"two\"
 "
-      (jsp-string))))
+      (julia-snail-parser-*string))))
   (should
    (equal
     "one\ntwo\nthree"
@@ -20,7 +20,7 @@
 two
 three\"
 "
-      (jsp-string))))
+      (julia-snail-parser-*string))))
   (should
    (equal
     "one\ntwo\nthree"
@@ -29,7 +29,7 @@ three\"
 two
 three\"\"\"
 "
-      (jsp-string)))))
+      (julia-snail-parser-*string)))))
 
 
 (ert-deftest jsp-test-comments ()
@@ -40,7 +40,7 @@ three\"\"\"
 # one
 # two
 "
-      (jsp-comment))))
+      (julia-snail-parser-*comment))))
   (should
    (equal
     '("# one" "# two" "## three")
@@ -49,7 +49,7 @@ three\"\"\"
 # two
    ## three
 "
-      (jsp-comment-multiline)))))
+      (julia-snail-parser-*comment-multiline)))))
 
 
 (ert-deftest jsp-test-expressions ()
@@ -57,29 +57,29 @@ three\"\"\"
    (equal
     "one"
     (parsec-with-input "\"one\""
-      (jsp-expression))))
+      (julia-snail-parser-*expression))))
   (should
    (equal
     "# comment"
     (parsec-with-input "# comment"
-      (jsp-expression))))
+      (julia-snail-parser-*expression))))
   (should
    (equal
     "alpha"
     (parsec-with-input "alpha"
-      (jsp-expression))))
+      (julia-snail-parser-*expression))))
   (should
    (equal
     ""
     (parsec-with-input "end"
-      (jsp-expression))))
+      (julia-snail-parser-*expression))))
   (should
    (equal
     '("alpha"
       (:end 7))
     (parsec-with-input "alpha end"
-      (parsec-collect (jsp-expression)
-                      (jsp-end)))))
+      (parsec-collect (julia-snail-parser-*expression)
+                      (julia-snail-parser-*end)))))
   (should
    (equal
     "alpha"
@@ -89,7 +89,7 @@ three\"\"\"
 # charlie
 delta
 "
-      (jsp-expression))))
+      (julia-snail-parser-*expression))))
   (should
    (equal
     "# comment"
@@ -98,7 +98,7 @@ delta
 \"alpha\"
 bravo
 "
-      (jsp-expression))))
+      (julia-snail-parser-*expression))))
   (should
    (equal
     '("# comment" "alpha" "bravo\n")
@@ -109,7 +109,7 @@ bravo
 "
       (parsec-many
        (parsec-try
-        (jsp-expression))))))
+        (julia-snail-parser-*expression))))))
   (should
    (equal
     "alpha"
@@ -120,7 +120,7 @@ alpha
 # delta
 echo
 "
-      (jsp-expression))))
+      (julia-snail-parser-*expression))))
   (should
    (equal
     ""
@@ -132,7 +132,7 @@ alpha
 # delta
 echo
 "
-      (jsp-expression)))))
+      (julia-snail-parser-*expression)))))
 
 
 (ert-deftest jsp-test-blocks ()
@@ -152,7 +152,7 @@ foxtrot = golf()
 # hotel
 end
 "
-      (jsp-block))))
+      (julia-snail-parser-*block))))
   (should
    (equal
     '((:module 1 "Alpha")
@@ -176,24 +176,24 @@ println(\"hi\")
 
 end
 "
-      (jsp-block))))
+      (julia-snail-parser-*block))))
   ;; unterminated blocks
   (should
    (parsec-error-p
     (parsec-with-input "module Alpha"
-      (jsp-block))))
+      (julia-snail-parser-*block))))
   (should
    (parsec-error-p
     (parsec-with-input "module Alpha
 alpha"
-      (jsp-block))))
+      (julia-snail-parser-*block))))
     (should
    (parsec-error-p
     (parsec-with-input "module Alpha
 alpha
 function t1()
 end"
-      (jsp-block)))))
+      (julia-snail-parser-*block)))))
 
 
 (ert-deftest jsp-test-files ()
@@ -229,7 +229,7 @@ function t2(y)
 end
 end
 "
-      (jsp-file))))
+      (julia-snail-parser-*file))))
   ;; missing terminating "end"
   (should
    (parsec-error-p
@@ -247,7 +247,7 @@ module Bravo
 function t2(y)
 end
 "
-      (jsp-file))))
+      (julia-snail-parser-*file))))
   ;; too many "end"s
   (should
    (equal
@@ -256,11 +256,11 @@ end
     (parsec-with-input "module Alpha
 end
 end"
-      (jsp-file))))
+      (julia-snail-parser-*file))))
   (should
    (endp
     (parsec-with-input "end"
-      (jsp-file)))))
+      (julia-snail-parser-*file)))))
 
 
 (ert-deftest jsp-test-all-blocks ()
@@ -340,4 +340,4 @@ function t1(x)
     stuff()
   end
 end"
-      (jsp-file)))))
+      (julia-snail-parser-*file)))))
