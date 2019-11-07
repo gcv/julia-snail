@@ -186,10 +186,33 @@ replace the result of the parser with it."
       (goto-char (point-min))
       (parsec-parse (julia-snail-parser-*file)))))
 
+(defun julia-snail-parser-parse-blocks (tree)
+  (cond ((null tree)
+         tree)
+        ((atom tree)
+         nil)
+        ((and (listp tree)
+              (listp (-first-item tree))
+              (keywordp (-first-item (-first-item tree))))
+         (let* ((block tree)
+                (head (-first-item block))
+                (body (-second-item block))
+                (tail (-third-item block)))
+           (-remove #'null (list (-first-item head)
+                                 (when (-third-item head) (substring-no-properties (-third-item head)))
+                                 (-second-item head)
+                                 (-second-item tail)
+                                 (-remove #'null (-map #'julia-snail-parser-parse-blocks body))))))
+        (t ; list
+         (-remove #'null (cons (julia-snail-parser-parse-blocks (car tree))
+                               (julia-snail-parser-parse-blocks (cdr tree)))))))
 
-(defun julia-snail-parser-query (buf pt &optional block-types)
-  (let ((raw-tree (julia-snail-parser-parse-raw buf)))
-    ))
+;; block-types:
+;; t - returns all blocks
+;; keyword - returns all blocks matching the keyword
+;; list - returns all blocks matching the list
+(defun julia-snail-parser-query (blocks pt &optional block-types)
+)
 
 
 (provide 'julia-snail-parser)
