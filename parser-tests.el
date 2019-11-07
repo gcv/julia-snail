@@ -1,5 +1,6 @@
-(require 'julia-snail-parser)
 (require 'ert)
+
+(require 'julia-snail-parser "parser.el")
 
 
 (ert-deftest jsp-test-strings ()

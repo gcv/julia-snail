@@ -12,6 +12,8 @@
 (require 'thingatpt)
 (require 'vterm)
 
+(require 'julia-snail-parser "parser.el")
+
 
 ;;; --- customization
 
