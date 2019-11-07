@@ -15,7 +15,9 @@
    (parsec-re "[._[:alnum:]]+")))
 
 (defmacro julia-snail-parser-*keyword (kw)
-  `(parsec-re (concatenate 'string ,kw "[^[:alnum:]]")))
+  `(parsec-return
+       (parsec-str ,kw)
+     (parsec-lookahead (parsec-re "[^[:alnum:]]"))))
 
 (defun julia-snail-parser-*string-tq ()
   (parsec-and
@@ -85,7 +87,7 @@
 (defun julia-snail-parser-*start-function ()
   (-snoc
    (julia-snail-parser-parsec-query (julia-snail-parser-*keyword "function") :function)
-   (julia-snail-parser-*identifier)))
+   (parsec-optional (julia-snail-parser-*identifier))))
 
 (defun julia-snail-parser-*start-macro ()
   (-snoc

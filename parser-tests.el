@@ -344,3 +344,20 @@ function t1(x)
   end
 end"
       (julia-snail-parser-*file)))))
+
+
+(ert-deftest jsp-test-anonymous-functions ()
+  (should
+   (equal
+    '(:function 1 nil)
+    (parsec-with-input "function(x)"
+      (julia-snail-parser-*start-function))))
+  (should
+   (equal
+    '("("
+      ((:function 2 nil)
+       ("(x); return 2x;")
+       (:end 26))
+      ")(3)")
+    (parsec-with-input "(function(x); return 2x; end)(3)"
+      (julia-snail-parser-*file)))))
