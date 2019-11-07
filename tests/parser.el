@@ -1,9 +1,9 @@
-;;; julia-snail/parser-tests.el --- Julia Snail parser tests -*- lexical-binding: t -*-
+;;; julia-snail/tests/parser.el --- Julia Snail parser tests -*- lexical-binding: t -*-
 
 
 (require 'ert)
 
-(require 'julia-snail-parser "parser.el")
+(require 'julia-snail-parser "../parser.el")
 
 
 (ert-deftest jsp-test-strings ()
@@ -361,3 +361,37 @@ end"
       ")(3)")
     (parsec-with-input "(function(x); return 2x; end)(3)"
       (julia-snail-parser-*file)))))
+
+
+(ert-deftest jsp-test-whole-file ()
+  (should
+   (equal
+    '((:module "Alpha" 1 549
+               ((:module "Bravo" 15 544
+                         ((:macro "m1" 29 65
+                                  ((:while 43 61)))
+                          (:struct "s1" 67 85)
+                          (:type "NewReal" 87 122)
+                          (:type "Special" 124 163)
+                          (:function "t1" 165 281
+                                     ((:for 208 277
+                                            ((:if 228 270)))))
+                          (:function "t2" 283 439
+                                     ((:let 300 435
+                                            ((:try 325 428)))))
+                          (:function "t3" 441 539
+                                     ((:begin 468 535
+                                              ((:quote 497 528)))))))))
+      (:module "Charlie" 551 569)
+      (:module "Delta" 571 594))
+    (with-temp-buffer
+      (insert-file
+       ;; XXX: Obnoxious Elisp path construction for "files/blocks.jl".
+       (concat
+        (file-name-as-directory
+         (concat (or (file-name-as-directory default-directory)
+                     (file-name-directory load-file-name)) "files"))
+        "blocks.jl"))
+      (-> (current-buffer)
+          julia-snail-parser-parse-raw
+          julia-snail-parser-parse-blocks)))))

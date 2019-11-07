@@ -199,12 +199,13 @@ replace the result of the parser with it."
          (let* ((block tree)
                 (head (-first-item block))
                 (body (-second-item block))
-                (tail (-third-item block)))
+                (tail (-last-item block)))
            (-remove #'null (list (-first-item head)
                                  (when (-third-item head) (substring-no-properties (-third-item head)))
                                  (-second-item head)
-                                 (-second-item tail)
-                                 (-remove #'null (-map #'julia-snail-parser-parse-blocks body))))))
+                                 (+ 3 (-second-item tail)) ;; end location
+                                 (unless (equal body tail)
+                                   (-remove #'null (-map #'julia-snail-parser-parse-blocks body)))))))
         (t ; list
          (-remove #'null (cons (julia-snail-parser-parse-blocks (car tree))
                                (julia-snail-parser-parse-blocks (cdr tree)))))))
