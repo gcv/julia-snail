@@ -1,9 +1,13 @@
 ;;; parser.el --- Julia Snail parser -*- lexical-binding: t -*-
 
 
+;;; --- requirements
+
 (require 'dash)
 (require 'parsec)
 
+
+;;; --- parser rules
 
 (defun julia-snail-parser-*whitespace ()
   (parsec-many-as-string
@@ -168,6 +172,8 @@
      (parsec-try (julia-snail-parser-*end))))))
 
 
+;;; --- helpers
+
 (defmacro julia-snail-parser-parsec-query (parser &optional placeholder)
   "Similar to parsec-query, but always returns the point position
 at which the parser started matching. If placeholder is given,
@@ -182,40 +188,95 @@ replace the result of the parser with it."
              ,start))))
 
 
-(defun julia-snail-parser-parse-raw (buf)
+;;; --- parse tree processing functions
+
+(defun julia-snail-parser-parse (buf)
   (save-excursion
     (with-current-buffer buf
       (goto-char (point-min))
       (parsec-parse (julia-snail-parser-*file)))))
 
-(defun julia-snail-parser-parse-blocks (tree)
-  (cond ((null tree)
-         tree)
-        ((atom tree)
-         nil)
-        ((and (listp tree)
-              (listp (-first-item tree))
-              (keywordp (-first-item (-first-item tree))))
-         (let* ((block tree)
-                (head (-first-item block))
-                (body (-second-item block))
-                (tail (-last-item block)))
-           (-remove #'null (list (-first-item head)
-                                 (when (-third-item head) (substring-no-properties (-third-item head)))
-                                 (-second-item head)
-                                 (+ 3 (-second-item tail)) ;; end location
-                                 (unless (equal body tail)
-                                   (-remove #'null (-map #'julia-snail-parser-parse-blocks body)))))))
-        (t ; list
-         (-remove #'null (cons (julia-snail-parser-parse-blocks (car tree))
-                               (julia-snail-parser-parse-blocks (cdr tree)))))))
+(defun julia-snail-parser-blocks (tree)
+  (cond
+   ((null tree)
+    tree)
+   ((atom tree)
+    nil)
+   ((and (listp tree)
+         (listp (-first-item tree))
+         (keywordp (-first-item (-first-item tree))))
+    (let* ((block tree)
+           (head (-first-item block))
+           (body (-second-item block))
+           (tail (-last-item block)))
+      (-remove #'null (list (-first-item head)
+                            (-second-item head)
+                            (+ 3 (-second-item tail)) ;; end location
+                            (when (-third-item head) (substring-no-properties (-third-item head)))
+                            (unless (equal body tail)
+                              (-remove #'null (-map #'julia-snail-parser-blocks body)))))))
+   (t ; list
+    (-remove #'null (cons (julia-snail-parser-blocks (car tree))
+                          (julia-snail-parser-blocks (cdr tree)))))))
 
-;; block-types:
-;; t - returns all blocks
-;; keyword - returns all blocks matching the keyword
-;; list - returns all blocks matching the list
-(defun julia-snail-parser-query (blocks pt &optional block-types)
-)
+(defun julia-snail-parser-block-path (blocks pt)
+  (cl-labels ((helper (node)
+                      (if (keywordp (-first-item node))
+                          (when (and (>= pt (-second-item node))
+                                     (<= pt (-third-item node)))
+                            (if (atom (-last-item node))
+                                (list (-first-item node)
+                                      (-second-item node)
+                                      (-third-item node)
+                                      (if (stringp (-fourth-item node))
+                                          (-fourth-item node)
+                                        :nil))
+                              (let ((child-check (helper (-last-item node))))
+                                (when child-check
+                                  (list (-first-item node)
+                                        (-second-item node)
+                                        (-third-item node)
+                                        (if (stringp (-fourth-item node))
+                                            (-fourth-item node)
+                                          :nil)
+                                        child-check)))))
+                        (-first-item (-remove #'null (-map #'helper node))))))
+    (-partition
+     4
+     (-map (lambda (x) (if (equal :nil x) nil x))
+           (-> (-remove #'null (-map #'helper blocks))
+               -first-item
+               -flatten)))))
 
+
+;;; --- queries
+
+;; needed queries:
+;; - current module (including nesting)
+;; - current top-level block (top-level: either a direct child of a module, or actually top level of block list)
+
+(defun julia-snail-parser-query-current-module (block-path)
+  ;; Implementation: Remove everything from the list which is not a module, and
+  ;; return the resulting module names. Fall back to Main if nothing comes back.
+  )
+
+(defun julia-snail-parser-query-current-top-level-block (block-path)
+  )
+
+
+;;; --- entry point
+
+(defun julia-snail-parser-query (buffer query)
+  ;; FIXME: This needs to do the parsing, and must error-check and
+  ;; error-report properly.
+  ;; FIXME: Maybe change /everything/ other than this function to
+  ;; julia-snail-parser-- namespace?
+  (cond ((equal :module query)
+         ;; ...
+         ))
+  )
+
+
+;;; --- done
 
 (provide 'julia-snail-parser)

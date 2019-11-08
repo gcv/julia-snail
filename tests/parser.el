@@ -1,10 +1,14 @@
 ;;; julia-snail/tests/parser.el --- Julia Snail parser tests -*- lexical-binding: t -*-
 
 
+;;; --- requirements
+
 (require 'ert)
 
 (require 'julia-snail-parser "../parser.el")
 
+
+;;; --- tests
 
 (ert-deftest jsp-test-strings ()
   (should
@@ -34,7 +38,6 @@ three\"\"\"
 "
       (julia-snail-parser-*string)))))
 
-
 (ert-deftest jsp-test-comments ()
   (should
    (equal
@@ -53,7 +56,6 @@ three\"\"\"
    ## three
 "
       (julia-snail-parser-*comment-multiline)))))
-
 
 (ert-deftest jsp-test-expressions ()
   (should
@@ -137,7 +139,6 @@ echo
 "
       (julia-snail-parser-*expression)))))
 
-
 (ert-deftest jsp-test-blocks ()
   (should
    (equal
@@ -197,7 +198,6 @@ alpha
 function t1()
 end"
       (julia-snail-parser-*block)))))
-
 
 (ert-deftest jsp-test-files ()
   (should
@@ -264,7 +264,6 @@ end"
    (endp
     (parsec-with-input "end"
       (julia-snail-parser-*file)))))
-
 
 (ert-deftest jsp-test-all-blocks ()
   (should
@@ -345,7 +344,6 @@ function t1(x)
 end"
       (julia-snail-parser-*file)))))
 
-
 (ert-deftest jsp-test-anonymous-functions ()
   (should
    (equal
@@ -362,36 +360,57 @@ end"
     (parsec-with-input "(function(x); return 2x; end)(3)"
       (julia-snail-parser-*file)))))
 
-
-(ert-deftest jsp-test-whole-file ()
-  (should
-   (equal
-    '((:module "Alpha" 1 549
-               ((:module "Bravo" 15 544
-                         ((:macro "m1" 29 65
-                                  ((:while 43 61)))
-                          (:struct "s1" 67 85)
-                          (:type "NewReal" 87 122)
-                          (:type "Special" 124 163)
-                          (:function "t1" 165 281
-                                     ((:for 208 277
-                                            ((:if 228 270)))))
-                          (:function "t2" 283 439
-                                     ((:let 300 435
-                                            ((:try 325 428)))))
-                          (:function "t3" 441 539
-                                     ((:begin 468 535
-                                              ((:quote 497 528)))))))))
-      (:module "Charlie" 551 569)
-      (:module "Delta" 571 594))
-    (with-temp-buffer
-      (insert-file
-       ;; XXX: Obnoxious Elisp path construction for "files/blocks.jl".
-       (concat
-        (file-name-as-directory
-         (concat (or (file-name-as-directory default-directory)
-                     (file-name-directory load-file-name)) "files"))
-        "blocks.jl"))
-      (-> (current-buffer)
-          julia-snail-parser-parse-raw
-          julia-snail-parser-parse-blocks)))))
+(ert-deftest jsp-test-whole-file-blocks ()
+  (let ((blocks
+         (with-temp-buffer
+           (insert-file
+            ;; XXX: Obnoxious Elisp path construction for "files/blocks.jl".
+            (concat
+             (file-name-as-directory
+              (concat (or (file-name-as-directory default-directory)
+                          (file-name-directory load-file-name)) "files"))
+             "blocks.jl"))
+           (-> (current-buffer)
+               julia-snail-parser-parse
+               julia-snail-parser-blocks)))
+        (expected-blocks
+         '((:module 1 549 "Alpha"
+                    ((:module 15 544 "Bravo"
+                              ((:macro 29 65 "m1"
+                                       ((:while 43 61)))
+                               (:struct 67 85 "s1")
+                               (:type 87 122 "NewReal")
+                               (:type 124 163 "Special")
+                               (:function 165 281 "t1"
+                                          ((:for 208 277
+                                                 ((:if 228 270)))))
+                               (:function 283 439 "t2"
+                                          ((:let 300 435
+                                                 ((:try 325 428)))))
+                               (:function 441 539 "t3"
+                                          ((:begin 468 535
+                                                   ((:quote 497 528)))))))))
+           (:module 551 569 "Charlie")
+           (:module 571 594 "Delta"))))
+    (should (equal expected-blocks blocks))
+    (should
+     (equal
+      '((:module 1 549 "Alpha")
+        (:module 15 544 "Bravo")
+        (:macro 29 65 "m1")
+        (:while 43 61 nil))
+      (julia-snail-parser-block-path blocks 50)))
+    (should
+     (equal
+      '((:module 1 549 "Alpha")
+        (:module 15 544 "Bravo")
+        (:type 124 163 "Special"))
+      (julia-snail-parser-block-path blocks 130)))
+    (should
+     (equal
+      '((:module 1 549 "Alpha")
+        (:module 15 544 "Bravo")
+        (:function 441 539 "t3")
+        (:begin 468 535 nil)
+        (:quote 497 528 nil))
+      (julia-snail-parser-block-path blocks 500)))))

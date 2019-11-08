@@ -21,13 +21,11 @@
   "Customization options for Julia Snail mode."
   :group 'external)
 
-
 (defcustom julia-snail-executable "julia"
   "Julia executable to run as a Snail server."
   :tag "Julia executable"
   :group 'julia-snail
   :type 'string)
-
 
 (defcustom julia-snail-port 2001
   "Snail server port."
@@ -35,13 +33,11 @@
   :group 'julia-snail
   :type 'integer)
 
-
 (defcustom julia-snail-repl-buffer "*julia*"
   "Buffer to use for Julia REPL interaction."
   :tag "Julia REPL buffer"
   :group 'julia-snail
   :type 'string)
-
 
 (defcustom julia-snail-show-error-window t
   "When t, show compilation errors in separate window. When nil,
@@ -78,7 +74,6 @@ just display them in the minibuffer."
       (error "no REPL buffer found"))
     (format "%s process" (buffer-name (get-buffer real-buf)))))
 
-
 (defun julia-snail--error-buffer-name (repl-buf)
   (let ((real-buf (get-buffer repl-buf)))
     (unless real-buf
@@ -93,7 +88,6 @@ just display them in the minibuffer."
     (when process-buf
       (kill-buffer process-buf)))
   (setq julia-snail--process nil))
-
 
 (defun julia-snail--enable ()
   (add-hook 'kill-buffer-hook #'julia-snail--cleanup nil t)
@@ -117,7 +111,6 @@ just display them in the minibuffer."
           (setq julia-snail--process ; NB: buffer-local variable!
                 (open-network-stream "julia-process" process-buf "localhost" julia-snail-port))
           (set-process-filter julia-snail--process #'julia-snail--server-response-filter))))))
-
 
 (defun julia-snail--disable ()
   (julia-snail--cleanup))
@@ -143,7 +136,6 @@ wait for the REPL prompt to return, otherwise return immediately."
           (sleep-for 0 20)
           (setf sleep-total (+ sleep-total 20)))))))
 
-
 (defun julia-snail--send-to-server (repl-buf str)
   "Send str to Snail server."
   (declare (indent defun))
@@ -167,7 +159,6 @@ wait for the REPL prompt to return, otherwise return immediately."
              julia-snail--requests)
     reqid))
 
-
 (defun julia-snail--send-to-server-via-tmp-file (repl-buf str)
   "Send str to server by first writing it to a tmpfile, calling
 Julia include on the tmpfile, and then deleting the file."
@@ -189,7 +180,6 @@ Julia include on the tmpfile, and then deleting the file."
                   :originating-buf (current-buffer)
                   :tmpfile tmpfile)
                  julia-snail--requests)))))
-
 
 (defun julia-snail--server-response-filter (proc str)
   (when (buffer-live-p (process-buffer proc))
@@ -216,10 +206,8 @@ Julia include on the tmpfile, and then deleting the file."
       ;; remove request ID from requests hash
       (remhash reqid julia-snail--requests))))
 
-
 (defun julia-snail--response-done (reqid)
   (julia-snail--response-base reqid))
-
 
 (defun julia-snail--response-error (reqid error-message error-stack)
   (if (not julia-snail-show-error-window)
@@ -251,7 +239,6 @@ Julia include on the tmpfile, and then deleting the file."
         (vterm julia-snail-repl-buffer)
         (julia-snail-mode)))))
 
-
 (defun julia-snail-send-line ()
   "FIXME: Write this."
   (interactive)
@@ -260,7 +247,6 @@ Julia include on the tmpfile, and then deleting the file."
       (let ((line (s-trim (thing-at-point 'line t))))
         (julia-snail--send-to-repl repl-buf
           line)))))
-
 
 (defun julia-snail-send-buffer ()
   "FIXME: Write this."
@@ -271,7 +257,6 @@ Julia include on the tmpfile, and then deleting the file."
       (julia-snail--send-to-server repl-buf
         (format "include(\"%s\");" filename)))))
 
-
 (defun julia-snail-send-region ()
   "FIXME: Write this."
   (interactive)
@@ -279,7 +264,6 @@ Julia include on the tmpfile, and then deleting the file."
     (when (and repl-buf (use-region-p))
       (let ((text (buffer-substring-no-properties (region-beginning) (region-end))))
         (julia-snail--send-to-server-via-tmp-file repl-buf text)))))
-
 
 (defun julia-snail-send-top-level-form ()
   "FIXME: Write this."
