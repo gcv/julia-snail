@@ -18,7 +18,7 @@
 \"one\"
 \"two\"
 "
-      (julia-snail-parser-*string))))
+      (julia-snail-parser--*string))))
   (should
    (equal
     "one\ntwo\nthree"
@@ -27,7 +27,7 @@
 two
 three\"
 "
-      (julia-snail-parser-*string))))
+      (julia-snail-parser--*string))))
   (should
    (equal
     "one\ntwo\nthree"
@@ -36,7 +36,7 @@ three\"
 two
 three\"\"\"
 "
-      (julia-snail-parser-*string)))))
+      (julia-snail-parser--*string)))))
 
 (ert-deftest jsp-test-comments ()
   (should
@@ -46,7 +46,7 @@ three\"\"\"
 # one
 # two
 "
-      (julia-snail-parser-*comment))))
+      (julia-snail-parser--*comment))))
   (should
    (equal
     '("# one" "# two" "## three")
@@ -55,36 +55,36 @@ three\"\"\"
 # two
    ## three
 "
-      (julia-snail-parser-*comment-multiline)))))
+      (julia-snail-parser--*comment-multiline)))))
 
 (ert-deftest jsp-test-expressions ()
   (should
    (equal
     "one"
     (parsec-with-input "\"one\""
-      (julia-snail-parser-*expression))))
+      (julia-snail-parser--*expression))))
   (should
    (equal
     "# comment"
     (parsec-with-input "# comment"
-      (julia-snail-parser-*expression))))
+      (julia-snail-parser--*expression))))
   (should
    (equal
     "alpha"
     (parsec-with-input "alpha"
-      (julia-snail-parser-*expression))))
+      (julia-snail-parser--*expression))))
   (should
    (equal
     ""
     (parsec-with-input "end"
-      (julia-snail-parser-*expression))))
+      (julia-snail-parser--*expression))))
   (should
    (equal
     '("alpha"
       (:end 7))
     (parsec-with-input "alpha end"
-      (parsec-collect (julia-snail-parser-*expression)
-                      (julia-snail-parser-*end)))))
+      (parsec-collect (julia-snail-parser--*expression)
+                      (julia-snail-parser--*end)))))
   (should
    (equal
     "alpha"
@@ -94,7 +94,7 @@ three\"\"\"
 # charlie
 delta
 "
-      (julia-snail-parser-*expression))))
+      (julia-snail-parser--*expression))))
   (should
    (equal
     "# comment"
@@ -103,7 +103,7 @@ delta
 \"alpha\"
 bravo
 "
-      (julia-snail-parser-*expression))))
+      (julia-snail-parser--*expression))))
   (should
    (equal
     '("# comment" "alpha" "bravo\n")
@@ -114,7 +114,7 @@ bravo
 "
       (parsec-many
        (parsec-try
-        (julia-snail-parser-*expression))))))
+        (julia-snail-parser--*expression))))))
   (should
    (equal
     "alpha"
@@ -125,7 +125,7 @@ alpha
 # delta
 echo
 "
-      (julia-snail-parser-*expression))))
+      (julia-snail-parser--*expression))))
   (should
    (equal
     ""
@@ -137,7 +137,7 @@ alpha
 # delta
 echo
 "
-      (julia-snail-parser-*expression)))))
+      (julia-snail-parser--*expression)))))
 
 (ert-deftest jsp-test-blocks ()
   (should
@@ -156,7 +156,7 @@ foxtrot = golf()
 # hotel
 end
 "
-      (julia-snail-parser-*block))))
+      (julia-snail-parser--*block))))
   (should
    (equal
     '((:module 1 "Alpha")
@@ -180,24 +180,24 @@ println(\"hi\")
 
 end
 "
-      (julia-snail-parser-*block))))
+      (julia-snail-parser--*block))))
   ;; unterminated blocks
   (should
    (parsec-error-p
     (parsec-with-input "module Alpha"
-      (julia-snail-parser-*block))))
+      (julia-snail-parser--*block))))
   (should
    (parsec-error-p
     (parsec-with-input "module Alpha
 alpha"
-      (julia-snail-parser-*block))))
-    (should
+      (julia-snail-parser--*block))))
+  (should
    (parsec-error-p
     (parsec-with-input "module Alpha
 alpha
 function t1()
 end"
-      (julia-snail-parser-*block)))))
+      (julia-snail-parser--*block)))))
 
 (ert-deftest jsp-test-files ()
   (should
@@ -232,7 +232,7 @@ function t2(y)
 end
 end
 "
-      (julia-snail-parser-*file))))
+      (julia-snail-parser--*file))))
   ;; missing terminating "end"
   (should
    (parsec-error-p
@@ -250,7 +250,7 @@ module Bravo
 function t2(y)
 end
 "
-      (julia-snail-parser-*file))))
+      (julia-snail-parser--*file))))
   ;; too many "end"s
   (should
    (equal
@@ -259,11 +259,11 @@ end
     (parsec-with-input "module Alpha
 end
 end"
-      (julia-snail-parser-*file))))
+      (julia-snail-parser--*file))))
   (should
    (endp
     (parsec-with-input "end"
-      (julia-snail-parser-*file)))))
+      (julia-snail-parser--*file)))))
 
 (ert-deftest jsp-test-all-blocks ()
   (should
@@ -342,14 +342,14 @@ function t1(x)
     stuff()
   end
 end"
-      (julia-snail-parser-*file)))))
+      (julia-snail-parser--*file)))))
 
 (ert-deftest jsp-test-anonymous-functions ()
   (should
    (equal
     '(:function 1 nil)
     (parsec-with-input "function(x)"
-      (julia-snail-parser-*start-function))))
+      (julia-snail-parser--*start-function))))
   (should
    (equal
     '("("
@@ -358,7 +358,7 @@ end"
        (:end 26))
       ")(3)")
     (parsec-with-input "(function(x); return 2x; end)(3)"
-      (julia-snail-parser-*file)))))
+      (julia-snail-parser--*file)))))
 
 (ert-deftest jsp-test-whole-file-blocks ()
   (let ((blocks
@@ -371,8 +371,8 @@ end"
                           (file-name-directory load-file-name)) "files"))
              "blocks.jl"))
            (-> (current-buffer)
-               julia-snail-parser-parse
-               julia-snail-parser-blocks)))
+               julia-snail-parser--parse
+               julia-snail-parser--blocks)))
         (expected-blocks
          '((:module 1 549 "Alpha"
                     ((:module 15 544 "Bravo"
@@ -399,13 +399,13 @@ end"
         (:module 15 544 "Bravo")
         (:macro 29 65 "m1")
         (:while 43 61 nil))
-      (julia-snail-parser-block-path blocks 50)))
+      (julia-snail-parser--block-path blocks 50)))
     (should
      (equal
       '((:module 1 549 "Alpha")
         (:module 15 544 "Bravo")
         (:type 124 163 "Special"))
-      (julia-snail-parser-block-path blocks 130)))
+      (julia-snail-parser--block-path blocks 130)))
     (should
      (equal
       '((:module 1 549 "Alpha")
@@ -413,4 +413,4 @@ end"
         (:function 441 539 "t3")
         (:begin 468 535 nil)
         (:quote 497 528 nil))
-      (julia-snail-parser-block-path blocks 500)))))
+      (julia-snail-parser--block-path blocks 500)))))
