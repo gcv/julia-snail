@@ -54,5 +54,29 @@ module Charlie
 end
 
 module Delta
+
 a = 10
+
+begin
+   if iseven(a)
+      println("even a")
+   end
+end
+
+function t4(arg1, arg2)
+   arg1 * arg2 * a
+end
+
+module Echo
+
+let x = 10
+   println(x)
+end
+
+function t5()
+   println("t5")
+end
+
+end
+
 end

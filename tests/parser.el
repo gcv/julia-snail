@@ -391,7 +391,13 @@ end"
                                           ((:begin 468 535
                                                    ((:quote 497 528)))))))))
            (:module 551 569 "Charlie")
-           (:module 571 594 "Delta"))))
+           (:module 571 786 "Delta"
+                    ((:begin 593 649
+                             ((:if 602 645)))
+                     (:function 651 697 "t4")
+                     (:module 699 781 "Echo"
+                              ((:let 712 740)
+                               (:function 742 776 "t5"))))))))
     (should (equal expected-blocks blocks))
     (should
      (equal
@@ -413,4 +419,15 @@ end"
         (:function 441 539 "t3")
         (:begin 468 535 nil)
         (:quote 497 528 nil))
-      (julia-snail-parser--block-path blocks 500)))))
+      (julia-snail-parser--block-path blocks 500)))
+    (should
+     (equal
+      '((:module 571 786 "Delta")
+        (:function 651 697 "t4"))
+      (julia-snail-parser--block-path blocks 660)))
+    (should
+     (equal
+      '((:module 571 786 "Delta")
+        (:module 699 781 "Echo")
+        (:function 742 776 "t5"))
+      (julia-snail-parser--block-path blocks 750)))))

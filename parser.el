@@ -243,7 +243,7 @@ replace the result of the parser with it."
                         (-first-item (-remove #'null (-map #'helper node))))))
     (-partition
      4
-     (-map (lambda (x) (if (equal :nil x) nil x))
+     (-map (lambda (x) (if (eq :nil x) nil x))
            (-> (-remove #'null (-map #'helper blocks))
                -first-item
                -flatten)))))
