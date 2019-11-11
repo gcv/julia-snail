@@ -251,17 +251,27 @@ replace the result of the parser with it."
 
 ;;; --- queries
 
-;; needed queries:
-;; - current module (including nesting)
-;; - current top-level block (top-level: either a direct child of a module, or actually top level of block list)
+(defun julia-snail-parser--query-module (block-path)
+  ;; Remove everything from the list which is not a module, and return the
+  ;; resulting module names. Fall back to Main if nothing comes back. Return
+  ;; list of module names.
+  (let ((module-blocks (-filter (lambda (block)
+                                  (eq :module
+                                      (-first-item block)))
+                                block-path)))
+    (if (endp module-blocks)
+        (list "Main") ; default
+      (-map #'-fourth-item module-blocks))))
 
-(defun julia-snail-parser--query-current-module (block-path)
-  ;; Implementation: Remove everything from the list which is not a module, and
-  ;; return the resulting module names. Fall back to Main if nothing comes back.
-  )
-
-(defun julia-snail-parser--query-current-top-level-block (block-path)
-  )
+(defun julia-snail-parser--query-top-level-block (block-path)
+  (cl-loop with current-top-block = nil
+           for block in block-path
+           if (eq :module (-first-item block))
+           collect (-fourth-item block) into module
+           and do (setq current-top-block nil)
+           else do (when (null current-top-block) (setq current-top-block block))
+           finally return (list :module (or module (list "Main"))
+                                :block current-top-block)))
 
 
 ;;; --- entry point

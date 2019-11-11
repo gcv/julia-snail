@@ -431,3 +431,49 @@ end"
         (:module 699 781 "Echo")
         (:function 742 776 "t5"))
       (julia-snail-parser--block-path blocks 750)))))
+
+(ert-deftest jsp-test-query-top-level-blocks ()
+  (let ((block-path '((:module 1 549 "Alpha")
+                      (:module 15 544 "Bravo")
+                      (:function 165 281 "f1")
+                      (:for 208 277 nil)
+                      (:if 228 270 nil))))
+    (should
+     (equal
+      (list :module '("Alpha" "Bravo")
+            :block '(:function 165 281 "f1"))
+      (julia-snail-parser--query-top-level-block block-path))))
+  ;; more complicated nesting 1
+  (let ((block-path '((:module 1 130 "Alpha")
+                      (:module 10 120 "Bravo")
+                      (:let 20 110 nil)
+                      (:begin 30 100 nil)
+                      (:function 50 80 "f1")
+                      (:if 60 70 nil))))
+    (should
+     (equal
+      (list :module '("Alpha" "Bravo")
+            :block '(:let 20 110 nil))
+      (julia-snail-parser--query-top-level-block block-path))))
+  ;; more complicated nesting 2
+  (let ((block-path '((:module 1 130 "Alpha")
+                      (:begin 3 65 nil)
+                      (:module 10 120 "Bravo")
+                      (:let 20 110 nil)
+                      (:begin 30 100 nil)
+                      (:module 40 90 "Charlie")
+                      (:function 50 80 "f1")
+                      (:if 60 70 nil))))
+    (should
+     (equal
+      (list :module '("Alpha" "Bravo" "Charlie")
+            :block '(:function 50 80 "f1"))
+      (julia-snail-parser--query-top-level-block block-path))))
+  ;; no top-level module
+  (let ((block-path '((:function 50 80 "f1")
+                      (:if 60 70 nil))))
+    (should
+     (equal
+      (list :module '("Main")
+            :block '(:function 50 80 "f1"))
+      (julia-snail-parser--query-top-level-block block-path)))))
