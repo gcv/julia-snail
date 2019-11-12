@@ -511,10 +511,8 @@ end"
 (ert-deftest jsp-test-query-fail-to-parse ()
   (with-temp-buffer
     (insert-file jsp-test-file-bad-syntax.jl)
-    (should
-     (equal
-      "Buffer does not parse; check Julia syntax"
-      (julia-snail-parser-query (current-buffer) 1 :module)))))
+    (should-error
+     (julia-snail-parser-query (current-buffer) 1 :module))))
 
 (ert-deftest jsp-test-query-module ()
   (with-temp-buffer

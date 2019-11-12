@@ -272,7 +272,7 @@ replace the result of the parser with it."
 (defun julia-snail-parser-query (buf pt query)
   (let ((tree (julia-snail-parser--parse buf)))
     (if (parsec-error-p tree)
-        (message "Buffer does not parse; check Julia syntax")
+        (error "Buffer does not parse; check Julia syntax")
       (let* ((blocks (julia-snail-parser--blocks tree))
              (block-path (julia-snail-parser--block-path blocks pt)))
         (cond ((eq :module query)
