@@ -224,22 +224,15 @@ replace the result of the parser with it."
                       (if (keywordp (-first-item node))
                           (when (and (>= pt (-second-item node))
                                      (<= pt (-third-item node)))
-                            (if (atom (-last-item node))
-                                (list (-first-item node)
-                                      (-second-item node)
-                                      (-third-item node)
-                                      (if (stringp (-fourth-item node))
-                                          (-fourth-item node)
-                                        :nil))
-                              (let ((child-check (helper (-last-item node))))
-                                (when child-check
-                                  (list (-first-item node)
-                                        (-second-item node)
-                                        (-third-item node)
-                                        (if (stringp (-fourth-item node))
-                                            (-fourth-item node)
-                                          :nil)
-                                        child-check)))))
+                            (list (-first-item node)
+                                  (-second-item node)
+                                  (-third-item node)
+                                  (if (stringp (-fourth-item node))
+                                      (-fourth-item node)
+                                    :nil)
+                                  (when (listp (-last-item node))
+                                    (when-let (child-check (helper (-last-item node)))
+                                      child-check))))
                         (-first-item (-remove #'null (-map #'helper node))))))
     (-partition
      4
@@ -276,15 +269,17 @@ replace the result of the parser with it."
 
 ;;; --- entry point
 
-(defun julia-snail-parser-query (buffer query)
-  ;; FIXME: This needs to do the parsing, and must error-check and
-  ;; error-report properly.
-  ;; FIXME: Maybe change /everything/ other than this function to
-  ;; julia-snail-parser-- namespace?
-  (cond ((equal :module query)
-         ;; ...
-         ))
-  )
+(defun julia-snail-parser-query (buf pt query)
+  (let ((tree (julia-snail-parser--parse buf)))
+    (if (parsec-error-p tree)
+        (message "Buffer does not parse; check Julia syntax")
+      (let* ((blocks (julia-snail-parser--blocks tree))
+             (block-path (julia-snail-parser--block-path blocks pt)))
+        (cond ((eq :module query)
+               (julia-snail-parser--query-module block-path))
+              ((eq :top-level-block query)
+               (julia-snail-parser--query-top-level-block block-path))
+              (t (message (format "Unknown Snail parser query: %s" query))))))))
 
 
 ;;; --- done

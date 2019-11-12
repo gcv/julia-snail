@@ -8,6 +8,25 @@
 (require 'julia-snail-parser "../parser.el")
 
 
+;;; --- variables
+
+(defvar jsp-test-file-blocks.jl
+  ;; XXX: Obnoxious Elisp path construction for "files/blocks.jl".
+  (concat
+   (file-name-as-directory
+    (concat (or (file-name-as-directory default-directory)
+                (file-name-directory load-file-name)) "files"))
+   "blocks.jl"))
+
+(defvar jsp-test-file-bad-syntax.jl
+  ;; XXX: Obnoxious Elisp path construction for "files/bad-syntax.jl".
+  (concat
+   (file-name-as-directory
+    (concat (or (file-name-as-directory default-directory)
+                (file-name-directory load-file-name)) "files"))
+   "bad-syntax.jl"))
+
+
 ;;; --- tests
 
 (ert-deftest jsp-test-strings ()
@@ -363,13 +382,7 @@ end"
 (ert-deftest jsp-test-whole-file-blocks ()
   (let ((blocks
          (with-temp-buffer
-           (insert-file
-            ;; XXX: Obnoxious Elisp path construction for "files/blocks.jl".
-            (concat
-             (file-name-as-directory
-              (concat (or (file-name-as-directory default-directory)
-                          (file-name-directory load-file-name)) "files"))
-             "blocks.jl"))
+           (insert-file jsp-test-file-blocks.jl)
            (-> (current-buffer)
                julia-snail-parser--parse
                julia-snail-parser--blocks)))
@@ -399,6 +412,23 @@ end"
                               ((:let 712 740)
                                (:function 742 776 "t5"))))))))
     (should (equal expected-blocks blocks))
+    (should
+     (equal
+      '((:module 1 549 "Alpha"))
+      (julia-snail-parser--block-path blocks 1)))
+    (should
+     (equal
+      '((:module 1 549 "Alpha"))
+      (julia-snail-parser--block-path blocks 2)))
+    (should
+     (equal
+      '((:module 1 549 "Alpha"))
+      (julia-snail-parser--block-path blocks 10)))
+    (should
+     (equal
+      '((:module 1 549 "Alpha")
+        (:module 15 544 "Bravo"))
+      (julia-snail-parser--block-path blocks 15)))
     (should
      (equal
       '((:module 1 549 "Alpha")
@@ -477,3 +507,82 @@ end"
       (list :module '("Main")
             :block '(:function 50 80 "f1"))
       (julia-snail-parser--query-top-level-block block-path)))))
+
+(ert-deftest jsp-test-query-fail-to-parse ()
+  (with-temp-buffer
+    (insert-file jsp-test-file-bad-syntax.jl)
+    (should
+     (equal
+      "Buffer does not parse; check Julia syntax"
+      (julia-snail-parser-query (current-buffer) 1 :module)))))
+
+(ert-deftest jsp-test-query-module ()
+  (with-temp-buffer
+    (insert-file jsp-test-file-blocks.jl)
+    (should
+     (equal
+      '("Alpha")
+      (julia-snail-parser-query (current-buffer) 1 :module)))
+    (should
+     (equal
+      '("Alpha")
+      (julia-snail-parser-query (current-buffer) 2 :module)))
+    (should
+     (equal
+      '("Alpha" "Bravo")
+      (julia-snail-parser-query (current-buffer) 55 :module)))
+    (should
+     (equal
+      '("Main")
+      (julia-snail-parser-query (current-buffer) 550 :module)))
+    (should
+     (equal
+      '("Charlie")
+      (julia-snail-parser-query (current-buffer) 551 :module)))
+    (should
+     (equal
+      '("Delta")
+      (julia-snail-parser-query (current-buffer) 585 :module)))
+    (should
+     (equal
+      '("Main")
+      (julia-snail-parser-query (current-buffer) 787 :module)))))
+
+(ert-deftest jsp-test-query-top-level-block ()
+  (with-temp-buffer
+    (insert-file jsp-test-file-blocks.jl)
+    (should
+     (equal
+      (list :module '("Alpha")
+            :block nil)
+      (julia-snail-parser-query (current-buffer) 1 :top-level-block)))
+    (should
+     (equal
+      (list :module '("Alpha" "Bravo")
+            :block '(:macro 29 65 "m1"))
+      (julia-snail-parser-query (current-buffer) 55 :top-level-block)))
+    (should
+     (equal
+      (list :module '("Alpha" "Bravo")
+            :block '(:struct 67 85 "s1"))
+      (julia-snail-parser-query (current-buffer) 77 :top-level-block)))
+    (should
+     (equal
+      (list :module '("Alpha" "Bravo")
+            :block '(:function 165 281 "t1"))
+      (julia-snail-parser-query (current-buffer) 260 :top-level-block)))
+    (should
+     (equal
+      (list :module '("Delta" "Echo")
+            :block '(:let 712 740 nil))
+      (julia-snail-parser-query (current-buffer) 723 :top-level-block)))
+    (should
+     (equal
+      (list :module '("Delta" "Echo")
+            :block '(:function 742 776 "t5"))
+      (julia-snail-parser-query (current-buffer) 756 :top-level-block)))
+    (should
+     (equal
+      (list :module '("Main")
+            :block nil)
+      (julia-snail-parser-query (current-buffer) 787 :top-level-block)))))
