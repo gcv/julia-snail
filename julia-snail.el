@@ -360,6 +360,18 @@ This occurs in the context of the current module."
                                                   "unknown")
                                                 (julia-snail--construct-module-path module))))))))
 
+(defun julia-snail-package-activate (dir)
+  "Activate a Pkg project in the Julia REPL."
+  (interactive "DProject directory: ")
+  (let ((repl-buf (get-buffer julia-snail-repl-buffer))
+        (expanded-dir (expand-file-name dir)))
+    (if (null repl-buf)
+        (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
+      (julia-snail--send-to-server repl-buf
+        :Main
+        (format "Pkg.activate(\"%s\")" expanded-dir)
+        :callback-success (lambda () (message "Package activated: %s" expanded-dir))))))
+
 
 ;;; --- mode definition
 
