@@ -28,16 +28,20 @@
   :type 'string)
 
 (defcustom julia-snail-port 2001
-  "Snail server port."
+  "Default Snail server port."
   :tag "Snail server port"
   :group 'julia-snail
+  :safe 'integerp
   :type 'integer)
+(make-variable-buffer-local 'julia-snail-port)
 
 (defcustom julia-snail-repl-buffer "*julia*"
-  "Buffer to use for Julia REPL interaction."
+  "Default buffer to use for Julia REPL interaction."
   :tag "Julia REPL buffer"
   :group 'julia-snail
+  :safe 'stringp
   :type 'string)
+(make-variable-buffer-local 'julia-snail-repl-buffer)
 
 (defcustom julia-snail-show-error-window t
   "When t, show compilation errors in separate window. When nil,
@@ -123,6 +127,7 @@ symbols, given by MODULE. MODULE can be:
       (persp-add-buffer process-buf))
     (with-current-buffer process-buf
       (unless julia-snail--process
+        (setq julia-snail-port (buffer-local-value 'julia-snail-port repl-buf))
         ;; XXX: This is currently necessary because there does not appear to be
         ;; a way to pass arguments to an interactive Julia session. This does
         ;; not work: `julia -L JuliaSnail.jl -- $PORT`.
@@ -261,12 +266,14 @@ Julia include on the tmpfile, and then deleting the file."
 (defun julia-snail ()
   "FIXME: Write this."
   (interactive)
-  (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
+  (let ((source-buf (current-buffer))
+        (repl-buf (get-buffer julia-snail-repl-buffer)))
     (if repl-buf
         (pop-to-buffer-same-window repl-buf)
       ;; run Julia in a vterm and load the Snail server file
       (let ((vterm-shell (format "%s -L %s" julia-snail-executable julia-snail--server-file)))
         (vterm julia-snail-repl-buffer)
+        (setq julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
         (julia-snail-mode)))))
 
 (defun julia-snail-send-line ()
