@@ -14,16 +14,20 @@
   ;; XXX: Obnoxious Elisp path construction for "files/blocks.jl".
   (concat
    (file-name-as-directory
-    (concat (or (file-name-as-directory default-directory)
-                (file-name-directory load-file-name)) "files"))
+    (concat (if load-file-name
+                (file-name-directory load-file-name)
+              (file-name-as-directory default-directory))
+            "files"))
    "blocks.jl"))
 
 (defvar jsp-test-file-bad-syntax.jl
   ;; XXX: Obnoxious Elisp path construction for "files/bad-syntax.jl".
   (concat
    (file-name-as-directory
-    (concat (or (file-name-as-directory default-directory)
-                (file-name-directory load-file-name)) "files"))
+    (concat (if load-file-name
+                (file-name-directory load-file-name)
+              (file-name-as-directory default-directory))
+            "files"))
    "bad-syntax.jl"))
 
 

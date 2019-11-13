@@ -56,7 +56,10 @@ just display them in the minibuffer."
 (defvar-local julia-snail--process nil)
 
 (defvar julia-snail--server-file
-  (concat (file-name-directory load-file-name) "JuliaSnail.jl"))
+  (concat (if load-file-name
+                (file-name-directory load-file-name)
+              (file-name-as-directory default-directory))
+          "JuliaSnail.jl"))
 
 (defvar julia-snail--requests
   (make-hash-table :test #'equal))
