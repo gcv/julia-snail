@@ -27,7 +27,7 @@
   :group 'julia-snail
   :type 'string)
 
-(defcustom julia-snail-port 2001
+(defcustom julia-snail-port 10011
   "Default Snail server port."
   :tag "Snail server port"
   :group 'julia-snail

@@ -103,7 +103,7 @@ Standard output and standard error during evaluation go into the REPL. Errors
 during evaluation are captured and sent back to the client as Elisp
 s-expressions. Special queries also write back their responses as s-expressions.
 """
-function start(port=2001)
+function start(port=10011)
    global running = true
    @async begin
       global server_socket = Sockets.listen(port)
