@@ -82,7 +82,7 @@ function eval_in_module(fully_qualified_module_name::Array{Symbol, 1}, expr::Exp
    for m in fully_qualified_module_name[2:end]
       fqm = getfield(fqm, m)
    end
-   fqm.eval(expr) # alternatively: Core.eval(fqm, expr)
+   Core.eval(fqm, expr)
 end
 
 

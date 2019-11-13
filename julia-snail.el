@@ -80,6 +80,32 @@ just display them in the minibuffer."
       (error "no REPL buffer found"))
     (format "%s error" (buffer-name (get-buffer real-buf)))))
 
+(defun julia-snail--flash-region (start end &optional timeout)
+  ;; borrowed from SLIME
+  (let ((overlay (make-overlay start end)))
+    (overlay-put overlay 'face 'highlight)
+    (run-with-timer (or timeout 0.2) nil 'delete-overlay overlay)))
+
+(defun julia-snail--construct-module-path (module)
+  "Return a Julia array representing the module path, as Julia
+symbols, given by MODULE. MODULE can be:
+- nil, which returns [:Main]
+- an Elisp keyword, which returns [<keyword>], including the
+  leading colon in the keyword
+- an Elisp list, which can contain either keywords or strings,
+  and which is converted to a Julia array literal with the
+  entries of the input list converted to Julia keywords"
+  (cond ((null module) "[:Main]")
+        ((keywordp module) (format "[%s]" module))
+        ((listp module) (format
+                         "[%s]"
+                         (s-join " " (-map (lambda (s)
+                                             (if (keywordp s)
+                                                 (format "%s" s)
+                                               (format ":%s" s)))
+                                           module))))
+        (t (error "Malformed module specification"))))
+
 
 ;;; --- connection management functions
 
@@ -136,15 +162,16 @@ wait for the REPL prompt to return, otherwise return immediately."
           (sleep-for 0 20)
           (setf sleep-total (+ sleep-total 20)))))))
 
-(defun julia-snail--send-to-server (repl-buf str)
+(defun julia-snail--send-to-server (repl-buf module str)
   "Send str to Snail server."
   (declare (indent defun))
   (unless repl-buf
     (error "no REPL buffer given"))
   (let* ((process-buf (get-buffer (julia-snail--process-buffer-name repl-buf)))
-         ;; FIXME: Support other namespaces!
+         (module-ns (julia-snail--construct-module-path module))
          (reqid (format "%04x%04x" (random (expt 16 4)) (random (expt 16 4))))
-         (msg (format "(ns = [:Main], reqid = \"%s\", code = %s)\n"
+         (msg (format "(ns = %s, reqid = \"%s\", code = %s)\n"
+                      module-ns
                       reqid
                       (json-encode-string str))))
     (with-current-buffer process-buf
@@ -159,7 +186,7 @@ wait for the REPL prompt to return, otherwise return immediately."
              julia-snail--requests)
     reqid))
 
-(defun julia-snail--send-to-server-via-tmp-file (repl-buf str)
+(defun julia-snail--send-to-server-via-tmp-file (repl-buf module str)
   "Send str to server by first writing it to a tmpfile, calling
 Julia include on the tmpfile, and then deleting the file."
   (unless repl-buf
@@ -173,7 +200,9 @@ Julia include on the tmpfile, and then deleting the file."
       (with-temp-file tmpfile
         (insert text))
       (let ((reqid (julia-snail--send-to-server
-                     repl-buf (format "include(\"%s\");" tmpfile))))
+                     repl-buf
+                     module
+                     (format "include(\"%s\");" tmpfile))))
         (puthash reqid
                  (make-julia-snail--request-tracker
                   :repl-buf repl-buf
@@ -207,7 +236,8 @@ Julia include on the tmpfile, and then deleting the file."
       (remhash reqid julia-snail--requests))))
 
 (defun julia-snail--response-done (reqid)
-  (julia-snail--response-base reqid))
+  (julia-snail--response-base reqid)
+  (message "Snail command succeeded"))
 
 (defun julia-snail--response-error (reqid error-message error-stack)
   (if (not julia-snail-show-error-window)
@@ -255,6 +285,7 @@ Julia include on the tmpfile, and then deleting the file."
         (filename buffer-file-name))
     (when repl-buf
       (julia-snail--send-to-server repl-buf
+        :Main
         (format "include(\"%s\");" filename)))))
 
 (defun julia-snail-send-region ()
@@ -262,19 +293,23 @@ Julia include on the tmpfile, and then deleting the file."
   (interactive)
   (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
     (when (and repl-buf (use-region-p))
-      (let ((text (buffer-substring-no-properties (region-beginning) (region-end))))
-        (julia-snail--send-to-server-via-tmp-file repl-buf text)))))
+      (let ((text (buffer-substring-no-properties (region-beginning) (region-end)))
+            (module (julia-snail-parser-query (current-buffer) (point) :module)))
+        (julia-snail--send-to-server-via-tmp-file repl-buf module text)))))
 
 (defun julia-snail-send-top-level-form ()
   "FIXME: Write this."
   (interactive)
-  ;; FIXME: Convert to sending by socket.
-  ;; TODO: Use a Julia parser and support module context.
   (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
     (when repl-buf
-      (let ((form (s-trim (thing-at-point 'defun t))))
-        (julia-snail--send-to-repl repl-buf
-          form)))))
+      (let* ((q (julia-snail-parser-query (current-buffer) (point) :top-level-block))
+             (module (plist-get q :module))
+             (block-description (plist-get q :block))
+             (block-start (-second-item block-description))
+             (block-end (-third-item block-description))
+             (text (buffer-substring-no-properties block-start block-end)))
+        (julia-snail--flash-region block-start block-end 0.5)
+        (julia-snail--send-to-server-via-tmp-file repl-buf module text)))))
 
 
 ;;; --- mode definition
