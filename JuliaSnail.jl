@@ -1,3 +1,6 @@
+import Pkg
+
+
 module JuliaSnail
 
 
@@ -118,11 +121,11 @@ function start(port=10011)
                expr = Meta.parse(input.code)
                eval_in_module(input.ns, expr)
                # report successful evaluation back to client
-               resp = elexpr((Symbol("julia-snail--response-done"), input.reqid))
+               resp = elexpr((Symbol("julia-snail--response-success"), input.reqid))
                println(client, resp)
             catch err
                try
-                  resp = elexpr((Symbol("julia-snail--response-error"),
+                  resp = elexpr((Symbol("julia-snail--response-failure"),
                                  input.reqid,
                                  sprint(showerror, err),
                                  string.(stacktrace(catch_backtrace()))))
