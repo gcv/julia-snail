@@ -264,7 +264,12 @@ Julia include on the tmpfile, and then deleting the file."
 
 ;;;###autoload
 (defun julia-snail ()
-  "FIXME: Write this."
+  "Start a Julia REPL and connect to it, or switch if one already exists.
+The following buffer-local variables control it:
+- julia-snail-repl-buffer (default: *julia*)
+- julia-snail-port (default: 10011)
+To create multiple REPLs, give these variables distinct values (e.g.:
+*julia my-project-1* and 10012)."
   (interactive)
   (let ((source-buf (current-buffer))
         (repl-buf (get-buffer julia-snail-repl-buffer)))
@@ -277,7 +282,8 @@ Julia include on the tmpfile, and then deleting the file."
         (julia-snail-mode)))))
 
 (defun julia-snail-send-line ()
-  "FIXME: Write this."
+  "Copy the line at the current point into the REPL and run it.
+This is not module-context aware."
   (interactive)
   (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
     (when repl-buf
@@ -286,7 +292,8 @@ Julia include on the tmpfile, and then deleting the file."
           line)))))
 
 (defun julia-snail-send-buffer ()
-  "FIXME: Write this."
+  "Send the current buffer's file into the Julia REPL, and include() it.
+This will occur in the context of the Main module, just as it would at the REPL."
   (interactive)
   (let ((repl-buf (get-buffer julia-snail-repl-buffer))
         (filename buffer-file-name))
@@ -296,7 +303,8 @@ Julia include on the tmpfile, and then deleting the file."
         (format "include(\"%s\");" filename)))))
 
 (defun julia-snail-send-region ()
-  "FIXME: Write this."
+  "Send the region (requires transient-mark) to the Julia REPL and evaluate it.
+This occurs in the context of the current module."
   (interactive)
   (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
     (when (and repl-buf (use-region-p))
@@ -305,7 +313,8 @@ Julia include on the tmpfile, and then deleting the file."
         (julia-snail--send-to-server-via-tmp-file repl-buf module text)))))
 
 (defun julia-snail-send-top-level-form ()
-  "FIXME: Write this."
+  "Send the top-level form surrounding the point to the Julia REPL and evaluate it.
+This occurs in the context of the current module."
   (interactive)
   (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
     (when repl-buf
