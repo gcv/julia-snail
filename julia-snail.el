@@ -70,7 +70,7 @@ just display them in the minibuffer."
 (cl-defstruct julia-snail--request-tracker
   repl-buf
   originating-buf
-  (callback-success (lambda () (message "Snail command succeeded")))
+  (callback-success (lambda (&optional data) (message "Snail command succeeded")))
   (callback-failure (lambda () (message "Snail command failed")))
   tmpfile)
 
@@ -254,9 +254,11 @@ Julia include on the tmpfile, and then deleting the file."
       ;; remove request ID from requests hash
       (remhash reqid julia-snail--requests))))
 
-(defun julia-snail--response-success (reqid)
-  (let ((request-info (gethash reqid julia-snail--requests)))
-    (funcall (julia-snail--request-tracker-callback-success request-info)))
+(defun julia-snail--response-success (reqid result-data)
+  (let* ((request-info (gethash reqid julia-snail--requests))
+         (callback-success (julia-snail--request-tracker-callback-success request-info)))
+    (when callback-success
+      (funcall callback-success result-data)))
   (julia-snail--response-base reqid))
 
 (defun julia-snail--response-failure (reqid error-message error-stack)
@@ -264,7 +266,8 @@ Julia include on the tmpfile, and then deleting the file."
       (message error-message)
     (let* ((request-info (gethash reqid julia-snail--requests))
            (repl-buf (julia-snail--request-tracker-repl-buf request-info))
-           (error-buffer (get-buffer-create (julia-snail--error-buffer-name repl-buf))))
+           (error-buffer (get-buffer-create (julia-snail--error-buffer-name repl-buf)))
+           (callback-failure (julia-snail--request-tracker-callback-failure request-info)))
       (with-current-buffer error-buffer
         (insert error-message)
         (insert "\n\n")
@@ -272,7 +275,8 @@ Julia include on the tmpfile, and then deleting the file."
         (goto-char (point-min))
         (read-only-mode))
       (display-buffer error-buffer)
-      (funcall (julia-snail--request-tracker-callback-failure request-info))))
+      (when callback-failure
+        (funcall callback-failure))))
   (julia-snail--response-base reqid))
 
 
@@ -319,7 +323,8 @@ This will occur in the context of the Main module, just as it would at the REPL.
       (julia-snail--send-to-server repl-buf
         :Main
         (format "include(\"%s\");" filename)
-        :callback-success (lambda () (message "%s loaded" filename))))))
+        :callback-success (lambda (&optional data)
+                            (message "%s loaded" filename))))))
 
 (defun julia-snail-send-region ()
   "Send the region (requires transient-mark) to the Julia REPL and evaluate it.
@@ -334,7 +339,7 @@ This occurs in the context of the current module."
               (module (julia-snail-parser-query (current-buffer) (point) :module)))
           (julia-snail--send-to-server-via-tmp-file repl-buf
             module text
-            :callback-success (lambda ()
+            :callback-success (lambda (&optional data)
                                 (message "Selected region evaluated in module %s"
                                          (julia-snail--construct-module-path module)))))))))
 
@@ -354,11 +359,12 @@ This occurs in the context of the current module."
         (julia-snail--flash-region block-start block-end 0.5)
         (julia-snail--send-to-server-via-tmp-file repl-buf
           module text
-          :callback-success (lambda () (message "Top-level form evaluated (%s) in module %s"
-                                                (if (-fourth-item block-description)
-                                                    (-fourth-item block-description)
-                                                  "unknown")
-                                                (julia-snail--construct-module-path module))))))))
+          :callback-success (lambda (&optional data)
+                              (message "Top-level form evaluated (%s) in module %s"
+                                       (if (-fourth-item block-description)
+                                           (-fourth-item block-description)
+                                         "unknown")
+                                       (julia-snail--construct-module-path module))))))))
 
 (defun julia-snail-package-activate (dir)
   "Activate a Pkg project in the Julia REPL."
@@ -370,7 +376,8 @@ This occurs in the context of the current module."
       (julia-snail--send-to-server repl-buf
         :Main
         (format "Pkg.activate(\"%s\")" expanded-dir)
-        :callback-success (lambda () (message "Package activated: %s" expanded-dir))))))
+        :callback-success (lambda (&optional data)
+                            (message "Package activated: %s" expanded-dir))))))
 
 
 ;;; --- mode definition

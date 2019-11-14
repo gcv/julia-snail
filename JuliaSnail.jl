@@ -45,6 +45,10 @@ function elexpr(arg::Symbol)
    string(arg)
 end
 
+function elexpr(arg::Any)
+   "nil"
+end
+
 function elexpr(arg::ElispKeyword)
    Printf.@sprintf(":%s", arg.kw)
 end
@@ -119,9 +123,11 @@ function start(port=10011)
             try
                input = eval(Meta.parse(command))
                expr = Meta.parse(input.code)
-               eval_in_module(input.ns, expr)
+               result = eval_in_module(input.ns, expr)
                # report successful evaluation back to client
-               resp = elexpr((Symbol("julia-snail--response-success"), input.reqid))
+               resp = elexpr((Symbol("julia-snail--response-success"),
+                              input.reqid,
+                              result))
                println(client, resp)
             catch err
                try
