@@ -519,7 +519,7 @@ end"
     (should-error
      (julia-snail-parser-query (current-buffer) 1 :module))))
 
-(ert-deftest jsp-test-query-module ()
+(ert-deftest jsp-test-query-file-module ()
   (with-temp-buffer
     (insert-file jsp-test-file-blocks.jl)
     (should
@@ -551,14 +551,11 @@ end"
       '("Main")
       (julia-snail-parser-query (current-buffer) 787 :module)))))
 
-(ert-deftest jsp-test-query-top-level-block ()
+(ert-deftest jsp-test-query-file-top-level-block ()
   (with-temp-buffer
     (insert-file jsp-test-file-blocks.jl)
-    (should
-     (equal
-      (list :module '("Alpha")
-            :block nil)
-      (julia-snail-parser-query (current-buffer) 1 :top-level-block)))
+    (should-error
+     (julia-snail-parser-query (current-buffer) 1 :top-level-block))
     (should
      (equal
       (list :module '("Alpha" "Bravo")
@@ -584,8 +581,5 @@ end"
       (list :module '("Delta" "Echo")
             :block '(:function 742 776 "t5"))
       (julia-snail-parser-query (current-buffer) 756 :top-level-block)))
-    (should
-     (equal
-      (list :module '("Main")
-            :block nil)
-      (julia-snail-parser-query (current-buffer) 787 :top-level-block)))))
+    (should-error
+     (julia-snail-parser-query (current-buffer) 787 :top-level-block))))

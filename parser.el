@@ -269,8 +269,11 @@ replace the result of the parser with it."
            collect (-fourth-item block) into module
            and do (setq current-top-block nil)
            else do (when (null current-top-block) (setq current-top-block block))
-           finally return (list :module (or module (list "Main"))
-                                :block current-top-block)))
+           finally return
+           (if (endp current-top-block)
+               (error "Unable to parse top-level block")
+             (list :module (or module (list "Main"))
+                   :block current-top-block))))
 
 
 ;;; --- entry point
