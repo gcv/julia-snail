@@ -340,8 +340,9 @@ This occurs in the context of the current module."
           (julia-snail--send-to-server-via-tmp-file repl-buf
             module text
             :callback-success (lambda (&optional data)
-                                (message "Selected region evaluated in module %s"
-                                         (julia-snail--construct-module-path module)))))))))
+                                (message "Selected region evaluated: module %s, result: %s"
+                                         (julia-snail--construct-module-path module)
+                                         data))))))))
 
 (defun julia-snail-send-top-level-form ()
   "Send the top-level form surrounding the point to the Julia REPL and evaluate it.
@@ -360,11 +361,11 @@ This occurs in the context of the current module."
         (julia-snail--send-to-server-via-tmp-file repl-buf
           module text
           :callback-success (lambda (&optional data)
-                              (message "Top-level form evaluated (%s) in module %s"
+                              (message "Top-level form evaluated: module %s, %s"
+                                       (julia-snail--construct-module-path module)
                                        (if (-fourth-item block-description)
                                            (-fourth-item block-description)
-                                         "unknown")
-                                       (julia-snail--construct-module-path module))))))))
+                                         "unknown"))))))))
 
 (defun julia-snail-package-activate (dir)
   "Activate a Pkg project in the Julia REPL."
