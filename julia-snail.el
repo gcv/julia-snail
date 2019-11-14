@@ -83,11 +83,22 @@ just display them in the minibuffer."
       (error "no REPL buffer found"))
     (format "%s process" (buffer-name (get-buffer real-buf)))))
 
-(defun julia-snail--error-buffer-name (repl-buf)
+(defun julia-snail--error-buffer (repl-buf error-message error-stack)
   (let ((real-buf (get-buffer repl-buf)))
     (unless real-buf
       (error "no REPL buffer found"))
-    (format "%s error" (buffer-name (get-buffer real-buf)))))
+    (let* ((error-buf-name (format "%s error" (buffer-name (get-buffer real-buf))))
+           (error-buf (get-buffer-create error-buf-name)))
+      (with-current-buffer error-buf
+        (read-only-mode -1)
+        (erase-buffer)
+        (insert error-message)
+        (insert "\n\n")
+        (insert (s-join "\n" error-stack))
+        (goto-char (point-min))
+        (read-only-mode 1)
+        (julia-snail-error-buffer-mode))
+      error-buf)))
 
 (defun julia-snail--flash-region (start end &optional timeout)
   ;; borrowed from SLIME
@@ -266,14 +277,8 @@ Julia include on the tmpfile, and then deleting the file."
       (message error-message)
     (let* ((request-info (gethash reqid julia-snail--requests))
            (repl-buf (julia-snail--request-tracker-repl-buf request-info))
-           (error-buffer (get-buffer-create (julia-snail--error-buffer-name repl-buf)))
+           (error-buffer (julia-snail--error-buffer repl-buf error-message error-stack))
            (callback-failure (julia-snail--request-tracker-callback-failure request-info)))
-      (with-current-buffer error-buffer
-        (insert error-message)
-        (insert "\n\n")
-        (insert (s-join "\n" error-stack))
-        (goto-char (point-min))
-        (read-only-mode))
       (display-buffer error-buffer)
       (when callback-failure
         (funcall callback-failure))))
@@ -381,7 +386,7 @@ This occurs in the context of the current module."
                             (message "Package activated: %s" expanded-dir))))))
 
 
-;;; --- mode definition
+;;; --- mode definitions
 
 (define-minor-mode julia-snail-mode
   "A minor mode for interactive Julia development. Should only be
@@ -392,5 +397,11 @@ turned on in REPL buffers."
   (if julia-snail-mode
       (julia-snail--enable)
     (julia-snail--disable)))
+
+(define-minor-mode julia-snail-error-buffer-mode
+  "A minor mode for displaying errors returned from the Julia REPL."
+  :init-value nil
+  :lighter " Snail Error"
+  :keymap '(((kbd "q") . bury-buffer)))
 
 (provide 'julia-snail)
