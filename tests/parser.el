@@ -98,7 +98,7 @@ three\"\"\"
       (julia-snail-parser--*expression))))
   (should
    (equal
-    ""
+    "end"
     (parsec-with-input "end"
       (julia-snail-parser--*expression))))
   (should
@@ -142,18 +142,6 @@ bravo
    (equal
     "alpha"
     (parsec-with-input "
-alpha
-\"bravo\"
-\"charlie\"
-# delta
-echo
-"
-      (julia-snail-parser--*expression))))
-  (should
-   (equal
-    ""
-    (parsec-with-input "
-end
 alpha
 \"bravo\"
 \"charlie\"
@@ -284,7 +272,8 @@ end
 end"
       (julia-snail-parser--*file))))
   (should
-   (endp
+   (equal
+    '("end")
     (parsec-with-input "end"
       (julia-snail-parser--*file)))))
 
@@ -382,6 +371,18 @@ end"
       ")(3)")
     (parsec-with-input "(function(x); return 2x; end)(3)"
       (julia-snail-parser--*file)))))
+
+(ert-deftest jsp-test-embedded-end ()
+  (should
+   (equal
+    '((:function 1 "f1")
+      ("()\n   C = @Persistent [1 2 3]\n   append(C, 4)")
+      (:end 58))
+    (parsec-with-input "function f1()
+   C = @Persistent [1 2 3]
+   append(C, 4)
+end"
+      (julia-snail-parser--*block)))))
 
 (ert-deftest jsp-test-whole-file-blocks ()
   (let ((blocks

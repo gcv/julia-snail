@@ -13,6 +13,10 @@
   (parsec-many-as-string
    (parsec-re "[[:space:]\r\n]")))
 
+(defun julia-snail-parser--*whitespace+ ()
+  (parsec-many1-as-string
+   (parsec-re "[[:space:]\r\n]")))
+
 (defun julia-snail-parser--*identifier ()
   (parsec-and
    (julia-snail-parser--*whitespace)
@@ -53,8 +57,10 @@
      (parsec-re "#.*?$")))))
 
 (defun julia-snail-parser--*end ()
+  ;; This detects the end of blocks. The string must start with non-optional
+  ;; whitespace to distinguish it from identifiers like "appEND".
   (parsec-and
-   (julia-snail-parser--*whitespace)
+   (julia-snail-parser--*whitespace+)
    (julia-snail-parser--parsec-query (parsec-re "end") :end)))
 
 (defun julia-snail-parser--*other ()
