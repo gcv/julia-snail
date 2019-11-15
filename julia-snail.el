@@ -25,6 +25,7 @@
   "Julia executable to run as a Snail server."
   :tag "Julia executable"
   :group 'julia-snail
+  :safe 'stringp
   :type 'string)
 
 (defcustom julia-snail-port 10011
@@ -33,7 +34,6 @@
   :group 'julia-snail
   :safe 'integerp
   :type 'integer)
-(make-variable-buffer-local 'julia-snail-port)
 
 (defcustom julia-snail-repl-buffer "*julia*"
   "Default buffer to use for Julia REPL interaction."
@@ -41,7 +41,6 @@
   :group 'julia-snail
   :safe 'stringp
   :type 'string)
-(make-variable-buffer-local 'julia-snail-repl-buffer)
 
 (defcustom julia-snail-show-error-window t
   "When t, show compilation errors in separate window. When nil,
