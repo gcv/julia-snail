@@ -69,6 +69,17 @@
    (parsec-many-till-as-string
     (parsec-or
      (parsec-re "\\[.*?end.*?\\]") ; deal with Julia end syntax in brackets
+     ;; XXX: Major cheating with lookahead using LOOKING-AT here! This check speeds up
+     ;; the parser by a factor of about 10 by letting it consume full lines
+     ;; whenever the lookahead mechanism will not pick anything up anyway.
+     ;; Otherwise, it has to consume one character at a time and check for new
+     ;; blocks, strings, and comments.
+     (if (looking-at ".+\\(\"\\|#\\|end\\|module\\|baremodule\\|function\\|macro\\|abstract type\\|primitive type\\|struct\\|mutable struct\\|if\\|while\\|for\\|begin\\|quote\\|try\\|let\\)")
+         ;; non-"other" syntax found on this line, so consume it char-by-char
+         (parsec-any-ch)
+       ;; no non-"other" syntax found on this line, so consume it whole
+       (parsec-re "[^\n\r]+"))
+     ;; very slow char-by-char fallback
      (parsec-any-ch))
     (parsec-lookahead
      (parsec-or
