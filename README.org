@@ -1,16 +1,123 @@
 * Julia Snail
 
-Snail is a "superior" REPL interaction mode for Julia in the spirit of Common Lisp's [[https://common-lisp.net/project/slime/][SLIME]] and Clojure's [[https://cider.mx][CIDER]].
+Snail is a "superior" REPL interaction package for Julia in the spirit of Common Lisp's [[https://common-lisp.net/project/slime/][SLIME]] and Clojure's [[https://cider.mx][CIDER]].
 
 
-** Planned features
+** Features
 
-- REPL interaction
-- Emacs [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Xref.html][xref]] support
+- REPL display :: Snail currently uses [[https://github.com/neovim/libvterm][libvterm]] with [[https://github.com/akermu/emacs-libvterm][Emacs]] bindings to display Julia's native REPL in a good terminal, so it should have relatively good performance and fewer display bugs than attempting to run the REPL in a `term.el` buffer.
+- Parser :: Snail contains a limited but serviceable Julia parser. See below for where it is used.
+- Convenient REPL interaction :: Snail provides a bridge between Julia programs and a Julia process running in a REPL. ...
 
 
 ** Requirements
 
-- [[https://github.com/JuliaEditorSupport/julia-emacs][julia-mode]]
+- Emacs 26.2 or later, compiled with module support (~--with-modules~)
+- [[https://github.com/JuliaEditorSupport/julia-emacs][julia-mode]] (not strictly required, but highly recommended)
 - [[https://github.com/akermu/emacs-libvterm][emacs-libvterm]]
 - [[https://github.com/magnars/s.el][s.el]]
+- [[https://github.com/Malabarba/spinner.el][spinner]]
+- [[https://github.com/cute-jumper/parsec.el][parsec]]
+- [[https://github.com/magnars/dash.el][dash]]
+
+
+** Future improvements
+
+- The current Parsec-based parser leaves much to be desired. It is incomplete, fairly slow, and not particularly straightforward. Perhaps an implementation with [[https://github.com/ellerh/peg.el][PEG]] would work better.
+- The libvterm dependency forces the use of very recent Emacs releases, and forces Emacs to be build with module support. It would be much better to re-implement the REPL in Elisp.
+
+
+** Usage
+
+*** Installation
+
+...
+
+
+*** Configuration
+
+...
+
+
+*** Basics
+
+...
+
+
+*** Multiple REPLs
+
+To use multiple REPLs, set the local variables ~julia-snail-repl-buffer~ and ~julia-snail-port~. They must be distinct per-project. They can be set at the [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html][file level]], or at the [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html][directory level]]. The latter approach is recommended, with the ~.dir-locals.el~ file at the root of a project directory.
+
+For example, consider two projects: ~Mars~ and ~Venus~, both of which you wish to work on at the same time. They live in different directories.
+
+The ~Mars~ project directory contains the following ~.dir-locals.el~ file:
+
+#+BEGIN_SRC emacs-lisp
+((julia-mode . ((julia-snail-port . 10050)
+                (julia-snail-repl-buffer . "*julia Mars*"))))
+#+END_SRC
+
+The ~Venus~ project directory contains the following ~.dir-locals.el~ file:
+
+#+BEGIN_SRC emacs-lisp
+((julia-mode . ((julia-snail-port . 10060)
+                (julia-snail-repl-buffer . "*julia Venus*"))))
+#+END_SRC
+
+(Be sure to refresh any buffers currently visiting files in ~Mars~ and ~Venus~ using ~find-alternate-file~ or similar.)
+
+Now, source files in ~Mars~ will interact with the REPL running in the ~*julia Mars*~ buffer, and source files in ~Venus~ will interact with the REPL running in the ~*julia Venus*~ buffer.
+
+The ~julia-snail-executable~ variable can be set the same way to run different versions of Julia.
+
+
+** Notes
+
+*** Retrieving line number of a function
+
+#+BEGIN_SRC julia
+code_lowered(Snail.start)[1].linetable[1]
+methods(Snail.start)
+# look at methods
+m = methods(Snail.start).ms[1] # or first(methods(Snail.start))
+[m.file, m.line]
+#+END_SRC
+
+This is complicated by the use of generic functions, IOW it's unclear which definition is relevant without analyzing the arguments — which can realistically only happen at runtime.
+
+This suggests that the xref mechanism should only auto-jump when the definition only contains one entry, and present a type selection dialog otherwise.
+
+
+*** Retrieving autocompletion candidates
+
+#+BEGIN_SRC julia
+names(Main)
+#+END_SRC
+
+This returns an array of symbols.
+
+
+** Tasks
+
+*** Overall
+
+- [X] fill out FIXMEs
+- [X] add Pkg.activate command (and improve command result feedback)
+- [X] parser broken on app~end~ in Blueberry cost function
+- [X] when the breakage occurs, the modeline progress indicator is not removed
+- [X] make callback-success and callback-failure optional
+- [X] fix hanging with broken top-level forms
+- [X] fix failures with multiple error buffers — and add a way to dismiss with q key?
+- [X] test multi-REPL support
+- [ ] test with lowvar code
+- [ ] test with Julia 1.2
+- [ ] rename to just Snail from julia-snail? JSnail?
+  + research the use of "Snail" in software
+  + see if there's another Emacs "snail" package in MELPA
+  + see if there's a snail package in the Julia general registry
+- [ ] xref
+- [ ] autocomplete
+- [ ] figure out how to integrate with vanilla Emacs, company-mode, ivy, helm completers
+- [ ] write decent README, include recommended ~display-buffer-alist~ tweaks
+- [ ] add license (GPL)
+- [ ] eldoc integration (requires better parser)
