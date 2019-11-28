@@ -128,14 +128,15 @@ symbols, given by MODULE. MODULE can be:
 
 ;;; --- connection management functions
 
-(defun julia-snail--cleanup ()
+(defun julia-snail--repl-cleanup ()
   (let ((process-buf (get-buffer (julia-snail--process-buffer-name (current-buffer)))))
     (when process-buf
       (kill-buffer process-buf)))
   (setq julia-snail--process nil))
 
-(defun julia-snail--enable ()
-  (add-hook 'kill-buffer-hook #'julia-snail--cleanup nil t)
+(defun julia-snail--repl-enable ()
+  (add-hook 'kill-buffer-hook #'julia-snail--repl-cleanup nil t)
+  (make-local-variable 'julia-snail--repl-go-back-target)
   (let ((repl-buf (current-buffer))
         (process-buf (get-buffer-create (julia-snail--process-buffer-name (current-buffer)))))
     (when (fboundp #'persp-add-buffer) ; perspective-el support
@@ -158,8 +159,16 @@ symbols, given by MODULE. MODULE can be:
                 (open-network-stream "julia-process" process-buf "localhost" julia-snail-port))
           (set-process-filter julia-snail--process #'julia-snail--server-response-filter))))))
 
+(defun julia-snail--repl-disable ()
+  (julia-snail--repl-cleanup))
+
+(defun julia-snail--enable ()
+  ;; placeholder for source buffer minor mode initialization
+  )
+
 (defun julia-snail--disable ()
-  (julia-snail--cleanup))
+  ;; placeholder for source buffer minor mode cleanup
+  )
 
 
 ;;; --- Julia REPL and Snail server interaction functions
@@ -298,12 +307,15 @@ To create multiple REPLs, give these variables distinct values (e.g.:
   (let ((source-buf (current-buffer))
         (repl-buf (get-buffer julia-snail-repl-buffer)))
     (if repl-buf
-        (pop-to-buffer-same-window repl-buf)
+        (progn
+          (setf (buffer-local-value 'julia-snail--repl-go-back-target repl-buf) source-buf)
+          (pop-to-buffer-same-window repl-buf))
       ;; run Julia in a vterm and load the Snail server file
       (let ((vterm-shell (format "%s -L %s" julia-snail-executable julia-snail--server-file)))
         (vterm julia-snail-repl-buffer)
-        (setq julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
-        (julia-snail-mode)))))
+        (setq-local julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
+        (setq-local julia-snail--repl-go-back-target source-buf)
+        (julia-snail-repl-mode)))))
 
 (defun julia-snail-send-line ()
   "Copy the line at the current point into the REPL and run it.
@@ -384,23 +396,60 @@ This occurs in the context of the current module."
         :callback-success (lambda (&optional data)
                             (message "Package activated: %s" expanded-dir))))))
 
+(defun julia-snail-repl-go-back ()
+  (interactive)
+  (when (boundp 'julia-snail--repl-go-back-target)
+    (pop-to-buffer julia-snail--repl-go-back-target 'display-buffer-reuse-window)))
+
+
+;;; --- keymaps
+
+(defvar julia-snail-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-z") #'julia-snail)
+    (define-key map (kbd "C-c C-a") #'julia-snail-package-activate)
+    (define-key map (kbd "C-c C-c") #'julia-snail-send-top-level-form)
+    (define-key map (kbd "C-M-x") #'julia-snail-send-top-level-form)
+    (define-key map (kbd "C-c C-r") #'julia-snail-send-region)
+    (define-key map (kbd "C-c C-l") #'julia-snail-send-line)
+    (define-key map (kbd "C-c C-k") #'julia-snail-send-buffer)
+    map))
+
+(defvar julia-snail-repl-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-z") #'julia-snail-repl-go-back)
+    map))
+
 
 ;;; --- mode definitions
 
+;;;###autoload
 (define-minor-mode julia-snail-mode
+  "A minor mode for interactive Julia development. Should only be turned on in source buffers."
+  :init-value nil
+  :lighter " Snail"
+  :keymap julia-snail-mode-map
+  (when (eq 'julia-mode major-mode)
+    (if julia-snail-mode
+        (julia-snail--enable)
+      (julia-snail--disable))))
+
+;;;###autoload
+(define-minor-mode julia-snail-repl-mode
   "A minor mode for interactive Julia development. Should only be
 turned on in REPL buffers."
   :init-value nil
   :lighter " Snail"
-  :keymap (make-sparse-keymap)
-  (if julia-snail-mode
-      (julia-snail--enable)
-    (julia-snail--disable)))
+  :keymap julia-snail-repl-mode-map
+  (when (eq 'vterm-mode major-mode)
+    (if julia-snail-repl-mode
+        (julia-snail--repl-enable)
+      (julia-snail--repl-disable))))
 
 (define-minor-mode julia-snail-error-buffer-mode
   "A minor mode for displaying errors returned from the Julia REPL."
   :init-value nil
   :lighter " Snail Error"
-  :keymap '(((kbd "q") . bury-buffer)))
+  :keymap '(((kbd "q") . quit-window)))
 
 (provide 'julia-snail)
