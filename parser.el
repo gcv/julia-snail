@@ -23,9 +23,11 @@
    (parsec-re "[._[:alnum:]]+")))
 
 (defmacro julia-snail-parser--*keyword (kw)
-  `(parsec-return
-       (parsec-str ,kw)
-     (parsec-lookahead (parsec-re "[^[:alnum:]]"))))
+  `(parsec-and
+    (julia-snail-parser--*whitespace)
+    (parsec-return
+        (parsec-str ,kw)
+      (parsec-lookahead (parsec-re "[^[:alnum:]_]")))))
 
 (defun julia-snail-parser--*string-tq ()
   (parsec-and

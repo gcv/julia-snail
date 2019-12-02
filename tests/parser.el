@@ -583,3 +583,24 @@ end"
       (julia-snail-parser-query (current-buffer) 756 :top-level-block)))
     (should-error
      (julia-snail-parser-query (current-buffer) 787 :top-level-block))))
+
+(ert-deftest jsp-test-embedded-keywords ()
+  (should
+   (equal
+    '(((:module 1 "Alpha")
+       ("\ndocstring\n"
+        ((:function 32 "test_fn")
+         ("(module_name)" "hi")
+         (:end 70)))
+       (:end 74))
+      "")
+    (parsec-with-input "module Alpha
+\"\"\"
+docstring
+\"\"\"
+function test_fn(module_name)
+   \"hi\"
+end
+end
+"
+      (julia-snail-parser--*file)))))
