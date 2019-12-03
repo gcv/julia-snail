@@ -34,6 +34,7 @@
   :group 'julia-snail
   :safe 'integerp
   :type 'integer)
+(make-variable-buffer-local 'julia-snail-port)
 
 (defcustom julia-snail-repl-buffer "*julia*"
   "Default buffer to use for Julia REPL interaction."
@@ -41,6 +42,7 @@
   :group 'julia-snail
   :safe 'stringp
   :type 'string)
+(make-variable-buffer-local 'julia-snail-buffer)
 
 (defcustom julia-snail-show-error-window t
   "When t, show compilation errors in separate window. When nil,
