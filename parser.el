@@ -13,10 +13,6 @@
   (parsec-many-as-string
    (parsec-re "[[:space:]\r\n]")))
 
-(defun julia-snail-parser--*whitespace+ ()
-  (parsec-many1-as-string
-   (parsec-re "[[:space:]\r\n]")))
-
 (defun julia-snail-parser--*identifier ()
   (parsec-and
    (julia-snail-parser--*whitespace)
@@ -37,7 +33,9 @@
 (defun julia-snail-parser--*string-dq ()
   (parsec-and
    (julia-snail-parser--*whitespace)
-   (parsec-query (parsec-re "\"\\(\\(?:.\\|\n\\)*?\\)\"") :group 1)))
+   (parsec-query (parsec-re
+                  (rx "\"" (group-n 1 (*? (or "\\\"" anything))) "\""))
+                 :group 1)))
 
 (defun julia-snail-parser--*string ()
   (parsec-and
@@ -59,37 +57,60 @@
      (parsec-re "#.*?$")))))
 
 (defun julia-snail-parser--*end ()
-  ;; This detects the end of blocks. The string must start with non-optional
-  ;; whitespace to distinguish it from identifiers like "appEND".
-  (parsec-and
-   (julia-snail-parser--*whitespace+)
-   (julia-snail-parser--parsec-query (parsec-re "end") :end)))
+  (if (looking-at (rx (* (or blank "\n")) "#"))
+      (parsec-stop :expected "end"
+                   :found (parsec-eof-or-char-as-string))
+    (parsec-and
+     (julia-snail-parser--*whitespace)
+     (parsec-re (rx (* (or blank "\n" (syntax punctuation)))))
+     (julia-snail-parser--parsec-query
+      (parsec-re "end")
+      :end))))
+
+(defun julia-snail-parser--parsec-re-group (regexp group)
+  "Parse the input matching the regular expression REGEXP, but
+extract only GROUP (numbered as per MATCH-STRING."
+  (if (looking-at regexp)
+      (progn (goto-char (match-end group))
+             (match-string group))
+    (parsec-stop :expected regexp
+                 :found (parsec-eof-or-char-as-string))))
+
+(defvar julia-snail-parser--rx-other-core
+  '(or "#" "\""
+       (and (or "end"
+                "module" "baremodule"
+                "function" "macro"
+                "abstract type" "primitive type"
+                "struct" "mutable struct"
+                "if" "while" "for" "begin" "quote" "try" "let")
+            (or line-end blank
+                (syntax punctuation)
+                (syntax open-parenthesis)
+                (syntax close-parenthesis)))))
+
+(defvar julia-snail-parser--rx-other-keywords
+  (rx (+ (or line-start blank "\n" "\r"))
+      (eval julia-snail-parser--rx-other-core)))
+
+(defvar julia-snail-parser--rx-other-main
+  (rx (group (*? (or (and "[" (* anything) "end" (* anything) "]")
+                     anything
+                     "\n"))
+             (or line-start blank
+                 (syntax punctuation)
+                 (syntax open-parenthesis)
+                 (syntax close-parenthesis)))
+      (group (eval julia-snail-parser--rx-other-core))))
 
 (defun julia-snail-parser--*other ()
-  (parsec-and
-   (julia-snail-parser--*whitespace)
-   (parsec-many-till-as-string
-    (parsec-or
-     (parsec-re "\\[.*?end.*?\\]") ; deal with Julia end syntax in brackets
-     ;; XXX: Major cheating with lookahead using LOOKING-AT here! This check speeds up
-     ;; the parser by a factor of about 10 by letting it consume full lines
-     ;; whenever the lookahead mechanism will not pick anything up anyway.
-     ;; Otherwise, it has to consume one character at a time and check for new
-     ;; blocks, strings, and comments.
-     (if (looking-at ".+\\(\"\\|#\\|end\\|module\\|baremodule\\|function\\|macro\\|abstract type\\|primitive type\\|struct\\|mutable struct\\|if\\|while\\|for\\|begin\\|quote\\|try\\|let\\)")
-         ;; non-"other" syntax found on this line, so consume it char-by-char
-         (parsec-any-ch)
-       ;; no non-"other" syntax found on this line, so consume it whole
-       (parsec-re "[^\n\r]+"))
-     ;; very slow char-by-char fallback
-     (parsec-any-ch))
-    (parsec-lookahead
-     (parsec-or
-      (parsec-try (parsec-eof))
-      (parsec-try (julia-snail-parser--*end))
-      (parsec-try (julia-snail-parser--*comment))
-      (parsec-try (julia-snail-parser--*string))
-      (parsec-try (julia-snail-parser--*block)))))))
+  (with-syntax-table julia-mode-syntax-table
+    (cond ((looking-at julia-snail-parser--rx-other-keywords)
+           (parsec-stop :expected "'other' syntax"
+                        :found (parsec-eof-or-char-as-string)))
+          ((looking-at julia-snail-parser--rx-other-main)
+           (julia-snail-parser--parsec-re-group julia-snail-parser--rx-other-main 1))
+          (t (parsec-re (rx (* (or anything "\n"))))))))
 
 (defun julia-snail-parser--*expression ()
   (parsec-and

@@ -59,6 +59,11 @@ three\"
 two
 three\"\"\"
 "
+      (julia-snail-parser--*string))))
+  (should
+   (equal
+    "one\\\"two"
+    (parsec-with-input "\"one\\\"two\""
       (julia-snail-parser--*string)))))
 
 (ert-deftest jsp-test-comments ()
@@ -80,6 +85,98 @@ three\"\"\"
 "
       (julia-snail-parser--*comment-multiline)))))
 
+(ert-deftest jsp-test-end ()
+  (should
+   (equal
+    '(:end 1)
+    (parsec-with-input "end"
+      (julia-snail-parser--*end))))
+  (should
+   (equal
+    '(:end 2)
+    (parsec-with-input " end"
+      (julia-snail-parser--*end))))
+  (should
+   (equal
+    '(:end 2)
+    (parsec-with-input ";end"
+      (julia-snail-parser--*end))))
+  (should
+   (equal
+    '(:end 2)
+    (parsec-with-input ";end"
+      (julia-snail-parser--*end))))
+  (should
+   (parsec-error-p
+    (parsec-with-input "append"
+      (julia-snail-parser--*end))))
+  (should
+   (parsec-error-p
+    (parsec-with-input "# end"
+      (julia-snail-parser--*end)))))
+
+(ert-deftest jsp-test-other ()
+  (should
+   (equal
+    "one "
+    (parsec-with-input "one function(x) x; end"
+      (julia-snail-parser--*other))))
+  (should
+   (parsec-error-p
+    (parsec-with-input "function(x) x; end"
+      (julia-snail-parser--*other))))
+  (should
+   (parsec-error-p
+    (parsec-with-input "   function(x) x; end"
+      (julia-snail-parser--*other))))
+  (should
+   (equal
+    "prefunction(x) x; "
+    (parsec-with-input "prefunction(x) x; end"
+      (julia-snail-parser--*other))))
+  (should
+   (equal
+    "pre_function(x) x; "
+    (parsec-with-input "pre_function(x) x; end"
+      (julia-snail-parser--*other))))
+  (should
+   (equal
+    "function_post(x) x; "
+    (parsec-with-input "function_post(x) x; end"
+      (julia-snail-parser--*other))))
+  (should
+   (equal
+    "functionpost(x) x; "
+    (parsec-with-input "functionpost(x) x; end"
+      (julia-snail-parser--*other))))
+  (should
+   (equal
+    "1:(("
+    (parsec-with-input "1:((function(); 1; end)())"
+      (julia-snail-parser--*other))))
+  (should
+   (equal
+    "("
+    (parsec-with-input "(function(); 1; end)()*(function(); 2; end)()"
+      (julia-snail-parser--*other))))
+  (should
+   (parsec-error-p
+    (parsec-with-input "end"
+      (julia-snail-parser--*other))))
+  ;; FIXME:
+  ;; (should
+  ;;  (equal
+  ;;   "A = B[1:end]"
+  ;;   (parsec-with-input "A = B[1:end]"
+  ;;     (julia-snail-parser--*other))))
+  ;; FIXME:
+  ;; (should
+  ;;  (equal
+  ;;   "A = B[ 1 : end ]"
+  ;;   (parsec-with-input "A = B[ 1 :end ]"
+  ;;     (julia-snail-parser--*other))))
+  )
+
 (ert-deftest jsp-test-expressions ()
   (should
    (equal
@@ -97,13 +194,12 @@ three\"\"\"
     (parsec-with-input "alpha"
       (julia-snail-parser--*expression))))
   (should
-   (equal
-    "end"
+   (parsec-error-p
     (parsec-with-input "end"
       (julia-snail-parser--*expression))))
   (should
    (equal
-    '("alpha"
+    '("alpha "
       (:end 7))
     (parsec-with-input "alpha end"
       (parsec-collect (julia-snail-parser--*expression)
@@ -140,7 +236,7 @@ bravo
         (julia-snail-parser--*expression))))))
   (should
    (equal
-    "alpha"
+    "alpha\n"
     (parsec-with-input "
 alpha
 \"bravo\"
@@ -156,7 +252,7 @@ echo
     '((:module 1 "Alpha")
       ("# bravo"
        "charlie"
-       "delta + echo\nfoxtrot = golf()"
+       "delta + echo\nfoxtrot = golf()\n"
        "# hotel")
       (:end 70))
     (parsec-with-input "module Alpha
@@ -173,9 +269,9 @@ end
     '((:module 1 "Alpha")
       ("# comment"
        ((:function 26 "t1")
-        ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:end]")
+        ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:end]\n")
         (:end 77))
-       "println(" "hi" ")")
+       "println(" "hi" ")\n\n")
       (:end 97))
     (parsec-with-input "module Alpha
 
@@ -215,15 +311,15 @@ end"
    (equal
     '(((:module 1 "Alpha")
        ("# comment"
-        "echo"
+        "echo\n"
         ((:function 29 "t1")
-         ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:end]")
+         ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:end]\n")
          (:end 80))
-        "println(" "hi" ")")
+        "println(" "hi" ")\n")
        (:end 98))
       ((:module 103 "Bravo")
        (((:function 116 "t2")
-         ("(y)")
+         ("(y)\n")
          (:end 131)))
        (:end 135))
       "")
@@ -272,8 +368,7 @@ end
 end"
       (julia-snail-parser--*file))))
   (should
-   (equal
-    '("end")
+   (null
     (parsec-with-input "end"
       (julia-snail-parser--*file)))))
 
@@ -281,37 +376,37 @@ end"
   (should
    (equal
     '(((:struct 2 "Point")
-       ("x\n  y")
+       ("x\n  y\n")
        (:end 23))
       ((:macro 28 "m1")
-       ("(x)\n  x")
+       ("(x)\n  x\n")
        (:end 44))
       ((:struct 49 "Vector")
-       ("x\n  y\n  z")
+       ("x\n  y\n  z\n")
        (:end 75))
       ((:function 80 "t1")
-       ("(x)"
+       ("(x)\n  "
         ((:try 97)
          (((:if 105)
-           ("alpha\n      i = 0"
+           ("alpha\n      i = 0\n      "
             ((:while 132)
-             ("i < 10"
+             ("i < 10\n        "
               ((:for 153)
-               ("x in 1:3\n          println(x * i)")
+               ("x in 1:3\n          println(x * i)\n        ")
                (:end 199)))
              (:end 209))
-            "ex ="
+            "ex = "
             ((:quote 224)
-             ("x + 3")
+             ("x + 3\n      ")
              (:end 250)))
            (:end 258))
-          "catch\n    z = 10"
+          "catch\n    z = 10\n    "
           ((:begin 285)
            (((:let 297)
-             ("w = z * 4\n        println(w)")
+             ("w = z * 4\n        println(w)\n      ")
              (:end 336)))
            (:end 344))
-          "finally\n    stuff()")
+          "finally\n    stuff()\n  ")
          (:end 372)))
        (:end 376)))
     (parsec-with-input "
@@ -366,7 +461,7 @@ end"
    (equal
     '("("
       ((:function 2 nil)
-       ("(x); return 2x;")
+       ("(x); return 2x; ")
        (:end 26))
       ")(3)")
     (parsec-with-input "(function(x); return 2x; end)(3)"
@@ -376,7 +471,7 @@ end"
   (should
    (equal
     '((:function 1 "f1")
-      ("()\n   C = @Persistent [1 2 3]\n   append(C, 4)")
+      ("()\n   C = @Persistent [1 2 3]\n   append(C, 4)\n")
       (:end 58))
     (parsec-with-input "function f1()
    C = @Persistent [1 2 3]
@@ -590,7 +685,7 @@ end"
     '(((:module 1 "Alpha")
        ("\ndocstring\n"
         ((:function 32 "test_fn")
-         ("(module_name)" "hi")
+         ("(module_name)\n   " "hi")
          (:end 70)))
        (:end 74))
       "")
