@@ -269,7 +269,7 @@ end
     '((:module 1 "Alpha")
       ("# comment"
        ((:function 26 "t1")
-        ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:end]\n")
+        ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:" "end]\n")
         (:end 77))
        "println(" "hi" ")\n\n")
       (:end 97))
@@ -313,7 +313,7 @@ end"
        ("# comment"
         "echo\n"
         ((:function 29 "t1")
-         ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:end]\n")
+         ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:" "end]\n")
          (:end 80))
         "println(" "hi" ")\n")
        (:end 98))
@@ -477,7 +477,28 @@ end"
    C = @Persistent [1 2 3]
    append(C, 4)
 end"
-      (julia-snail-parser--*block)))))
+      (julia-snail-parser--*block))))
+  (equal
+   '(((:function 1 "f")
+      ("()\n   "
+       ((:for 17)
+        ("a in A[" "end]\n   ")
+        (:end 36)))
+      (:end 40))
+     ((:function 45 "g")
+      ("()\n   A[1:" "end:" "end]\n")
+      (:end 74))
+     "")
+   (parsec-with-input "function f()
+   for a in A[end]
+   end
+end
+
+function g()
+   A[end:end]
+end
+"
+     (julia-snail-parser--*block))))
 
 (ert-deftest jsp-test-whole-file-blocks ()
   (let ((blocks

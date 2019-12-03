@@ -63,9 +63,11 @@
     (parsec-and
      (julia-snail-parser--*whitespace)
      (parsec-re (rx (* (or blank "\n" (syntax punctuation)))))
-     (julia-snail-parser--parsec-query
-      (parsec-re "end")
-      :end))))
+     (if (julia-in-brackets) ;; XXX: julia-mode to the rescue
+         (parsec-stop :expected "no brackets" :found "brackets")
+       (julia-snail-parser--parsec-query
+        (parsec-re "end")
+        :end)))))
 
 (defun julia-snail-parser--parsec-re-group (regexp group)
   "Parse the input matching the regular expression REGEXP, but
