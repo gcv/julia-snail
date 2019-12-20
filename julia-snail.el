@@ -127,6 +127,14 @@ symbols, given by MODULE. MODULE can be:
                                            module))))
         (t (error "Malformed module specification"))))
 
+(defun julia-snail--identifier-at-point ()
+  (let ((stab (copy-syntax-table)))
+    (with-syntax-table stab
+      (modify-syntax-entry ?. "_")
+      (modify-syntax-entry ?@ "_")
+      (modify-syntax-entry ?= " ")
+      (thing-at-point 'symbol t))))
+
 
 ;;; --- connection management functions
 
@@ -295,6 +303,80 @@ Julia include on the tmpfile, and then deleting the file."
   (julia-snail--response-base reqid))
 
 
+;;; --- xref implementation
+
+(defun julia-snail--xref-backend-definitions (identifier callback-success)
+  (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
+    (if (null repl-buf)
+        (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
+      (if (null identifier)
+          (error "No identifier at point")
+        (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+               ;; Grab everything in the identifier up to the last dot, i.e.,
+               ;; the fully-qualified module name, and everything after the
+               ;; last dot, which should be the symbol in the module.
+               (identifier-split (save-match-data
+                                   (if (string-match
+                                        "\\(.*\\)\\.\\(.*\\)"
+                                        identifier)
+                                       (list (match-string 1 identifier)
+                                             (match-string 2 identifier))
+                                     (list module identifier))))
+               (identifier-ns (-first-item identifier-split))
+               (identifier-name (-second-item identifier-split)))
+          (julia-snail--send-to-server repl-buf
+            module
+            (format "JuliaSnail.xref_backend_definitions(%s, \"%s\")"
+                    identifier-ns identifier-name)
+            :callback-success callback-success))))))
+
+(defun julia-snail-xref-backend ()
+  'xref-julia-snail)
+
+(cl-defmethod xref-backend-identifier-at-point ((_backend (eql xref-julia-snail)))
+  (julia-snail--identifier-at-point))
+
+(cl-defmethod xref-backend-identifier-completion-table ((_backend (eql xref-julia-snail)))
+  ;; Not sure what this should return.
+  ;; ...
+  )
+
+(cl-defmethod xref-backend-definitions ((_backend (eql xref-julia-snail)) identifier)
+  (let ((res nil))
+    ;; Kick off async request to the Snail server. In the success callback, it
+    ;; will destructively modify the closed-over res variable, which this method
+    ;; will poll.
+    (julia-snail--xref-backend-definitions
+     identifier
+     (lambda (&optional data)
+       (setq res (or data :nothing))))
+    ;; wait for the async request callback to set res
+    (let ((sleep-total 0))
+      (while (and (< sleep-total 1000) (null res))
+        (sleep-for 0 20)
+        (setf sleep-total (+ sleep-total 20))))
+    ;; process res
+    (if (or (null res) (eq :nothing res))
+        nil
+      ;; FIXME: Detect situations when the candidate file points to a $TMPDIR
+      ;; path, and use xref-make-bogus-location in those cases. Or maybe just
+      ;; detect when the file points to a non-existent path?
+      (mapcar (lambda (candidate)
+                (xref-make (-first-item candidate)
+                           (xref-make-file-location (-second-item candidate)
+                                                    (-third-item candidate)
+                                                    0)))
+              res))))
+
+(cl-defmethod xref-backend-references ((_backend (eql xref-julia-snail)) identifier)
+  ;; Not sure I want to support this.
+  nil)
+
+(cl-defmethod xref-backend-apropos ((_backend (eql xref-julia-snail)) pattern)
+  ;; ...
+  )
+
+
 ;;; --- commands
 
 ;;;###autoload
@@ -433,7 +515,10 @@ This occurs in the context of the current module."
   :keymap julia-snail-mode-map
   (when (eq 'julia-mode major-mode)
     (if julia-snail-mode
-        (julia-snail--enable)
+        (progn
+          (julia-snail--enable)
+          (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t))
+      (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
       (julia-snail--disable))))
 
 ;;;###autoload

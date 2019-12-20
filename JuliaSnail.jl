@@ -93,6 +93,24 @@ function eval_in_module(fully_qualified_module_name::Array{Symbol, 1}, expr::Exp
 end
 
 
+### --- xref helpers
+
+"""
+FIXME: Write this.
+"""
+function xref_backend_definitions(ns, identifier)
+   try
+      let ms = methods(getproperty(ns, Symbol(identifier))).ms
+         map(m -> (string(m.sig), Base.find_source_file(string(m.file)), m.line), ms)
+         # FIXME: Make m.sig look nicer.
+         # FIXME: If all results point to the same file and line, collapse them into one.
+      end
+   catch
+      nothing
+   end
+end
+
+
 ### --- server code
 
 running = false
