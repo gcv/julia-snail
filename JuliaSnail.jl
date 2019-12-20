@@ -93,7 +93,7 @@ function eval_in_module(fully_qualified_module_name::Array{Symbol, 1}, expr::Exp
 end
 
 
-### server code
+### --- server code
 
 running = false
 server_socket = nothing
