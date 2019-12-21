@@ -269,7 +269,7 @@ end
     '((:module 1 "Alpha")
       ("# comment"
        ((:function 26 "t1")
-        ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:" "end]\n")
+        ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:end]\n")
         (:end 77))
        "println(" "hi" ")\n\n")
       (:end 97))
@@ -313,7 +313,7 @@ end"
        ("# comment"
         "echo\n"
         ((:function 29 "t1")
-         ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:" "end]\n")
+         ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:end]\n")
          (:end 80))
         "println(" "hi" ")\n")
        (:end 98))
