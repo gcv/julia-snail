@@ -358,14 +358,15 @@ Julia include on the tmpfile, and then deleting the file."
     ;; process res
     (if (or (null res) (eq :nothing res))
         nil
-      ;; FIXME: Detect situations when the candidate file points to a $TMPDIR
-      ;; path, and use xref-make-bogus-location in those cases. Or maybe just
-      ;; detect when the file points to a non-existent path?
       (mapcar (lambda (candidate)
-                (xref-make (-first-item candidate)
-                           (xref-make-file-location (-second-item candidate)
-                                                    (-third-item candidate)
-                                                    0)))
+                (let ((descr (-first-item candidate))
+                      (path (-second-item candidate))
+                      (line (-third-item candidate)))
+                  (xref-make descr
+                             (if (file-exists-p path)
+                                 (xref-make-file-location path line 0)
+                               (xref-make-bogus-location
+                                "xref not supported for definitions evaluated with julia-snail-send-top-level-form")))))
               res))))
 
 (cl-defmethod xref-backend-references ((_backend (eql xref-julia-snail)) identifier)
