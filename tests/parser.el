@@ -370,6 +370,26 @@ end"
   (should
    (null
     (parsec-with-input "end"
+      (julia-snail-parser--*file))))
+  ;; bracket things
+  (should
+   (equal
+    '(((:module 1 "Alpha")
+       (((:function 14 "f")
+         ("()\n   "
+          ((:for 30)
+           ("in A[2:end]\n   ")
+           (:end 49)))
+         (:end 53))
+        "stuff = []\n")
+       (:end 68)))
+    (parsec-with-input "module Alpha
+function f()
+   for in A[2:end]
+   end
+end
+stuff = []
+end"
       (julia-snail-parser--*file)))))
 
 (ert-deftest jsp-test-all-blocks ()
