@@ -163,19 +163,25 @@ three\"\"\"
    (parsec-error-p
     (parsec-with-input "end"
       (julia-snail-parser--*other))))
-  ;; FIXME:
-  ;; (should
-  ;;  (equal
-  ;;   "A = B[1:end]"
-  ;;   (parsec-with-input "A = B[1:end]"
-  ;;     (julia-snail-parser--*other))))
-  ;; FIXME:
-  ;; (should
-  ;;  (equal
-  ;;   "A = B[ 1 : end ]"
-  ;;   (parsec-with-input "A = B[ 1 :end ]"
-  ;;     (julia-snail-parser--*other))))
-  )
+  ;; "[end]" checks have to use julia-snail-parser--*block
+  (should
+   (equal
+    '((:module 1 "Alpha")
+      ("A = B[1:end]\n")
+      (:end 27))
+    (parsec-with-input "module Alpha
+A = B[1:end]
+end"
+      (julia-snail-parser--*block))))
+  (should
+   (equal
+    '((:module 1 "Alpha")
+      ("A = B[ 1 : end ]\n")
+      (:end 31))
+    (parsec-with-input "module Alpha
+A = B[ 1 : end ]
+end"
+      (julia-snail-parser--*block)))))
 
 (ert-deftest jsp-test-expressions ()
   (should
