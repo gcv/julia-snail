@@ -96,14 +96,25 @@ end
 ### --- xref helpers
 
 """
-FIXME: Write this.
+xref helper: return known definitions of given identifier in given namespace.
 """
 function xref_backend_definitions(ns, identifier)
    try
       let ms = methods(getproperty(ns, Symbol(identifier))).ms
-         map(m -> (string(m.sig), Base.find_source_file(string(m.file)), m.line), ms)
-         # FIXME: Make m.sig look nicer.
-         # FIXME: If all results point to the same file and line, collapse them into one.
+         # If all definitions point to the same file and line, collapse them
+         # into one. This often happens with function default arguments.
+         lines = map(m -> m.line, ms)
+         files = map(m -> m.file, ms)
+         if length(unique(lines)) == 1 && length(unique(files)) == 1
+            [(identifier, Base.find_source_file(string(files[1])), lines[1])]
+         else
+            map(m -> (Printf.@sprintf("%s: %s",
+                                      identifier,
+                                      join(map(string, m.sig.types[2:end]), ", ")),
+                      Base.find_source_file(string(m.file)),
+                      m.line),
+                ms)
+         end
       end
    catch
       nothing
