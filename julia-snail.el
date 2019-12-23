@@ -135,6 +135,17 @@ symbols, given by MODULE. MODULE can be:
       (modify-syntax-entry ?= " ")
       (thing-at-point 'symbol t))))
 
+(defmacro julia-snail--wait-while (condition increment maximum)
+  (let ((sleep-total (gensym))
+        (incr (gensym))
+        (max (gensym)))
+    `(let ((,sleep-total 0)
+           (,incr ,increment)
+           (.max ,maximum))
+       (while (and (< ,sleep-total ,maximum) ,condition)
+         (sleep-for 0 ,incr)
+         (setf ,sleep-total (+ ,sleep-total ,incr))))))
+
 
 ;;; --- connection management functions
 
@@ -193,13 +204,8 @@ wait for the REPL prompt to return, otherwise return immediately."
     (vterm-send-string str)
     (vterm-send-return)
     (unless async
-      (sleep-for 0 20)
       ;; wait for the inclusion to succeed (i.e., the prompt prints)
-      (let ((sleep-total 0))
-        (while (and (< sleep-total 5000)
-                    (not (string-equal "julia>" (current-word))))
-          (sleep-for 0 20)
-          (setf sleep-total (+ sleep-total 20)))))))
+      (julia-snail--wait-while (not (string-equal "julia>" (current-word))) 20 5000))))
 
 (cl-defun julia-snail--send-to-server
     (repl-buf module str &key callback-success callback-failure)
