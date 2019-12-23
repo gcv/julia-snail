@@ -311,6 +311,16 @@ Julia include on the tmpfile, and then deleting the file."
 
 ;;; --- xref implementation
 
+(defun julia-snail--xref-backend-identifiers (callback-success)
+  (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
+    (if (null repl-buf)
+        (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
+      (let* ((module (julia-snail-parser-query (current-buffer) (point) :module)))
+        (julia-snail--send-to-server repl-buf
+          module
+          (format "JuliaSnail.xref_backend_identifiers(%s)" module)
+          :callback-success callback-success)))))
+
 (defun julia-snail--xref-backend-definitions (identifier callback-success)
   (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
     (if (null repl-buf)
@@ -343,24 +353,25 @@ Julia include on the tmpfile, and then deleting the file."
   (julia-snail--identifier-at-point))
 
 (cl-defmethod xref-backend-identifier-completion-table ((_backend (eql xref-julia-snail)))
-  ;; Not sure what this should return.
-  ;; ...
-  )
+  (let ((res nil))
+    ;; Kick off async request to the Snail server. The success callback will
+    ;; destructively modify the closed-over res variable, which this method
+    ;; polls.
+    (julia-snail--xref-backend-identifiers
+     (lambda (&optional data)
+       (setq res (or data :nothing))))
+    (julia-snail--wait-while (null res) 20 1000)
+    res))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql xref-julia-snail)) identifier)
   (let ((res nil))
-    ;; Kick off async request to the Snail server. In the success callback, it
-    ;; will destructively modify the closed-over res variable, which this method
-    ;; will poll.
-    (julia-snail--xref-backend-definitions
-     identifier
-     (lambda (&optional data)
-       (setq res (or data :nothing))))
-    ;; wait for the async request callback to set res
-    (let ((sleep-total 0))
-      (while (and (< sleep-total 1000) (null res))
-        (sleep-for 0 20)
-        (setf sleep-total (+ sleep-total 20))))
+    ;; Kick off async request to the Snail server. The success callback will
+    ;; destructively modify the closed-over res variable, which this method
+    ;; polls.
+    (julia-snail--xref-backend-definitions identifier
+                                           (lambda (&optional data)
+                                             (setq res (or data :nothing))))
+    (julia-snail--wait-while (null res) 20 1000)
     ;; process res
     (if (or (null res) (eq :nothing res))
         nil

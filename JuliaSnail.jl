@@ -96,6 +96,20 @@ end
 ### --- xref helpers
 
 """
+xref helper: return all identifiers in the given module.
+"""
+function xref_backend_identifiers(ns)
+   check = function(pn)
+      try
+         typeof(eval(pn)) != Module
+      catch
+         true
+      end
+   end
+   filter(check, propertynames(ns, true))
+end
+
+"""
 xref helper: return known definitions of given identifier in given namespace.
 """
 function xref_backend_definitions(ns, identifier)
