@@ -396,7 +396,31 @@ function f()
 end
 stuff = []
 end"
-      (julia-snail-parser--*file)))))
+      (julia-snail-parser--*file))))
+  ;; nested code with case-sensitive Module check
+  (should
+   (equal
+    '((:function 1 "xref_backend_identifiers")
+      ("(ns)\n   check = "
+       ((:function 50 nil)
+        ("(pn)\n      "
+         ((:try 69)
+          ("typeof(eval(pn)) != " "Module\n      catch\n         true\n      ")
+          (:end 141)))
+        (:end 148))
+       "filter(check, propertynames(Main, true))\n")
+      (:end 196))
+    (parsec-with-input "function xref_backend_identifiers(ns)
+   check = function(pn)
+      try
+         typeof(eval(pn)) != Module
+      catch
+         true
+      end
+   end
+   filter(check, propertynames(Main, true))
+end"
+      (julia-snail-parser--*block)))))
 
 (ert-deftest jsp-test-all-blocks ()
   (should

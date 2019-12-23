@@ -23,7 +23,8 @@
   `(parsec-and
     (julia-snail-parser--*whitespace)
     (parsec-return
-        (parsec-str ,kw)
+        (let ((case-fold-search nil))
+          (parsec-str ,kw))
       (parsec-lookahead (parsec-re "[^[:alnum:]_]")))))
 
 (defun julia-snail-parser--*string-tq ()
