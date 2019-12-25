@@ -93,20 +93,43 @@ function eval_in_module(fully_qualified_module_name::Array{Symbol, 1}, expr::Exp
 end
 
 
+### --- generic helpers
+
+"""
+try-catch wrapper.
+"""
+macro ignoreerr(expr, retval)
+   return quote
+      try
+         $(esc(expr))
+      catch
+         $retval
+      end
+   end
+end
+
+
 ### --- xref helpers
 
 """
 xref helper: return all identifiers in the given module.
 """
 function xref_backend_identifiers(ns)
-   check = function(pn)
-      try
-         typeof(eval(pn)) != Module
-      catch
-         true
-      end
-   end
-   filter(check, propertynames(ns, true))
+   raw = names(ns, all=true, imported=true)
+   # remove identifiers containing '#' since Elisp doesn't like them
+   raw_clean = filter(n -> !occursin(r"#", string(n)), raw)
+   vars = filter(
+      n -> @ignoreerr(typeof(Core.eval(ns, n)) ∉ (DataType, UnionAll), false),
+      raw_clean)
+   # convert results to strings
+   vars_strs = map(string, vars)
+   # strip out leading "Main." from identifiers to avoid confusion
+   ns_nomain = replace(string(ns), Regex("^Main\\.") => "")
+   vars_strs_nomain = map(
+      n -> replace(n, Regex(Printf.@sprintf("^Main\\.%s\\.", ns_nomain)) => ""),
+      vars_strs
+   )
+   return vars_strs_nomain
 end
 
 """
