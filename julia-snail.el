@@ -332,10 +332,11 @@ Julia include on the tmpfile, and then deleting the file."
   (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
     (if (null repl-buf)
         (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
-      (let* ((module (julia-snail-parser-query (current-buffer) (point) :module)))
+      (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+             (ns (s-join "." module)))
         (julia-snail--send-to-server repl-buf
           module
-          (format "JuliaSnail.xref_backend_identifiers(%s)" module)
+          (format "JuliaSnail.xref_backend_identifiers(%s)" ns)
           :callback-success callback-success)))))
 
 (defun julia-snail--xref-backend-definitions (identifier callback-success)
