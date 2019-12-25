@@ -65,6 +65,9 @@ just display them in the minibuffer."
 (defvar julia-snail--requests
   (make-hash-table :test #'equal))
 
+(defvar julia-snail--proc-responses
+  (make-hash-table :test #'equal))
+
 
 ;;; --- Snail protocol request tracking data structure
 
@@ -271,8 +274,22 @@ Julia include on the tmpfile, and then deleting the file."
       (goto-char (point-max))
       (insert str)
       (set-marker (process-mark proc) (point))
-      ;; scary
-      (eval (read str)))))
+      ;; Need to read and eval the value sent in by the process (str). But it
+      ;; may have been chunked. Assume that a successful read signals the end of
+      ;; input, but a failed read needs to be concatenated to other upcoming
+      ;; reads. Track them in a table hashed by the proc.
+      (let ((candidate (concatenate 'string
+                                    (gethash proc julia-snail--proc-responses)
+                                    str)))
+        (condition-case nil
+            (let ((read-str (read candidate)))
+              ;; read succeeds, so clean up and return its eval value
+              (remhash proc julia-snail--proc-responses)
+              ;; scary
+              (eval read-str))
+          ;; read failed: this means more data is incoming
+          (end-of-file
+           (puthash proc candidate julia-snail--proc-responses)))))))
 
 
  ;;; --- Snail server response handling functions
