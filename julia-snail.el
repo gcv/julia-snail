@@ -130,19 +130,15 @@ symbols, given by MODULE. MODULE can be:
                                            module))))
         (t (error "Malformed module specification"))))
 
-
 (let ((stab (copy-syntax-table)))
   (with-syntax-table stab
     (modify-syntax-entry ?. "_")
     (modify-syntax-entry ?@ "_")
     (modify-syntax-entry ?= " ")
-
     (defun julia-snail--identifier-at-point ()
       (thing-at-point 'symbol t))
-
     (defun julia-snail--identifier-at-point-bounds ()
       (bounds-of-thing-at-point 'symbol))))
-
 
 (defmacro julia-snail--wait-while (condition increment maximum)
   (let ((sleep-total (gensym))
@@ -154,6 +150,13 @@ symbols, given by MODULE. MODULE can be:
        (while (and (< ,sleep-total ,maximum) ,condition)
          (sleep-for 0 ,incr)
          (setf ,sleep-total (+ ,sleep-total ,incr))))))
+
+(defmacro julia-snail--with-repl-buf (repl-buf &rest body)
+  (declare (indent defun))
+  `(let ((,repl-buf (get-buffer julia-snail-repl-buffer)))
+     (if (null ,repl-buf)
+         (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
+       ,@body)))
 
 
 ;;; --- connection management functions
@@ -335,40 +338,36 @@ Julia include on the tmpfile, and then deleting the file."
 ;;; --- xref implementation
 
 (defun julia-snail--xref-backend-identifiers (callback-success)
-  (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
-    (if (null repl-buf)
-        (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
-      (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
-             (ns (s-join "." module)))
-        (julia-snail--send-to-server repl-buf
-          module
-          (format "JuliaSnail.xref_backend_identifiers(%s)" ns)
-          :callback-success callback-success)))))
+  (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+         (ns (s-join "." module)))
+    (julia-snail--with-repl-buf repl-buf
+      (julia-snail--send-to-server repl-buf
+        module
+        (format "JuliaSnail.xref_backend_identifiers(%s)" ns)
+        :callback-success callback-success))))
 
 (defun julia-snail--xref-backend-definitions (identifier callback-success)
-  (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
-    (if (null repl-buf)
-        (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
-      (if (null identifier)
-          (error "No identifier at point")
-        (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
-               ;; Grab everything in the identifier up to the last dot, i.e.,
-               ;; the fully-qualified module name, and everything after the
-               ;; last dot, which should be the symbol in the module.
-               (identifier-split (save-match-data
-                                   (if (string-match
-                                        "\\(.*\\)\\.\\(.*\\)"
-                                        identifier)
-                                       (list (match-string 1 identifier)
-                                             (match-string 2 identifier))
-                                     (list module identifier))))
-               (identifier-ns (-first-item identifier-split))
-               (identifier-name (-second-item identifier-split)))
-          (julia-snail--send-to-server repl-buf
-            module
-            (format "JuliaSnail.xref_backend_definitions(%s, \"%s\")"
-                    identifier-ns identifier-name)
-            :callback-success callback-success))))))
+  (if (null identifier)
+      (error "No identifier at point")
+    (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+           ;; Grab everything in the identifier up to the last dot, i.e., the
+           ;; fully-qualified module name, and everything after the last dot,
+           ;; which should be the symbol in the module.
+           (identifier-split (save-match-data
+                               (if (string-match
+                                    "\\(.*\\)\\.\\(.*\\)"
+                                    identifier)
+                                   (list (match-string 1 identifier)
+                                         (match-string 2 identifier))
+                                 (list module identifier))))
+           (identifier-ns (-first-item identifier-split))
+           (identifier-name (-second-item identifier-split)))
+      (julia-snail--with-repl-buf repl-buf
+        (julia-snail--send-to-server repl-buf
+          module
+          (format "JuliaSnail.xref_backend_definitions(%s, \"%s\")"
+                  identifier-ns identifier-name)
+          :callback-success callback-success)))))
 
 (defun julia-snail-xref-backend ()
   'xref-julia-snail)
@@ -421,36 +420,37 @@ Julia include on the tmpfile, and then deleting the file."
 
 ;;; --- completion backend
 
-(defun julia-snail--completions (callback-success)
-  (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
-    (if (null repl-buf)
-        (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
-      (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
-             (ns (s-join "." module)))
+(defun julia-snail--completions-async ()
+  )
+
+(defun julia-snail--completions (identifier)
+  (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+         (ns (s-join "." module)))
+    (julia-snail--with-repl-buf repl-buf
+      (let ((res nil))
+        ;; Kick off async request to the Snail server. The success callback will
+        ;; destructively modify the closed-over res variable, which this code
+        ;; subsequently polls.
         (julia-snail--send-to-server repl-buf
           module
           (format "JuliaSnail.completions(%s)" ns)
-          :callback-success callback-success)))))
+          :callback-success (lambda (&optional data)
+                              (setq res (or data :nothing))))
+        (julia-snail--wait-while (null res) 20 1000)
+        ;; process res
+        (if (or (null res) (eq :nothing res))
+            nil
+          res)))
+    ))
 
 (defun julia-snail-completion-at-point ()
-  (let ((bounds (julia-snail--identifier-at-point-bounds)))
+  (let ((identifier (julia-snail--identifier-at-point))
+        (bounds (julia-snail--identifier-at-point-bounds)))
     (when bounds
       (list (car bounds)
             (cdr bounds)
             (completion-table-dynamic
-             (lambda (_)
-               (let ((res nil))
-                 ;; Kick off async request to the Snail server. The success
-                 ;; callback will destructively modify the closed-over res
-                 ;; variable, which this method polls.
-                 (julia-snail--completions
-                  (lambda (&optional data)
-                    (setq res (or data :nothing))))
-                 (julia-snail--wait-while (null res) 20 1000)
-                 ;; process res
-                 (if (or (null res) (eq :nothing res))
-                     nil
-                   res))))
+             (lambda (_) (julia-snail--completions identifier)))
             :exclusive 'no))))
 
 
