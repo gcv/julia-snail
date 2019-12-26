@@ -84,13 +84,13 @@ just display them in the minibuffer."
 (defun julia-snail--process-buffer-name (repl-buf)
   (let ((real-buf (get-buffer repl-buf)))
     (unless real-buf
-      (error "no REPL buffer found"))
+      (error "No REPL buffer found"))
     (format "%s process" (buffer-name (get-buffer real-buf)))))
 
 (defun julia-snail--error-buffer (repl-buf error-message error-stack)
   (let ((real-buf (get-buffer repl-buf)))
     (unless real-buf
-      (error "no REPL buffer found"))
+      (error "No REPL buffer found"))
     (let* ((error-buf-name (format "%s error" (buffer-name (get-buffer real-buf))))
            (error-buf (get-buffer-create error-buf-name)))
       (with-current-buffer error-buf
@@ -151,13 +151,6 @@ symbols, given by MODULE. MODULE can be:
          (sleep-for 0 ,incr)
          (setf ,sleep-total (+ ,sleep-total ,incr))))))
 
-(defmacro julia-snail--with-repl-buf (repl-buf &rest body)
-  (declare (indent defun))
-  `(let ((,repl-buf (get-buffer julia-snail-repl-buffer)))
-     (if (null ,repl-buf)
-         (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
-       ,@body)))
-
 
 ;;; --- connection management functions
 
@@ -184,8 +177,9 @@ symbols, given by MODULE. MODULE can be:
         ;; problem and supposedly fixes it, but it does not work for me with
         ;; Julia 1.0.4.
         ;; TODO: Follow-up on https://github.com/JuliaLang/julia/issues/33752
-        (julia-snail--send-to-repl repl-buf
+        (julia-snail--send-to-repl
           (format "JuliaSnail.start(%d);" julia-snail-port)
+          :repl-buf repl-buf
           :async nil)
         (with-current-buffer repl-buf
           (setq julia-snail--process ; NB: buffer-local variable!
@@ -206,12 +200,16 @@ symbols, given by MODULE. MODULE can be:
 
 ;;; --- Julia REPL and Snail server interaction functions
 
-(cl-defun julia-snail--send-to-repl (repl-buf str &key (async t))
+(cl-defun julia-snail--send-to-repl
+    (str
+     &key
+     (repl-buf (get-buffer julia-snail-repl-buffer))
+     (async t))
   "Insert str directly into the REPL buffer. When :async is nil,
 wait for the REPL prompt to return, otherwise return immediately."
   (declare (indent defun))
   (unless repl-buf
-    (error "no REPL buffer given"))
+    (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
   (with-current-buffer repl-buf
     (vterm-send-string str)
     (vterm-send-return)
@@ -220,11 +218,18 @@ wait for the REPL prompt to return, otherwise return immediately."
       (julia-snail--wait-while (not (string-equal "julia>" (current-word))) 20 5000))))
 
 (cl-defun julia-snail--send-to-server
-    (repl-buf module str &key callback-success callback-failure)
-  "Send str to Snail server."
+    (module
+     str
+     &key
+     (repl-buf (get-buffer julia-snail-repl-buffer))
+     callback-success
+     callback-failure)
+  "Asynchronously send str to Snail server, and evaluate it in
+the context of module. Run callback-success and callback-failure
+as may be appropriate."
   (declare (indent defun))
   (unless repl-buf
-    (error "no REPL buffer given"))
+    (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
   (let* ((process-buf (get-buffer (julia-snail--process-buffer-name repl-buf)))
          (module-ns (julia-snail--construct-module-path module))
          (reqid (format "%04x%04x" (random (expt 16 4)) (random (expt 16 4))))
@@ -247,12 +252,15 @@ wait for the REPL prompt to return, otherwise return immediately."
     reqid))
 
 (cl-defun julia-snail--send-to-server-via-tmp-file
-    (repl-buf module str &key callback-success callback-failure)
+    (module
+     str
+     &key
+     (repl-buf (get-buffer julia-snail-repl-buffer))
+     callback-success
+     callback-failure)
   "Send str to server by first writing it to a tmpfile, calling
 Julia include on the tmpfile, and then deleting the file."
   (declare (indent defun))
-  (unless repl-buf
-    (error "no REPL buffer given"))
   (let ((text (s-trim str))
         (tmpfile (make-temp-file
                   (expand-file-name "julia-tmp"
@@ -262,9 +270,9 @@ Julia include on the tmpfile, and then deleting the file."
       (with-temp-file tmpfile
         (insert text))
       (let ((reqid (julia-snail--send-to-server
-                     repl-buf
                      module
                      (format "include(\"%s\");" tmpfile)
+                     :repl-buf repl-buf
                      :callback-success callback-success
                      :callback-failure callback-failure)))
         (puthash reqid
@@ -340,11 +348,10 @@ Julia include on the tmpfile, and then deleting the file."
 (defun julia-snail--xref-backend-identifiers (callback-success)
   (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
          (ns (s-join "." module)))
-    (julia-snail--with-repl-buf repl-buf
-      (julia-snail--send-to-server repl-buf
-        module
-        (format "JuliaSnail.xref_backend_identifiers(%s)" ns)
-        :callback-success callback-success))))
+    (julia-snail--send-to-server
+      module
+      (format "JuliaSnail.xref_backend_identifiers(%s)" ns)
+      :callback-success callback-success)))
 
 (defun julia-snail--xref-backend-definitions (identifier callback-success)
   (if (null identifier)
@@ -362,12 +369,11 @@ Julia include on the tmpfile, and then deleting the file."
                                  (list module identifier))))
            (identifier-ns (-first-item identifier-split))
            (identifier-name (-second-item identifier-split)))
-      (julia-snail--with-repl-buf repl-buf
-        (julia-snail--send-to-server repl-buf
-          module
-          (format "JuliaSnail.xref_backend_definitions(%s, \"%s\")"
-                  identifier-ns identifier-name)
-          :callback-success callback-success)))))
+      (julia-snail--send-to-server
+        module
+        (format "JuliaSnail.xref_backend_definitions(%s, \"%s\")"
+                identifier-ns identifier-name)
+        :callback-success callback-success))))
 
 (defun julia-snail-xref-backend ()
   'xref-julia-snail)
@@ -426,21 +432,20 @@ Julia include on the tmpfile, and then deleting the file."
 (defun julia-snail--completions (identifier)
   (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
          (ns (s-join "." module)))
-    (julia-snail--with-repl-buf repl-buf
-      (let ((res nil))
-        ;; Kick off async request to the Snail server. The success callback will
-        ;; destructively modify the closed-over res variable, which this code
-        ;; subsequently polls.
-        (julia-snail--send-to-server repl-buf
-          module
-          (format "JuliaSnail.completions(%s)" ns)
-          :callback-success (lambda (&optional data)
-                              (setq res (or data :nothing))))
-        (julia-snail--wait-while (null res) 20 1000)
-        ;; process res
-        (if (or (null res) (eq :nothing res))
-            nil
-          res)))
+    (let ((res nil))
+      ;; Kick off async request to the Snail server. The success callback will
+      ;; destructively modify the closed-over res variable, which this code
+      ;; subsequently polls.
+      (julia-snail--send-to-server
+        module
+        (format "JuliaSnail.completions(%s)" ns)
+        :callback-success (lambda (&optional data)
+                            (setq res (or data :nothing))))
+      (julia-snail--wait-while (null res) 20 1000)
+      ;; process res
+      (if (or (null res) (eq :nothing res))
+          nil
+        res))
     ))
 
 (defun julia-snail-completion-at-point ()
@@ -482,80 +487,64 @@ To create multiple REPLs, give these variables distinct values (e.g.:
   "Copy the line at the current point into the REPL and run it.
 This is not module-context aware."
   (interactive)
-  (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
-    (if (null repl-buf)
-        (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
-      (let ((line (s-trim (thing-at-point 'line t))))
-        (julia-snail--send-to-repl repl-buf
-          line)))))
+  (let ((line (s-trim (thing-at-point 'line t))))
+    (julia-snail--send-to-repl line)))
 
 (defun julia-snail-send-buffer ()
   "Send the current buffer's file into the Julia REPL, and include() it.
 This will occur in the context of the Main module, just as it would at the REPL."
   (interactive)
-  (let ((repl-buf (get-buffer julia-snail-repl-buffer))
-        (filename buffer-file-name))
-    (if (null repl-buf)
-        (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
-      (julia-snail--send-to-server repl-buf
-        :Main
-        (format "include(\"%s\");" filename)
-        :callback-success (lambda (&optional data)
-                            (message "%s loaded" filename))))))
+  (let ((filename buffer-file-name))
+    (julia-snail--send-to-server
+      :Main
+      (format "include(\"%s\");" filename)
+      :callback-success (lambda (&optional data)
+                          (message "%s loaded" filename)))))
 
 (defun julia-snail-send-region ()
   "Send the region (requires transient-mark) to the Julia REPL and evaluate it.
 This occurs in the context of the current module."
   (interactive)
-  (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
-    (if (null repl-buf)
-        (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
-      (if (null (use-region-p))
-          (error "No region selected")
-        (let ((text (buffer-substring-no-properties (region-beginning) (region-end)))
-              (module (julia-snail-parser-query (current-buffer) (point) :module)))
-          (julia-snail--send-to-server-via-tmp-file repl-buf
-            module text
-            :callback-success (lambda (&optional data)
-                                (message "Selected region evaluated: module %s, result: %s"
-                                         (julia-snail--construct-module-path module)
-                                         data))))))))
+  (if (null (use-region-p))
+      (error "No region selected")
+    (let ((text (buffer-substring-no-properties (region-beginning) (region-end)))
+          (module (julia-snail-parser-query (current-buffer) (point) :module)))
+      (julia-snail--send-to-server-via-tmp-file
+        module text
+        :callback-success (lambda (&optional data)
+                            (message "Selected region evaluated: module %s, result: %s"
+                                     (julia-snail--construct-module-path module)
+                                     data))))))
 
 (defun julia-snail-send-top-level-form ()
   "Send the top-level form surrounding the point to the Julia REPL and evaluate it.
 This occurs in the context of the current module."
   (interactive)
-  (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
-    (if (null repl-buf)
-        (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
-      (let* ((q (julia-snail-parser-query (current-buffer) (point) :top-level-block))
-             (module (plist-get q :module))
-             (block-description (plist-get q :block))
-             (block-start (-second-item block-description))
-             (block-end (-third-item block-description))
-             (text (buffer-substring-no-properties block-start block-end)))
-        (julia-snail--flash-region block-start block-end 0.5)
-        (julia-snail--send-to-server-via-tmp-file repl-buf
-          module text
-          :callback-success (lambda (&optional data)
-                              (message "Top-level form evaluated: module %s, %s"
-                                       (julia-snail--construct-module-path module)
-                                       (if (-fourth-item block-description)
-                                           (-fourth-item block-description)
-                                         "unknown"))))))))
+  (let* ((q (julia-snail-parser-query (current-buffer) (point) :top-level-block))
+         (module (plist-get q :module))
+         (block-description (plist-get q :block))
+         (block-start (-second-item block-description))
+         (block-end (-third-item block-description))
+         (text (buffer-substring-no-properties block-start block-end)))
+    (julia-snail--flash-region block-start block-end 0.5)
+    (julia-snail--send-to-server-via-tmp-file
+      module text
+      :callback-success (lambda (&optional data)
+                          (message "Top-level form evaluated: module %s, %s"
+                                   (julia-snail--construct-module-path module)
+                                   (if (-fourth-item block-description)
+                                       (-fourth-item block-description)
+                                     "unknown"))))))
 
 (defun julia-snail-package-activate (dir)
   "Activate a Pkg project in the Julia REPL."
   (interactive "DProject directory: ")
-  (let ((repl-buf (get-buffer julia-snail-repl-buffer))
-        (expanded-dir (expand-file-name dir)))
-    (if (null repl-buf)
-        (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
-      (julia-snail--send-to-server repl-buf
-        :Main
-        (format "Pkg.activate(\"%s\")" expanded-dir)
-        :callback-success (lambda (&optional data)
-                            (message "Package activated: %s" expanded-dir))))))
+  (let ((expanded-dir (expand-file-name dir)))
+    (julia-snail--send-to-server
+      :Main
+      (format "Pkg.activate(\"%s\")" expanded-dir)
+      :callback-success (lambda (&optional data)
+                          (message "Package activated: %s" expanded-dir)))))
 
 (defun julia-snail-repl-go-back ()
   (interactive)
