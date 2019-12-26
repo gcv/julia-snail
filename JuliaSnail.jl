@@ -119,7 +119,7 @@ function xref_backend_identifiers(ns)
    # remove identifiers containing '#' since Elisp doesn't like them
    raw_clean = filter(n -> !occursin(r"#", string(n)), raw)
    vars = filter(
-      n -> @ignoreerr(typeof(Core.eval(ns, n)) ∉ (DataType, UnionAll), false),
+      n -> @ignoreerr(typeof(Core.eval(ns, n)) ∉ (DataType, UnionAll, Module), false),
       raw_clean)
    # convert results to strings
    vars_strs = map(string, vars)
