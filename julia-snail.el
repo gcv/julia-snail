@@ -379,8 +379,8 @@ Julia include on the tmpfile, and then deleting the file."
 (cl-defmethod xref-backend-identifier-completion-table ((_backend (eql xref-julia-snail)))
   (let ((res nil))
     ;; Kick off async request to the Snail server. The success callback will
-    ;; destructively modify the closed-over res variable, which this method
-    ;; polls.
+    ;; destructively modify the closed-over res variable, which this code
+    ;; subsequently polls.
     (julia-snail--xref-backend-identifiers
      (lambda (&optional data)
        (setq res (or data :nothing))))
@@ -390,8 +390,8 @@ Julia include on the tmpfile, and then deleting the file."
 (cl-defmethod xref-backend-definitions ((_backend (eql xref-julia-snail)) identifier)
   (let ((res nil))
     ;; Kick off async request to the Snail server. The success callback will
-    ;; destructively modify the closed-over res variable, which this method
-    ;; polls.
+    ;; destructively modify the closed-over res variable, which this code
+    ;; subsequently polls.
     (julia-snail--xref-backend-definitions identifier
                                            (lambda (&optional data)
                                              (setq res (or data :nothing))))
