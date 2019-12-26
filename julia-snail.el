@@ -130,13 +130,19 @@ symbols, given by MODULE. MODULE can be:
                                            module))))
         (t (error "Malformed module specification"))))
 
-(defun julia-snail--identifier-at-point ()
-  (let ((stab (copy-syntax-table)))
-    (with-syntax-table stab
-      (modify-syntax-entry ?. "_")
-      (modify-syntax-entry ?@ "_")
-      (modify-syntax-entry ?= " ")
-      (thing-at-point 'symbol t))))
+
+(let ((stab (copy-syntax-table)))
+  (with-syntax-table stab
+    (modify-syntax-entry ?. "_")
+    (modify-syntax-entry ?@ "_")
+    (modify-syntax-entry ?= " ")
+
+    (defun julia-snail--identifier-at-point ()
+      (thing-at-point 'symbol t))
+
+    (defun julia-snail--identifier-at-point-bounds ()
+      (bounds-of-thing-at-point 'symbol))))
+
 
 (defmacro julia-snail--wait-while (condition increment maximum)
   (let ((sleep-total (gensym))
@@ -413,6 +419,41 @@ Julia include on the tmpfile, and then deleting the file."
   )
 
 
+;;; --- completion backend
+
+(defun julia-snail--completions (callback-success)
+  (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
+    (if (null repl-buf)
+        (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer)
+      (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+             (ns (s-join "." module)))
+        (julia-snail--send-to-server repl-buf
+          module
+          (format "JuliaSnail.completions(%s)" ns)
+          :callback-success callback-success)))))
+
+(defun julia-snail-completion-at-point ()
+  (let ((bounds (julia-snail--identifier-at-point-bounds)))
+    (when bounds
+      (list (car bounds)
+            (cdr bounds)
+            (completion-table-dynamic
+             (lambda (_)
+               (let ((res nil))
+                 ;; Kick off async request to the Snail server. The success
+                 ;; callback will destructively modify the closed-over res
+                 ;; variable, which this method polls.
+                 (julia-snail--completions
+                  (lambda (&optional data)
+                    (setq res (or data :nothing))))
+                 (julia-snail--wait-while (null res) 20 1000)
+                 ;; process res
+                 (if (or (null res) (eq :nothing res))
+                     nil
+                   res))))
+            :exclusive 'no))))
+
+
 ;;; --- commands
 
 ;;;###autoload
@@ -553,7 +594,9 @@ This occurs in the context of the current module."
     (if julia-snail-mode
         (progn
           (julia-snail--enable)
-          (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t))
+          (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t)
+          (add-hook 'completion-at-point-functions #'julia-snail-completion-at-point nil t))
+      (remove-hook 'completion-at-point-functions #'julia-snail-completion-at-point t)
       (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
       (julia-snail--disable))))
 

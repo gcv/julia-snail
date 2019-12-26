@@ -159,6 +159,58 @@ function xref_backend_definitions(ns, identifier)
 end
 
 
+### --- completion helper
+
+"""
+FIXME
+"""
+function completions(ns)
+   raw = names(ns, all=true, imported=true)
+   # remove identifiers containing '#' since Elisp doesn't like them
+   raw_clean = filter(
+      n -> !occursin(r"#", string(n)),
+      raw
+   )
+   all = filter(
+      n -> @ignoreerr(typeof(Core.eval(ns, n)) ∉ (DataType, UnionAll), false),
+      raw_clean)
+   modules = filter(
+      n -> @ignoreerr(typeof(Core.eval(ns, n)) == Module, false),
+      all)
+   vars = setdiff(all, modules)
+   # loop over modules
+   for m in modules
+      new_ns = getfield(ns, m)
+      new_ns_raw = names(new_ns, all=false, imported=false)
+      new_ns_all = map(
+         n -> Symbol(string(new_ns, ".", n)),
+         new_ns_raw
+      )
+      append!(vars, new_ns_all)
+   end
+   # convert results to strings
+   vars_strs = map(string, vars)
+   # strip out leading "Main." from identifiers to avoid confusion
+   ns_nomain = replace(string(ns), Regex("^Main\\.") => "")
+   vars_strs_nomain = map(
+      n -> replace(n, Regex(Printf.@sprintf("^Main\\.%s\\.", ns_nomain)) => ""),
+      vars_strs
+   )
+   # strip out leading "Base." from identifiers
+   # vars_strs_nobase = map(
+   #    n -> replace(n, Regex("^Base\\.") => ""),
+   #    vars_strs_nomain
+   # )
+   # strip out leading "Core." from identifiers
+   # vars_strs_nocore = map(
+   #    n -> replace(n, Regex("^Core\\.") => ""),
+   #    vars_strs_nobase
+   # )
+   # return vars_strs_nocore
+   return vars_strs_nomain
+end
+
+
 ### --- server code
 
 running = false
