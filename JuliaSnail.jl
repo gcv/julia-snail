@@ -109,7 +109,59 @@ macro ignoreerr(expr, retval)
 end
 
 
-### --- xref helpers
+### --- introspection helpers
+
+"""
+...
+"""
+
+function lsnames(ns; all=false, imported=false, include_modules=false, recursive=false, prepend_ns=false, first_call=true)
+   raw = names(ns, all=all, imported=imported)
+   # remove names containing '#' since Elisp doesn't like them
+   raw_clean = filter(
+      n -> !occursin(r"#", string(n)),
+      raw)
+   # remove :eval and :include since they are automatically everywhere
+   raw_clean = filter(
+      n -> n ∉ (:eval, :include),
+      raw_clean)
+   # if ns is Main, remove problematic entries
+   if ns == Main
+      raw_clean = filter(
+         n -> n ∉ (:Base, :Core, :InteractiveUtils, :Pkg, :ans),
+         raw_clean)
+   end
+   # remove self-matches
+   raw_clean = filter(
+      n -> @ignoreerr(n == :missing || Core.eval(ns, n) != ns, false),
+      raw_clean)
+   # separate out output by module and non-module
+   all = filter(
+      n -> @ignoreerr(typeof(Core.eval(ns, n)) ∉ (DataType, UnionAll), false),
+      raw_clean)
+   modules = filter(
+      n -> @ignoreerr(typeof(Core.eval(ns, n)) == Module, false),
+      all)
+   res = map(
+      v -> prepend_ns ? string(ns, ".", v) : string(v),
+      setdiff(all, modules))
+   # deal with modules
+   include_modules && append!(res, map(string, modules))
+   if recursive
+      for m in modules
+         new_ns = getfield(ns, m)
+         append!(res, lsnames(new_ns, all=false, imported=false, include_modules=include_modules, recursive=true, prepend_ns=true, first_call=false))
+      end
+   end
+   # remove anything which prepended the namespace itself
+   if first_call
+      return map(
+         n -> replace(n, Regex(Printf.@sprintf("^%s\\.", ns)) => ""),
+         res)
+   else
+      return res
+   end
+end
 
 """
 xref helper: return all identifiers in the given module.
@@ -157,9 +209,6 @@ function xref_backend_definitions(ns, identifier)
       nothing
    end
 end
-
-
-### --- completion helper
 
 """
 FIXME
