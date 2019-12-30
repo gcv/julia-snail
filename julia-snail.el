@@ -412,8 +412,15 @@ Julia include on the tmpfile, and then deleting the file."
                                 "xref not supported for definitions evaluated with julia-snail-send-top-level-form")))))
               res))))
 
+;;; TODO: Implement this. See
+;;; https://discourse.julialang.org/t/finding-uses-of-a-method/32729/3 for
+;;; information about how it can be done. Key points: (1) It is most reliable
+;;; for executed code, which is of course a non-starter for IDE functionality.
+;;; (2) It can be done by iterating through all methods in all modules and
+;;; calling Base.uncompressed_ast and looking for appropriate calls. Seems like
+;;; it won't be accurate for functions called through indirection, but would
+;;; definitely be a step in the right direction.
 (cl-defmethod xref-backend-references ((_backend (eql xref-julia-snail)) identifier)
-  ;; Not sure I want to support this.
   nil)
 
 (cl-defmethod xref-backend-apropos ((_backend (eql xref-julia-snail)) pattern)
