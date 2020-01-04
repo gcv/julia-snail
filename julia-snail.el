@@ -62,10 +62,17 @@ just display them in the minibuffer."
               (file-name-as-directory default-directory))
           "JuliaSnail.jl"))
 
+;;; TODO: Maybe this should hash by proc+reqid rather than just reqid?
 (defvar julia-snail--requests
   (make-hash-table :test #'equal))
 
 (defvar julia-snail--proc-responses
+  (make-hash-table :test #'equal))
+
+(defvar julia-snail--cache-proc-names-base
+  (make-hash-table :test #'equal))
+
+(defvar julia-snail--cache-proc-names-core
   (make-hash-table :test #'equal))
 
 
@@ -164,6 +171,8 @@ symbols, given by MODULE. MODULE can be:
 (defun julia-snail--repl-cleanup ()
   (let ((process-buf (get-buffer (julia-snail--process-buffer-name (current-buffer)))))
     (when process-buf
+      (remhash process-buf julia-snail--cache-proc-names-base)
+      (remhash process-buf julia-snail--cache-proc-names-core)
       (kill-buffer process-buf)))
   (setq julia-snail--process nil))
 
@@ -439,16 +448,43 @@ Julia include on the tmpfile, and then deleting the file."
 
 ;;; FIXME:
 ;;; - [X] base level: same as xref table, plus modules
+;;; - [ ] FIXME: Where are the imported completions???
 ;;; - [ ] optimization: when identifier has a dot: load from that module?
-;;; - [ ] Base: cache all 2-char and more, and strip leading
-;;; - [ ] Core: ditto?
+;;; - [X] Base: cache and strip leading
+;;; - [X] Core: ditto?
 (defun julia-snail--completions (identifier)
-  (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+  (let* ((process-buf (get-buffer (julia-snail--process-buffer-name julia-snail-repl-buffer)))
+         (module (julia-snail-parser-query (current-buffer) (point) :module))
          (ns (s-join "." module)))
-    (julia-snail--send-to-server
-      module
-      (format "Main.JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=true, recursive=true)" ns)
-      :async nil)))
+    (append
+     ;; Julia keywords
+     (list "abstract type" "begin" "catch" "do" "else" "elseif" "end"
+           "false" "finally" "for" "function" "if" "let" "macro" "module"
+           "mutable struct" "nothing" "primitive type" "quote" "struct"
+           "true" "try" "undef" "while" "module")
+     ;; return (cached) list of Base names
+     (if-let ((cached-base (gethash process-buf julia-snail--cache-proc-names-base)))
+         cached-base
+       (puthash process-buf
+                (julia-snail--send-to-server
+                  (list "Main")
+                  "Main.JuliaSnail.lsnames(Main.Base, all=true, imported=true, include_modules=true, recursive=true)"
+                  :async nil)
+                julia-snail--cache-proc-names-base))
+     ;; return (cached) list of Core names
+     (if-let ((cached-core (gethash process-buf julia-snail--cache-proc-names-core)))
+         cached-core
+       (puthash process-buf
+                (julia-snail--send-to-server
+                  (list "Main")
+                  "Main.JuliaSnail.lsnames(Main.Core, all=true, imported=true, include_modules=true, recursive=false)"
+                  :async nil)
+                julia-snail--cache-proc-names-core))
+     ;; finally, the main list of names
+     (julia-snail--send-to-server
+       module
+       (format "Main.JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=true, recursive=true)" ns)
+       :async nil))))
 
 (defun julia-snail-completion-at-point ()
   (let ((identifier (julia-snail--identifier-at-point))
@@ -458,7 +494,7 @@ Julia include on the tmpfile, and then deleting the file."
             (cdr bounds)
             (completion-table-dynamic
              (lambda (_) (julia-snail--completions identifier)))
-            :exclusive 'no))))
+            :exclusive 'yes))))
 
 
 ;;; --- commands
