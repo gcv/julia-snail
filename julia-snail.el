@@ -130,15 +130,22 @@ symbols, given by MODULE. MODULE can be:
                                            module))))
         (t (error "Malformed module specification"))))
 
-(let ((stab (copy-syntax-table)))
-  (with-syntax-table stab
-    (modify-syntax-entry ?. "_")
-    (modify-syntax-entry ?@ "_")
-    (modify-syntax-entry ?= " ")
-    (defun julia-snail--identifier-at-point ()
-      (thing-at-point 'symbol t))
-    (defun julia-snail--identifier-at-point-bounds ()
-      (bounds-of-thing-at-point 'symbol))))
+(defmacro julia-snail--with-syntax-table (&rest body)
+  (declare (indent defun))
+  `(let ((stab (copy-syntax-table)))
+     (with-syntax-table stab
+       (modify-syntax-entry ?. "_")
+       (modify-syntax-entry ?@ "_")
+       (modify-syntax-entry ?= " ")
+       ,@body)))
+
+(defun julia-snail--identifier-at-point ()
+  (julia-snail--with-syntax-table
+    (thing-at-point 'symbol t)))
+
+(defun julia-snail--identifier-at-point-bounds ()
+  (julia-snail--with-syntax-table
+    (bounds-of-thing-at-point 'symbol)))
 
 (defmacro julia-snail--wait-while (condition increment maximum)
   (let ((sleep-total (gensym))
@@ -428,29 +435,20 @@ Julia include on the tmpfile, and then deleting the file."
   )
 
 
-;;; --- completion backend
+;;; --- completion implementation
 
-(defun julia-snail--completions-async ()
-  )
-
+;;; FIXME:
+;;; - [X] base level: same as xref table, plus modules
+;;; - [ ] optimization: when identifier has a dot: load from that module?
+;;; - [ ] Base: cache all 2-char and more, and strip leading
+;;; - [ ] Core: ditto?
 (defun julia-snail--completions (identifier)
   (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
          (ns (s-join "." module)))
-    (let ((res nil))
-      ;; Kick off async request to the Snail server. The success callback will
-      ;; destructively modify the closed-over res variable, which this code
-      ;; subsequently polls.
-      (julia-snail--send-to-server
-        module
-        (format "JuliaSnail.completions(%s)" ns)
-        :callback-success (lambda (&optional data)
-                            (setq res (or data :nothing))))
-      (julia-snail--wait-while (null res) 20 1000)
-      ;; process res
-      (if (or (null res) (eq :nothing res))
-          nil
-        res))
-    ))
+    (julia-snail--send-to-server
+      module
+      (format "JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=true, recursive=true)" ns)
+      :async nil)))
 
 (defun julia-snail-completion-at-point ()
   (let ((identifier (julia-snail--identifier-at-point))
