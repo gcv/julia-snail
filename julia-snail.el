@@ -83,6 +83,7 @@ just display them in the minibuffer."
   originating-buf
   (callback-success (lambda (&optional data) (message "Snail command succeeded")))
   (callback-failure (lambda () (message "Snail command failed")))
+  (display-error-buffer-on-failure? t)
   tmpfile)
 
 
@@ -241,6 +242,7 @@ wait for the REPL prompt to return, otherwise return immediately."
      (async t)
      (async-poll-interval 20)
      (async-poll-maximum 1000)
+     (display-error-buffer-on-failure? t)
      callback-success
      callback-failure)
   "Send str to Snail server, and evaluate it in the context of
@@ -267,12 +269,17 @@ nil, wait for the result and return it."
              (make-julia-snail--request-tracker
               :repl-buf repl-buf
               :originating-buf (current-buffer)
+              :display-error-buffer-on-failure? display-error-buffer-on-failure?
               :callback-success (lambda (&optional data)
                                   (unless async
                                     (setq res (or data :nothing)))
                                   (when callback-success
                                     (funcall callback-success data)))
-              :callback-failure callback-failure)
+              :callback-failure (lambda ()
+                                  (unless async
+                                    (setq res :nothing))
+                                  (when callback-failure
+                                    (funcall callback-failure))))
              julia-snail--requests)
     (if async
         reqid
@@ -372,7 +379,8 @@ Julia include on the tmpfile, and then deleting the file."
            (repl-buf (julia-snail--request-tracker-repl-buf request-info))
            (error-buffer (julia-snail--error-buffer repl-buf error-message error-stack))
            (callback-failure (julia-snail--request-tracker-callback-failure request-info)))
-      (display-buffer error-buffer)
+      (when (julia-snail--request-tracker-display-error-buffer-on-failure? request-info)
+        (display-buffer error-buffer))
       (when callback-failure
         (funcall callback-failure))))
   (julia-snail--response-base reqid))
@@ -446,41 +454,59 @@ Julia include on the tmpfile, and then deleting the file."
 
 ;;; --- completion implementation
 
-;;; FIXME:
-;;; - [X] base level: same as xref table, plus modules
-;;; - [ ] FIXME: Where are the imported completions???
-;;; - [ ] optimization: when identifier has a dot: load from that module?
-;;; - [X] Base: cache and strip leading
-;;; - [X] Core: ditto?
+(defun julia-snail--completions-keywords ()
+  (list "abstract type" "begin" "catch" "do" "else" "elseif" "end"
+        "false" "finally" "for" "function" "if" "let" "macro" "module"
+        "mutable struct" "nothing" "primitive type" "quote" "struct"
+        "true" "try" "undef" "while"))
+
+(defun julia-snail--completions-base ()
+  (let ((process-buf (get-buffer (julia-snail--process-buffer-name julia-snail-repl-buffer))))
+    ;; return (cached) list of Base names
+    (if-let ((cached-base (gethash process-buf julia-snail--cache-proc-names-base)))
+        cached-base
+      (puthash process-buf
+               (julia-snail--send-to-server
+                 (list "Main")
+                 "Main.JuliaSnail.lsnames(Main.Base, all=true, imported=true, include_modules=true, recursive=true)"
+                 :async nil)
+               julia-snail--cache-proc-names-base))))
+
+(defun julia-snail--completions-core ()
+  (let ((process-buf (get-buffer (julia-snail--process-buffer-name julia-snail-repl-buffer))))
+    ;; return (cached) list of Core names
+    (if-let ((cached-core (gethash process-buf julia-snail--cache-proc-names-core)))
+        cached-core
+      (puthash process-buf
+               (julia-snail--send-to-server
+                 (list "Main")
+                 "Main.JuliaSnail.lsnames(Main.Core, all=true, imported=true, include_modules=true, recursive=false)"
+                 :async nil)
+               julia-snail--cache-proc-names-core))))
+
 (defun julia-snail--completions (identifier)
-  (let* ((process-buf (get-buffer (julia-snail--process-buffer-name julia-snail-repl-buffer)))
-         (module (julia-snail-parser-query (current-buffer) (point) :module))
-         (ns (s-join "." module)))
+  (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+         (ns (s-join "." module))
+         (identifier (julia-snail--identifier-at-point)))
     (append
-     ;; Julia keywords
-     (list "abstract type" "begin" "catch" "do" "else" "elseif" "end"
-           "false" "finally" "for" "function" "if" "let" "macro" "module"
-           "mutable struct" "nothing" "primitive type" "quote" "struct"
-           "true" "try" "undef" "while" "module")
-     ;; return (cached) list of Base names
-     (if-let ((cached-base (gethash process-buf julia-snail--cache-proc-names-base)))
-         cached-base
-       (puthash process-buf
-                (julia-snail--send-to-server
-                  (list "Main")
-                  "Main.JuliaSnail.lsnames(Main.Base, all=true, imported=true, include_modules=true, recursive=true)"
-                  :async nil)
-                julia-snail--cache-proc-names-base))
-     ;; return (cached) list of Core names
-     (if-let ((cached-core (gethash process-buf julia-snail--cache-proc-names-core)))
-         cached-core
-       (puthash process-buf
-                (julia-snail--send-to-server
-                  (list "Main")
-                  "Main.JuliaSnail.lsnames(Main.Core, all=true, imported=true, include_modules=true, recursive=false)"
-                  :async nil)
-                julia-snail--cache-proc-names-core))
-     ;; finally, the main list of names
+     (julia-snail--completions-keywords)
+     (julia-snail--completions-base)
+     (julia-snail--completions-core)
+     ;; handle a variable referencing a module
+     (when (and identifier (s-ends-with? "." identifier))
+       (let ((dotless-identifier (replace-regexp-in-string
+                                  (rx "." string-end) "" identifier)))
+         (mapcar
+          (lambda (c) (s-prepend identifier c))
+          (let ((res (julia-snail--send-to-server
+                       module
+                       (format "Main.JuliaSnail.lsnames(%s, all=false, imported=false, include_modules=false, recursive=false)" dotless-identifier)
+                       :display-error-buffer-on-failure? nil
+                       :async nil)))
+            (if (eq :nothing res)
+                (list)
+              res)))))
+     ;; the main list of names
      (julia-snail--send-to-server
        module
        (format "Main.JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=true, recursive=true)" ns)

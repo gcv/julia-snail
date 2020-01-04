@@ -120,9 +120,10 @@ function lsnames(ns; all=false, imported=false, include_modules=false, recursive
    raw_clean = filter(
       n -> !occursin(r"#", string(n)),
       raw)
-   # remove :eval and :include since they are automatically everywhere
+   # remove :eval and :include since they are automatically everywhere, along
+   # with unhelpful symbols
    raw_clean = filter(
-      n -> n ∉ (:eval, :include),
+      n -> n ∉ (:eval, :include, :..),
       raw_clean)
    # if ns is Main, remove problematic entries
    if ns == Main
