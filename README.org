@@ -13,7 +13,7 @@ Snail is a "superior" REPL interaction package for Julia in the spirit of Common
 ** Requirements
 
 - Emacs 26.2 or later, compiled with module support (~--with-modules~)
-- [[https://github.com/JuliaEditorSupport/julia-emacs][julia-mode]] (not strictly required, but highly recommended)
+- [[https://github.com/JuliaEditorSupport/julia-emacs][julia-mode]]
 - [[https://github.com/akermu/emacs-libvterm][emacs-libvterm]]
 - [[https://github.com/magnars/s.el][s.el]]
 - [[https://github.com/Malabarba/spinner.el][spinner]]
@@ -23,7 +23,7 @@ Snail is a "superior" REPL interaction package for Julia in the spirit of Common
 
 ** Future improvements
 
-- The current Parsec-based parser leaves much to be desired. It is incomplete, fairly slow, and not particularly straightforward. Perhaps an implementation with [[https://github.com/ellerh/peg.el][PEG]] would work better.
+- The current Parsec-based parser leaves much to be desired. It is woefully incomplete: in particular, it cannot detect one-line top-level definitions (such as `f(x) = 10x`). In addition: it is slow, and not particularly straightforward in implementation. A rewrite (perhaps with [[https://github.com/ellerh/peg.el][PEG]]) would work better and enable more features.
 - The libvterm dependency forces the use of very recent Emacs releases, and forces Emacs to be build with module support. It would be much better to re-implement the REPL in Elisp.
 
 
