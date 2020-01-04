@@ -494,13 +494,12 @@ Julia include on the tmpfile, and then deleting the file."
      (julia-snail--completions-core)
      ;; handle a variable referencing a module
      (when (and identifier (s-ends-with? "." identifier))
-       (let ((dotless-identifier (replace-regexp-in-string
-                                  (rx "." string-end) "" identifier)))
+       (let ((dotless (replace-regexp-in-string (rx "." string-end) "" identifier)))
          (mapcar
           (lambda (c) (s-prepend identifier c))
           (let ((res (julia-snail--send-to-server
                        module
-                       (format "Main.JuliaSnail.lsnames(%s, all=false, imported=false, include_modules=false, recursive=false)" dotless-identifier)
+                       (format "Main.JuliaSnail.lsnames(%s, all=false, imported=false, include_modules=false, recursive=false)" dotless)
                        :display-error-buffer-on-failure? nil
                        :async nil)))
             (if (eq :nothing res)
