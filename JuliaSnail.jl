@@ -112,9 +112,8 @@ end
 ### --- introspection helpers
 
 """
-...
+introspection helper: returns names of modules and identifiers in the given namespace.
 """
-
 function lsnames(ns; all=false, imported=false, include_modules=false, recursive=false, prepend_ns=false, first_call=true)
    raw = names(ns, all=all, imported=imported)
    # remove names containing '#' since Elisp doesn't like them
@@ -164,28 +163,7 @@ function lsnames(ns; all=false, imported=false, include_modules=false, recursive
 end
 
 """
-xref helper: return all identifiers in the given module.
-"""
-function xref_backend_identifiers(ns)
-   raw = names(ns, all=true, imported=true)
-   # remove identifiers containing '#' since Elisp doesn't like them
-   raw_clean = filter(n -> !occursin(r"#", string(n)), raw)
-   vars = filter(
-      n -> @ignoreerr(typeof(Core.eval(ns, n)) ∉ (DataType, UnionAll, Module), false),
-      raw_clean)
-   # convert results to strings
-   vars_strs = map(string, vars)
-   # strip out leading "Main." from identifiers to avoid confusion
-   ns_nomain = replace(string(ns), Regex("^Main\\.") => "")
-   vars_strs_nomain = map(
-      n -> replace(n, Regex(Printf.@sprintf("^Main\\.%s\\.", ns_nomain)) => ""),
-      vars_strs
-   )
-   return vars_strs_nomain
-end
-
-"""
-xref helper: return known definitions of given identifier in given namespace.
+introspection helper: return known definitions of given identifier in given namespace.
 """
 function xref_backend_definitions(ns, identifier)
    try

@@ -375,7 +375,7 @@ Julia include on the tmpfile, and then deleting the file."
          (ns (s-join "." module)))
     (julia-snail--send-to-server
       module
-      (format "JuliaSnail.xref_backend_identifiers(%s)" ns)
+      (format "JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=false, recursive=true)" ns)
       :async nil)))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql xref-julia-snail)) identifier)
