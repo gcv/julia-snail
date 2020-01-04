@@ -382,7 +382,7 @@ Julia include on the tmpfile, and then deleting the file."
          (ns (s-join "." module)))
     (julia-snail--send-to-server
       module
-      (format "JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=false, recursive=true)" ns)
+      (format "Main.JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=false, recursive=true)" ns)
       :async nil)))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql xref-julia-snail)) identifier)
@@ -403,7 +403,7 @@ Julia include on the tmpfile, and then deleting the file."
          (identifier-name (-second-item identifier-split))
          (res (julia-snail--send-to-server
                 module
-                (format "JuliaSnail.xref_backend_definitions(%s, \"%s\")"
+                (format "Main.JuliaSnail.xref_backend_definitions(%s, \"%s\")"
                         identifier-ns identifier-name)
                 :async nil)))
     (if (or (null res) (eq :nothing res))
@@ -447,7 +447,7 @@ Julia include on the tmpfile, and then deleting the file."
          (ns (s-join "." module)))
     (julia-snail--send-to-server
       module
-      (format "JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=true, recursive=true)" ns)
+      (format "Main.JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=true, recursive=true)" ns)
       :async nil)))
 
 (defun julia-snail-completion-at-point ()
