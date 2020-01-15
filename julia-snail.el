@@ -402,6 +402,20 @@ Julia include on the tmpfile, and then deleting the file."
       (format "Main.JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=false, recursive=true)" ns)
       :async nil)))
 
+(defun julia-snail--make-xrefs-helper (response)
+  (if (or (null response) (eq :nothing response))
+      nil
+    (mapcar (lambda (candidate)
+              (let ((descr (-first-item candidate))
+                    (path (-second-item candidate))
+                    (line (-third-item candidate)))
+                (xref-make descr
+                           (if (file-exists-p path)
+                               (xref-make-file-location path line 0)
+                             (xref-make-bogus-location
+                              "xref not supported for definitions evaluated with julia-snail-send-top-level-form")))))
+            response)))
+
 (cl-defmethod xref-backend-definitions ((_backend (eql xref-julia-snail)) identifier)
   (when (null identifier)
     (error "No identifier at point"))
@@ -420,21 +434,10 @@ Julia include on the tmpfile, and then deleting the file."
          (identifier-name (-second-item identifier-split))
          (res (julia-snail--send-to-server
                 module
-                (format "Main.JuliaSnail.xref_backend_definitions(%s, \"%s\")"
+                (format "Main.JuliaSnail.lsdefinitions(%s, \"%s\")"
                         identifier-ns identifier-name)
                 :async nil)))
-    (if (or (null res) (eq :nothing res))
-        nil
-      (mapcar (lambda (candidate)
-                (let ((descr (-first-item candidate))
-                      (path (-second-item candidate))
-                      (line (-third-item candidate)))
-                  (xref-make descr
-                             (if (file-exists-p path)
-                                 (xref-make-file-location path line 0)
-                               (xref-make-bogus-location
-                                "xref not supported for definitions evaluated with julia-snail-send-top-level-form")))))
-              res))))
+    (julia-snail--make-xrefs-helper res)))
 
 ;;; TODO: Implement this. See
 ;;; https://discourse.julialang.org/t/finding-uses-of-a-method/32729/3 for
@@ -448,8 +451,13 @@ Julia include on the tmpfile, and then deleting the file."
   nil)
 
 (cl-defmethod xref-backend-apropos ((_backend (eql xref-julia-snail)) pattern)
-  ;; ...
-  )
+  (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+         (ns (s-join "." module))
+         (res (julia-snail--send-to-server
+                module
+                (format "Main.JuliaSnail.apropos(\"%s\")" pattern)
+                :async nil)))
+    (julia-snail--make-xrefs-helper res)))
 
 
 ;;; --- completion implementation

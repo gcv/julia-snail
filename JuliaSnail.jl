@@ -70,7 +70,7 @@ is equivalent to
 Main.One.Two.Three.eval(:(x = 3 + 5))
 ```
 """
-function eval_in_module(fully_qualified_module_name::Array{Symbol, 1}, expr::Expr)
+function eval_in_module(fully_qualified_module_name::Array{Symbol}, expr::Expr)
    # Retrieving the first module in the chain can be tricky. In general, using
    # getfield to find a module works, but packages loaded as transitive
    # dependencies are not necessarily loaded into Main, and so must be found
@@ -108,11 +108,37 @@ macro ignoreerr(expr, retval)
    end
 end
 
+"""
+Formatter for method signatures, DataType specialized.
+"""
+function format_method_signature(methodsig::DataType)
+   join(map(string, methodsig.types[2:end]), ", ")
+end
+
+"""
+Formatter for method signatures, generic.
+"""
+function format_method_signature(methodsig::Any)
+   string(methodsig)
+end
+
+"""
+Return a name split into its module and identifier components.
+Example: given a string like "Base.Math.acos", return [Base.Math, "acos"].
+"""
+function split_name(name::String, ns::Module=Main)
+   if match(r"\.", name) == nothing
+      return [ns, name]
+   end
+   components = match(r"(.*?)\.(.*)", name)
+   return split_name(string(components[2]), getfield(ns, Symbol(components[1])))
+end
+
 
 ### --- introspection helpers
 
 """
-introspection helper: returns names of modules and identifiers in the given namespace.
+Return names of modules and identifiers in the given namespace.
 """
 function lsnames(ns; all=false, imported=false, include_modules=false, recursive=false, prepend_ns=false, first_call=true, pattern=nothing)
    raw = names(ns, all=all, imported=imported)
@@ -155,9 +181,12 @@ function lsnames(ns; all=false, imported=false, include_modules=false, recursive
    end
    if first_call
       # remove anything which prepended the namespace itself
-      full_clean = map(
-         n -> replace(n, Regex(Printf.@sprintf("^%s\\.", ns)) => ""),
-         res)
+      full_clean =
+         prepend_ns ?
+         res :
+         map(
+            n -> replace(n, Regex(Printf.@sprintf("^%s\\.", ns)) => ""),
+            res)
       # apply the pattern
       if pattern ≠ nothing
          pattern_rx = Regex(pattern)
@@ -173,50 +202,55 @@ function lsnames(ns; all=false, imported=false, include_modules=false, recursive
 end
 
 """
-introspection helper: return known definitions of given identifier in given namespace.
+Return known definition locations of given identifier in given namespace.
 """
-function xref_backend_definitions(ns, identifier)
+function lsdefinitions(ns, identifier)
    try
       let ms = methods(getproperty(ns, Symbol(identifier))).ms
          # If all definitions point to the same file and line, collapse them
          # into one. This often happens with function default arguments.
          lines = map(m -> m.line, ms)
          files = map(m -> m.file, ms)
-         if length(unique(lines)) == 1 && length(unique(files)) == 1
-            [(identifier, Base.find_source_file(string(files[1])), lines[1])]
-         else
-            map(m -> (Printf.@sprintf("%s: %s",
-                                      identifier,
-                                      join(map(string, m.sig.types[2:end]), ", ")),
-                      Base.find_source_file(string(m.file)),
-                      m.line),
-                ms)
-         end
+         map(m -> (Printf.@sprintf("%s(%s)",
+                                   identifier,
+                                   format_method_signature(m.sig)),
+                   Base.find_source_file(string(m.file)),
+                   m.line),
+             ms)
       end
    catch
-      nothing
+      []
    end
 end
 
+# Caches for apropos() function. These are separate from the caching performed
+# on the Elisp side by autocompletion to reduce the amount of data transfered
+# from Julia to Emacs.
+apropos_cached_base = nothing
+
 """
-...
+Return known definition locations of identifiers matching the pattern in
+namespaces loaded in Main, along with Base and Core.
 """
 function apropos(pattern)
-   names = lsnames(Main, all=true, imported=true, include_modules=false, recursive=true, pattern=pattern)
-   res = []
+   pattern_rx = Regex(pattern)
+   names = lsnames(Main.Core, all=true, imported=true, include_modules=false, recursive=true, pattern=pattern)
+   # lazy load Base
+   global apropos_cached_base
+   if apropos_cached_base == nothing
+      apropos_cached_base = lsnames(Main.Base, all=true, imported=true, include_modules=false, recursive=true, prepend_ns=true)
+   end
+   base_filtered = filter(
+      n -> occursin(pattern_rx, n),
+      apropos_cached_base)
+   append!(names, base_filtered)
+   # find the definitions of each result
+   res::Array{Tuple{String,String,Int32}} = []
    for name in names
-      ns = Main
-      if match(Regex("\\."), name)
-#         push!(xref_backend_def
-      else
-      end
+      ns, n = split_name(name)
+      append!(res, lsdefinitions(ns, n))
    end
    return res
-   # FIXME: For each entry, determine ns. If no dot, then it's Main. Else
-   # extract namespace up to the last dot (see xref-backend-definitions on Elisp
-   # side for regexp. Call xref_backend_definitions (renamed appropriately) on
-   # each result and return it. Use post-processing from
-   # xref-backend-definitions on Elisp side.
 end
 
 
