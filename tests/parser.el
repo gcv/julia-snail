@@ -397,6 +397,26 @@ end
 stuff = []
 end"
       (julia-snail-parser--*file))))
+  (should
+   (equal
+    '(((:module 1 "A")
+       (((:function 11 "f")
+         ("(x)\n   one = []\n")
+         (:end 37))
+        "two = []\n\n")
+       (:end 52))
+      "")
+    (parsec-with-input "module A
+
+function f(x)
+   one = []
+end
+
+two = []
+
+end
+"
+      (julia-snail-parser--*file))))
   ;; nested code with case-sensitive Module check
   (should
    (equal

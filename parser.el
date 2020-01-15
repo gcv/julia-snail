@@ -98,7 +98,7 @@ extract only GROUP (numbered as per MATCH-STRING."
       (eval julia-snail-parser--rx-other-core)))
 
 (defvar julia-snail-parser--rx-other-main
-  (rx (group (*? (or (and "[" (*? anything) "end" (*? anything) "]")
+  (rx (group (*? (or (and "[" (*? anything) (? "end") (*? anything) "]")
                      anything
                      "\n"))
              (or line-start blank
