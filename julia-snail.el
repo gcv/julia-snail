@@ -431,11 +431,14 @@ Julia include on the tmpfile, and then deleting the file."
                                        (match-string 2 identifier))
                                (list module identifier))))
          (identifier-ns (-first-item identifier-split))
+         (identifier-ns-real (if (listp identifier-ns)
+                                 (s-join "." identifier-ns)
+                               identifier-ns))
          (identifier-name (-second-item identifier-split))
          (res (julia-snail--send-to-server
                 module
                 (format "Main.JuliaSnail.lsdefinitions(%s, \"%s\")"
-                        identifier-ns identifier-name)
+                        identifier-ns-real identifier-name)
                 :async nil)))
     (julia-snail--make-xrefs-helper res)))
 
