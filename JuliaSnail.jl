@@ -114,7 +114,7 @@ end
 """
 introspection helper: returns names of modules and identifiers in the given namespace.
 """
-function lsnames(ns; all=false, imported=false, include_modules=false, recursive=false, prepend_ns=false, first_call=true)
+function lsnames(ns; all=false, imported=false, include_modules=false, recursive=false, prepend_ns=false, first_call=true, pattern=nothing)
    raw = names(ns, all=all, imported=imported)
    # remove names containing '#' since Elisp doesn't like them
    raw_clean = filter(
@@ -133,7 +133,7 @@ function lsnames(ns; all=false, imported=false, include_modules=false, recursive
    end
    # remove self-matches
    raw_clean = filter(
-      n -> @ignoreerr(n == :missing || Core.eval(ns, n) != ns, false),
+      n -> @ignoreerr(n == :missing || Core.eval(ns, n) ≠ ns, false),
       raw_clean)
    # separate out output by module and non-module
    all = filter(
@@ -153,11 +153,20 @@ function lsnames(ns; all=false, imported=false, include_modules=false, recursive
          append!(res, lsnames(new_ns, all=false, imported=false, include_modules=include_modules, recursive=true, prepend_ns=true, first_call=false))
       end
    end
-   # remove anything which prepended the namespace itself
    if first_call
-      return map(
+      # remove anything which prepended the namespace itself
+      full_clean = map(
          n -> replace(n, Regex(Printf.@sprintf("^%s\\.", ns)) => ""),
          res)
+      # apply the pattern
+      if pattern ≠ nothing
+         pattern_rx = Regex(pattern)
+         return filter(
+            n -> occursin(pattern_rx, n),
+            full_clean)
+      else
+         return full_clean
+      end
    else
       return res
    end
@@ -187,6 +196,27 @@ function xref_backend_definitions(ns, identifier)
    catch
       nothing
    end
+end
+
+"""
+...
+"""
+function apropos(pattern)
+   names = lsnames(Main, all=true, imported=true, include_modules=false, recursive=true, pattern=pattern)
+   res = []
+   for name in names
+      ns = Main
+      if match(Regex("\\."), name)
+#         push!(xref_backend_def
+      else
+      end
+   end
+   return res
+   # FIXME: For each entry, determine ns. If no dot, then it's Main. Else
+   # extract namespace up to the last dot (see xref-backend-definitions on Elisp
+   # side for regexp. Call xref_backend_definitions (renamed appropriately) on
+   # each result and return it. Use post-processing from
+   # xref-backend-definitions on Elisp side.
 end
 
 
