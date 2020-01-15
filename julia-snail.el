@@ -432,7 +432,7 @@ Julia include on the tmpfile, and then deleting the file."
                                (list module identifier))))
          (identifier-ns (-first-item identifier-split))
          (identifier-ns-real (if (listp identifier-ns)
-                                 (s-join "." identifier-ns)
+                                 (-last-item identifier-ns)
                                identifier-ns))
          (identifier-name (-second-item identifier-split))
          (res (julia-snail--send-to-server
