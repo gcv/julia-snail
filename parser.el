@@ -39,11 +39,22 @@
                   (rx "\"" (group-n 1 (*? (or "\\\"" anything))) "\""))
                  :group 1)))
 
+(defun julia-snail-parser--*string-non-standard-literal ()
+  (parsec-and
+   (julia-snail-parser--*whitespace)
+   (parsec-query (parsec-re
+                  (rx (1+ alpha) ; non-standard literal indication
+                      "\"" (group-n 1 (*? (or "\\\"" anything))) "\"" ; string
+                      (*? alpha) ; flags
+                      ))
+                 :group 1)))
+
 (defun julia-snail-parser--*string ()
   (parsec-and
    (julia-snail-parser--*whitespace)
    (parsec-or (julia-snail-parser--*string-tq)
-              (julia-snail-parser--*string-dq))))
+              (julia-snail-parser--*string-dq)
+              (julia-snail-parser--*string-non-standard-literal))))
 
 (defun julia-snail-parser--*comment ()
   (parsec-and
@@ -102,7 +113,6 @@ extract only GROUP (numbered as per MATCH-STRING."
                      anything
                      "\n"))
              (or line-start blank
-                 (syntax punctuation)
                  (syntax open-parenthesis)
                  (syntax close-parenthesis)))
       (group (eval julia-snail-parser--rx-other-core))))

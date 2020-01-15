@@ -64,6 +64,17 @@ three\"\"\"
    (equal
     "one\\\"two"
     (parsec-with-input "\"one\\\"two\""
+      (julia-snail-parser--*string))))
+  ;; non-standard literals
+  (should
+   (equal
+    "one"
+    (parsec-with-input "r\"one\"i"
+      (julia-snail-parser--*string))))
+  (should
+   (equal
+    "one"
+    (parsec-with-input "raw\"one\""
       (julia-snail-parser--*string)))))
 
 (ert-deftest jsp-test-comments ()
