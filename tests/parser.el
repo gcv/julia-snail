@@ -75,7 +75,20 @@ three\"\"\"
    (equal
     "one"
     (parsec-with-input "raw\"one\""
-      (julia-snail-parser--*string)))))
+      (julia-snail-parser--*string))))
+  (should
+   (equal
+    '(((:function 1 "f")
+       ("(name)\n   m = " "two" "components = match(r\"(.*?).(.*)\", name)\n")
+       (:end 74))
+      "one" "")
+    (parsec-with-input "function f(name)
+   m = \"two\"
+   components = match(r\"(.*?)\.(.*)\", name)
+end
+\"one\"
+"
+      (julia-snail-parser--*file)))))
 
 (ert-deftest jsp-test-comments ()
   (should

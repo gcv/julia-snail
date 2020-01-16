@@ -113,8 +113,7 @@ extract only GROUP (numbered as per MATCH-STRING."
                      anything
                      "\n"))
              (or line-start blank
-                 (syntax open-parenthesis)
-                 (syntax close-parenthesis)))
+                 (syntax open-parenthesis)))
       (group (eval julia-snail-parser--rx-other-core))))
 
 (defun julia-snail-parser--*other ()
