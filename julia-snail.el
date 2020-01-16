@@ -497,7 +497,7 @@ Julia include on the tmpfile, and then deleting the file."
 
 (defun julia-snail--completions (identifier)
   (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
-         (ns (s-join "." module))
+         (ns (-last-item module))
          (identifier (julia-snail--identifier-at-point)))
     (append
      (julia-snail--completions-keywords)
