@@ -4,6 +4,7 @@ import Pkg
 module JuliaSnail
 
 
+import Markdown
 import Printf
 import Sockets
 
@@ -35,6 +36,10 @@ end
 
 function elexpr(arg::String)
    Printf.@sprintf("\"%s\"", escape_string(arg))
+end
+
+function elexpr(arg::Markdown.MD)
+   elexpr(string(arg))
 end
 
 function elexpr(arg::Number)

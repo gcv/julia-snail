@@ -95,22 +95,20 @@ just display them in the minibuffer."
       (error "No REPL buffer found"))
     (format "%s process" (buffer-name (get-buffer real-buf)))))
 
-(defun julia-snail--error-buffer (repl-buf error-message error-stack)
+(defun julia-snail--message-buffer (repl-buf name message)
   (let ((real-buf (get-buffer repl-buf)))
     (unless real-buf
       (error "No REPL buffer found"))
-    (let* ((error-buf-name (format "%s error" (buffer-name (get-buffer real-buf))))
-           (error-buf (get-buffer-create error-buf-name)))
-      (with-current-buffer error-buf
+    (let* ((msg-buf-name (format "%s %s" (buffer-name (get-buffer real-buf)) name))
+           (msg-buf (get-buffer-create msg-buf-name)))
+      (with-current-buffer msg-buf
         (read-only-mode -1)
         (erase-buffer)
-        (insert error-message)
-        (insert "\n\n")
-        (insert (s-join "\n" error-stack))
+        (insert message)
         (goto-char (point-min))
         (read-only-mode 1)
-        (julia-snail-error-buffer-mode))
-      error-buf)))
+        (julia-snail-message-buffer-mode))
+      msg-buf)))
 
 (defun julia-snail--flash-region (start end &optional timeout)
   ;; borrowed from SLIME
@@ -377,7 +375,10 @@ Julia include on the tmpfile, and then deleting the file."
       (message error-message)
     (let* ((request-info (gethash reqid julia-snail--requests))
            (repl-buf (julia-snail--request-tracker-repl-buf request-info))
-           (error-buffer (julia-snail--error-buffer repl-buf error-message error-stack))
+           (error-buffer (julia-snail--message-buffer
+                          repl-buf
+                          "error"
+                          (format "%s\n\n%s" error-message (s-join "\n" error-stack))))
            (callback-failure (julia-snail--request-tracker-callback-failure request-info)))
       (when (julia-snail--request-tracker-display-error-buffer-on-failure? request-info)
         (display-buffer error-buffer))
@@ -630,6 +631,23 @@ This occurs in the context of the current module."
       :callback-success (lambda (&optional data)
                           (message "Package activated: %s" expanded-dir)))))
 
+(defun julia-snail-doc-lookup (identifier)
+  "Look up Julia documentation for symbol at point."
+  (interactive (list (read-string
+                      "Documentation look up: "
+                      (unless current-prefix-arg (julia-snail--identifier-at-point)))))
+  (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+         (name (concatenate 'string (s-join "." module) "." identifier))
+         (doc (julia-snail--send-to-server
+                '("Main")
+                (format "@doc %s" name)
+                :display-error-buffer-on-failure? nil
+                :async nil)))
+    (display-buffer (julia-snail--message-buffer
+                     julia-snail-repl-buffer
+                     (format "documentation: %s" identifier)
+                     doc))))
+
 (defun julia-snail-repl-go-back ()
   (interactive)
   (when (boundp 'julia-snail--repl-go-back-target)
@@ -642,6 +660,7 @@ This occurs in the context of the current module."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c C-z") #'julia-snail)
     (define-key map (kbd "C-c C-a") #'julia-snail-package-activate)
+    (define-key map (kbd "C-c C-d") #'julia-snail-doc-lookup)
     (define-key map (kbd "C-c C-c") #'julia-snail-send-top-level-form)
     (define-key map (kbd "C-M-x") #'julia-snail-send-top-level-form)
     (define-key map (kbd "C-c C-r") #'julia-snail-send-region)
@@ -687,10 +706,10 @@ turned on in REPL buffers."
         (julia-snail--repl-enable)
       (julia-snail--repl-disable))))
 
-(define-minor-mode julia-snail-error-buffer-mode
-  "A minor mode for displaying errors returned from the Julia REPL."
+(define-minor-mode julia-snail-message-buffer-mode
+  "A minor mode for displaying messages returned from the Julia REPL."
   :init-value nil
-  :lighter " Snail Error"
+  :lighter " Snail Message"
   :keymap '(((kbd "q") . quit-window)))
 
 (provide 'julia-snail)
