@@ -533,6 +533,16 @@ Julia include on the tmpfile, and then deleting the file."
             :exclusive 'yes))))
 
 
+;;; --- eldoc implementation
+
+(defun julia-snail-eldoc ()
+  ;; TODO: Implement something reasonable. This is pretty tricky to do in a
+  ;; world of generic functions, since the parser will need to do the work of
+  ;; figuring out just which possible signatures of a function are being called
+  ;; and display documentation accordingly.
+)
+
+
 ;;; --- commands
 
 ;;;###autoload
@@ -658,8 +668,10 @@ This occurs in the context of the current module."
         (progn
           (julia-snail--enable)
           (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t)
+          (add-function :before-until (local 'eldoc-documentation-function) #'julia-snail-eldoc)
           (add-hook 'completion-at-point-functions #'julia-snail-completion-at-point nil t))
       (remove-hook 'completion-at-point-functions #'julia-snail-completion-at-point t)
+      (remove-function (local 'eldoc-documentation-function) #'julia-snail-eldoc)
       (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
       (julia-snail--disable))))
 
