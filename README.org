@@ -25,13 +25,15 @@ Snail is a "superior" REPL interaction package for Julia in the spirit of Common
 
 *** Structural
 
-- The current Parsec-based parser leaves much to be desired. It is woefully incomplete: in particular, it cannot detect one-line top-level definitions (such as `f(x) = 10x`). In addition: it is slow, and not particularly straightforward in implementation. A rewrite (perhaps with [[https://github.com/ellerh/peg.el][PEG]]) would work better and enable more features.
+- The current parser leaves much to be desired. It is woefully incomplete: in particular, it cannot detect one-line top-level definitions (such as `f(x) = 10x`). In addition: it is slow, and not particularly straightforward in implementation. A rewrite would work better and enable more features. Unfortunately, parsers are hard. :)
 - The libvterm dependency forces the use of very recent Emacs releases, and forces Emacs to be build with module support. It would be much better to re-implement the REPL in Elisp.
 
 
 *** Features
 
 - The autocompletion search does not include anything pulled into a module with ~using~. Julia does not seem to have a built-in incantation for doing this (~names~ with ~imported=true~ only includes /explicitly/ imported parameters). This can be worked around on the Snail side, by extending the parser to recognize ~using~ statements.
+- Autocompletion does not pick up local variables. This is yet another weakness of the parser.
+- A real eldoc implementation would be great, but difficult to do with Julia's generic functions. The parser would also have to improve (notice a theme here?).
 
 
 ** Usage
