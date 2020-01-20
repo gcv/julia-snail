@@ -69,6 +69,18 @@
      (julia-snail-parser--*whitespace)
      (parsec-re "#.*?$")))))
 
+(defun julia-snail-parser--*brackets ()
+  (parsec-and
+   (julia-snail-parser--*whitespace)
+   (parsec-collect-as-string
+    ;;"B" ; put this back to debug bracket expression parsing
+    (parsec-str "[")
+    (parsec-many-as-string
+     (parsec-or
+      (parsec-re (rx (not (any "[" "]"))))
+      (julia-snail-parser--*brackets)))
+    (parsec-str "]"))))
+
 (defun julia-snail-parser--*end ()
   (if (looking-at (rx (* (or blank "\n")) "#"))
       (parsec-stop :expected "end"
@@ -92,7 +104,7 @@ extract only GROUP (numbered as per MATCH-STRING."
                  :found (parsec-eof-or-char-as-string))))
 
 (defvar julia-snail-parser--rx-other-core
-  '(or "#" "\""
+  '(or "#" "\"" "[" "]"
        (and (or "end"
                 "module" "baremodule"
                 "function" "macro"
@@ -109,9 +121,7 @@ extract only GROUP (numbered as per MATCH-STRING."
       (eval julia-snail-parser--rx-other-core)))
 
 (defvar julia-snail-parser--rx-other-main
-  (rx (group (*? (or (and "[" (*? anything) (? "end") (*? anything) "]")
-                     anything
-                     "\n"))
+  (rx (group (*? (or anything "\n"))
              (or line-start blank
                  (syntax open-parenthesis)))
       (group (eval julia-snail-parser--rx-other-core))))
@@ -130,6 +140,7 @@ extract only GROUP (numbered as per MATCH-STRING."
    (julia-snail-parser--*whitespace)
    (parsec-or (julia-snail-parser--*comment)
               (julia-snail-parser--*string)
+              (julia-snail-parser--*brackets)
               (julia-snail-parser--*block)
               (julia-snail-parser--*other))))
 
