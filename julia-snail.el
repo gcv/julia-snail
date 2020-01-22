@@ -2,14 +2,15 @@
 
 
 ;; URL: http://github.com/gcv/julia-snail
-;; Package-Requires: ((emacs "26.3") (cl-lib "0.5"))
+;; Package-Requires: ((emacs "26.3") (cl-lib "0.5") (s "1.12.0") (spinner "1.7.3") (vterm "0.0.1"))
 ;; Version: 1.0beta1
 ;; Created: 2019-10-27
 
 ;;; Commentary:
 
-;; This package provides a development environment for Julia
-;; (https://julialang.org/).
+;; This package provides an interactive development environment for Julia
+;; (https://julialang.org/), similar to SLIME for Common Lisp and CIDER for
+;; Clojure. Refer to the README.org file for documentation.
 
 ;;; Code:
 
