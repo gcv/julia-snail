@@ -1,10 +1,22 @@
 ;;; julia-snail.el --- Julia Snail -*- lexical-binding: t -*-
 
 
+;; URL: http://github.com/gcv/julia-snail
+;; Package-Requires: ((emacs "26.3") (cl-lib "0.5"))
+;; Version: 1.0beta1
+;; Created: 2019-10-27
+
+;;; Commentary:
+
+;; This package provides a development environment for Julia
+;; (https://julialang.org/).
+
+;;; Code:
+
+
 ;;; --- requirements
 
 (require 'cl-lib)
-(require 'cl-macs)
 (require 'json)
 (require 's)
 (require 'spinner)
@@ -713,3 +725,6 @@ turned on in REPL buffers."
   :keymap '(((kbd "q") . quit-window)))
 
 (provide 'julia-snail)
+
+
+;;; julia-snail.el ends here
