@@ -1,6 +1,6 @@
 * Julia Snail
 
-Snail is a "superior" REPL interaction package for Julia in the spirit of Common Lisp's [[https://common-lisp.net/project/slime/][SLIME]] and Clojure's [[https://cider.mx][CIDER]].
+Snail is a REPL interaction package for Julia in the spirit of Common Lisp's [[https://common-lisp.net/project/slime/][SLIME]] and Clojure's [[https://cider.mx][CIDER]].
 
 
 ** Features
@@ -19,6 +19,8 @@ Snail is a "superior" REPL interaction package for Julia in the spirit of Common
 - [[https://github.com/Malabarba/spinner.el][spinner]]
 - [[https://github.com/cute-jumper/parsec.el][parsec]]
 - [[https://github.com/magnars/dash.el][dash]]
+
+Julia versions 1.0 and 1.3 are supported.
 
 
 ** Future improvements
@@ -46,6 +48,8 @@ Snail is a "superior" REPL interaction package for Julia in the spirit of Common
 *** Configuration
 
 ...
+
+include recommended ~display-buffer-alist~ tweaks
 
 
 *** Basics
@@ -78,55 +82,3 @@ The ~Venus~ project directory contains the following ~.dir-locals.el~ file:
 Now, source files in ~Mars~ will interact with the REPL running in the ~*julia Mars*~ buffer, and source files in ~Venus~ will interact with the REPL running in the ~*julia Venus*~ buffer.
 
 The ~julia-snail-executable~ variable can be set the same way to run different versions of Julia.
-
-
-** Notes
-
-*** Retrieving line number of a function
-
-#+BEGIN_SRC julia
-code_lowered(Snail.start)[1].linetable[1]
-methods(Snail.start)
-# look at methods
-m = methods(Snail.start).ms[1] # or first(methods(Snail.start))
-[m.file, m.line]
-#+END_SRC
-
-This is complicated by the use of generic functions, IOW it's unclear which definition is relevant without analyzing the arguments — which can realistically only happen at runtime.
-
-This suggests that the xref mechanism should only auto-jump when the definition only contains one entry, and present a type selection dialog otherwise.
-
-
-*** Retrieving autocompletion candidates
-
-#+BEGIN_SRC julia
-names(Main)
-#+END_SRC
-
-This returns an array of symbols.
-
-
-** Tasks
-
-*** Overall
-
-- [X] fill out FIXMEs
-- [X] add Pkg.activate command (and improve command result feedback)
-- [X] parser broken on app~end~ in Blueberry cost function
-- [X] when the breakage occurs, the modeline progress indicator is not removed
-- [X] make callback-success and callback-failure optional
-- [X] fix hanging with broken top-level forms
-- [X] fix failures with multiple error buffers — and add a way to dismiss with q key?
-- [X] test multi-REPL support
-- [ ] test with lowvar code
-- [ ] test with Julia 1.2
-- [ ] rename to just Snail from julia-snail? JSnail?
-  + research the use of "Snail" in software
-  + see if there's another Emacs "snail" package in MELPA
-  + see if there's a snail package in the Julia general registry
-- [ ] xref
-- [ ] autocomplete
-- [ ] figure out how to integrate with vanilla Emacs, company-mode, ivy, helm completers
-- [ ] write decent README, include recommended ~display-buffer-alist~ tweaks
-- [ ] add license (GPL)
-- [ ] eldoc integration (requires better parser)
