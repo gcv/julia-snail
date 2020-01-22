@@ -1,11 +1,18 @@
 * Julia Snail
 
-Snail is a REPL interaction package for Julia in the spirit of Common Lisp's [[https://common-lisp.net/project/slime/][SLIME]] and Clojure's [[https://cider.mx][CIDER]].
+Snail is a development environment and REPL interaction package for Julia in the spirit of Common Lisp's [[https://common-lisp.net/project/slime/][SLIME]] and Clojure's [[https://cider.mx][CIDER]].
+
+
+** Tasks
+
+- test package in clean environment
+- logo
+- MELPA
 
 
 ** Features
 
-- REPL display :: Snail currently uses [[https://github.com/neovim/libvterm][libvterm]] with [[https://github.com/akermu/emacs-libvterm][Emacs]] bindings to display Julia's native REPL in a good terminal, so it should have relatively good performance and fewer display bugs than attempting to run the REPL in a `term.el` buffer.
+- REPL display :: Snail currently uses [[https://github.com/neovim/libvterm][libvterm]] with [[https://github.com/akermu/emacs-libvterm][Emacs]] bindings to display Julia's native REPL in a good terminal, so it should have relatively good performance and fewer display bugs than attempting to run the REPL in a ~term.el~ buffer.
 - Parser :: Snail contains a limited but serviceable Julia parser. See below for where it is used.
 - Convenient REPL interaction :: Snail provides a bridge between Julia programs and a Julia process running in a REPL. ...
 
