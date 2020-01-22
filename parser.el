@@ -87,11 +87,9 @@
     (parsec-and
      (julia-snail-parser--*whitespace)
      (parsec-re (rx (* (or blank "\n" (syntax punctuation)))))
-     (if (julia-in-brackets) ;; XXX: julia-mode to the rescue
-         (parsec-stop :expected "no brackets" :found "brackets")
-       (julia-snail-parser--parsec-query
-        (parsec-re "end")
-        :end)))))
+     (julia-snail-parser--parsec-query
+      (parsec-re "end")
+      :end))))
 
 (defun julia-snail-parser--parsec-re-group (regexp group)
   "Parse the input matching the regular expression REGEXP, but
@@ -244,30 +242,28 @@ extract only GROUP (numbered as per MATCH-STRING."
   (julia-snail-parser--parsec-query (julia-snail-parser--*keyword "let") :let))
 
 (defun julia-snail-parser--*block ()
-  (if (julia-in-brackets) ;; XXX: julia-mode to the rescue
-      (parsec-stop :expected "no brackets" :found "brackets")
-    (parsec-and
-     (julia-snail-parser--*whitespace)
-     (parsec-collect*
-      (parsec-or (julia-snail-parser--*start-module)
-                 (julia-snail-parser--*start-function)
-                 (julia-snail-parser--*start-macro)
-                 (julia-snail-parser--*start-type)
-                 (julia-snail-parser--*start-struct)
-                 (julia-snail-parser--*start-if)
-                 (julia-snail-parser--*start-while)
-                 (julia-snail-parser--*start-for)
-                 (julia-snail-parser--*start-begin)
-                 (julia-snail-parser--*start-quote)
-                 (julia-snail-parser--*start-try)
-                 (julia-snail-parser--*start-let))
-      (parsec-many-till
-       (julia-snail-parser--*expression)
-       (parsec-lookahead
-        (parsec-or
-         (parsec-eof)
-         (parsec-try (julia-snail-parser--*end)))))
-      (julia-snail-parser--*end)))))
+  (parsec-and
+   (julia-snail-parser--*whitespace)
+   (parsec-collect*
+    (parsec-or (julia-snail-parser--*start-module)
+               (julia-snail-parser--*start-function)
+               (julia-snail-parser--*start-macro)
+               (julia-snail-parser--*start-type)
+               (julia-snail-parser--*start-struct)
+               (julia-snail-parser--*start-if)
+               (julia-snail-parser--*start-while)
+               (julia-snail-parser--*start-for)
+               (julia-snail-parser--*start-begin)
+               (julia-snail-parser--*start-quote)
+               (julia-snail-parser--*start-try)
+               (julia-snail-parser--*start-let))
+    (parsec-many-till
+     (julia-snail-parser--*expression)
+     (parsec-lookahead
+      (parsec-or
+       (parsec-eof)
+       (parsec-try (julia-snail-parser--*end)))))
+    (julia-snail-parser--*end))))
 
 (defun julia-snail-parser--*file ()
   ;; XXX: This should be simply:
