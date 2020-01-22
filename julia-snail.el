@@ -75,13 +75,15 @@ just display them in the minibuffer."
 (defvar julia-snail--cache-proc-names-core
   (make-hash-table :test #'equal))
 
+(defvar julia-snail--repl-go-back-target)
+
 
 ;;; --- Snail protocol request tracking data structure
 
 (cl-defstruct julia-snail--request-tracker
   repl-buf
   originating-buf
-  (callback-success (lambda (&optional data) (message "Snail command succeeded")))
+  (callback-success (lambda (&optional _data) (message "Snail command succeeded")))
   (callback-failure (lambda () (message "Snail command failed")))
   (display-error-buffer-on-failure? t)
   tmpfile)
@@ -159,8 +161,8 @@ symbols, given by MODULE. MODULE can be:
         (max (gensym)))
     `(let ((,sleep-total 0)
            (,incr ,increment)
-           (.max ,maximum))
-       (while (and (< ,sleep-total ,maximum) ,condition)
+           (,max ,maximum))
+       (while (and (< ,sleep-total ,max) ,condition)
          (sleep-for 0 ,incr)
          (setf ,sleep-total (+ ,sleep-total ,incr))))))
 
@@ -451,12 +453,11 @@ Julia include on the tmpfile, and then deleting the file."
 ;;; calling Base.uncompressed_ast and looking for appropriate calls. Seems like
 ;;; it won't be accurate for functions called through indirection, but would
 ;;; definitely be a step in the right direction.
-(cl-defmethod xref-backend-references ((_backend (eql xref-julia-snail)) identifier)
+(cl-defmethod xref-backend-references ((_backend (eql xref-julia-snail)) _identifier)
   nil)
 
 (cl-defmethod xref-backend-apropos ((_backend (eql xref-julia-snail)) pattern)
   (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
-         (ns (s-join "." module))
          (res (julia-snail--send-to-server
                 module
                 (format "Main.JuliaSnail.apropos(\"%s\")" pattern)
@@ -498,8 +499,7 @@ Julia include on the tmpfile, and then deleting the file."
 
 (defun julia-snail--completions (identifier)
   (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
-         (ns (-last-item module))
-         (identifier (julia-snail--identifier-at-point)))
+         (ns (-last-item module)))
     (append
      (julia-snail--completions-keywords)
      (julia-snail--completions-base)
@@ -583,7 +583,7 @@ This will occur in the context of the Main module, just as it would at the REPL.
     (julia-snail--send-to-server
       :Main
       (format "include(\"%s\");" filename)
-      :callback-success (lambda (&optional data)
+      :callback-success (lambda (&optional _data)
                           (message "%s loaded" filename)))))
 
 (defun julia-snail-send-region ()
@@ -614,7 +614,7 @@ This occurs in the context of the current module."
     (julia-snail--flash-region block-start block-end 0.5)
     (julia-snail--send-to-server-via-tmp-file
       module text
-      :callback-success (lambda (&optional data)
+      :callback-success (lambda (&optional _data)
                           (message "Top-level form evaluated: module %s, %s"
                                    (julia-snail--construct-module-path module)
                                    (if (-fourth-item block-description)
@@ -628,7 +628,7 @@ This occurs in the context of the current module."
     (julia-snail--send-to-server
       :Main
       (format "Pkg.activate(\"%s\")" expanded-dir)
-      :callback-success (lambda (&optional data)
+      :callback-success (lambda (&optional _data)
                           (message "Package activated: %s" expanded-dir)))))
 
 (defun julia-snail-doc-lookup (identifier)
