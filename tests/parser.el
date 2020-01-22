@@ -79,7 +79,7 @@ three\"\"\"
   (should
    (equal
     '(((:function 1 "f")
-       ("(name)\n   m = " "two" "components = match(r\"(.*?).(.*)\", name)\n")
+       ("(name)\n   m = " "two" "components = match(r" "(.*?).(.*)" ", name)\n")
        (:end 74))
       "one" "")
     (parsec-with-input "function f(name)
@@ -191,7 +191,7 @@ end
   (should
    (equal
     '((:module 1 "Alpha")
-      ("A = B[1:end]\n")
+      ("A = B" "[1:end]")
       (:end 27))
     (parsec-with-input "module Alpha
 A = B[1:end]
@@ -200,7 +200,7 @@ end"
   (should
    (equal
     '((:module 1 "Alpha")
-      ("A = B[ 1 : end ]\n")
+      ("A = B" "[ 1 : end ]")
       (:end 31))
     (parsec-with-input "module Alpha
 A = B[ 1 : end ]
@@ -299,7 +299,7 @@ end
     '((:module 1 "Alpha")
       ("# comment"
        ((:function 26 "t1")
-        ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:end]\n")
+        ("(x)\n  x + 10\n  a = " "[1, 2, 3]" "a" "[1:end]")
         (:end 77))
        "println(" "hi" ")\n\n")
       (:end 97))
@@ -343,7 +343,7 @@ end"
        ("# comment"
         "echo\n"
         ((:function 29 "t1")
-         ("(x)\n  x + 10\n  a = [1, 2, 3]\n  a[1:end]\n")
+         ("(x)\n  x + 10\n  a = " "[1, 2, 3]" "a" "[1:end]")
          (:end 80))
         "println(" "hi" ")\n")
        (:end 98))
@@ -408,10 +408,10 @@ end"
        (((:function 14 "f")
          ("()\n   "
           ((:for 30)
-           ("in A[2:end]\n   ")
+           ("in A" "[2:end]")
            (:end 49)))
          (:end 53))
-        "stuff = []\n")
+        "stuff = " "[]")
        (:end 68)))
     (parsec-with-input "module Alpha
 function f()
@@ -425,9 +425,9 @@ end"
    (equal
     '(((:module 1 "A")
        (((:function 11 "f")
-         ("(x)\n   one = []\n")
+         ("(x)\n   one = " "[]")
          (:end 37))
-        "two = []\n\n")
+        "two = " "[]")
        (:end 52))
       "")
     (parsec-with-input "module A
@@ -565,7 +565,7 @@ end"
   (should
    (equal
     '((:function 1 "f1")
-      ("()\n   C = @Persistent [1 2 3]\n   append(C, 4)\n")
+      ("()\n   C = @Persistent " "[1 2 3]" "append(C, 4)\n")
       (:end 58))
     (parsec-with-input "function f1()
    C = @Persistent [1 2 3]
@@ -576,12 +576,12 @@ end"
    '(((:function 1 "f")
       ("()\n   "
        ((:for 17)
-        ("a in A[" "end]\n   ")
+        ("a in A" "[end]")
         (:end 36)))
       (:end 40))
      ((:function 45 "g")
-      ("()\n   A[1:" "end:" "end]\n")
-      (:end 74))
+      ("()\n   A" "[end:end]")
+      (:end 72))
      "")
    (parsec-with-input "function f()
    for a in A[end]
@@ -592,7 +592,7 @@ function g()
    A[end:end]
 end
 "
-     (julia-snail-parser--*block))))
+     (julia-snail-parser--*file))))
 
 (ert-deftest jsp-test-whole-file-blocks ()
   (let ((blocks
@@ -813,4 +813,40 @@ function test_fn(module_name)
 end
 end
 "
+      (julia-snail-parser--*file)))))
+
+(ert-deftest jsp-test-brackets ()
+  (should
+   (equal
+    "[2x * B]"
+    (parsec-with-input
+        "[2x * B]"
+      (julia-snail-parser--*brackets))))
+  (should
+   (equal
+    "[2x * B[end] for x in A[2:end]]"
+    (parsec-with-input
+        "[2x * B[end] for x in A[2:end]]"
+      (julia-snail-parser--*expression)))))
+
+(ert-deftest jsp-test-list-comprehension ()
+  (should
+   (equal
+    '(((:function 1 "f")
+       ("(ex::Expr)\n    kvtuples = " "[:($(esc(kv.args[end-1])), $(esc(kv.args[end])))\n                for kv in ex.args[2:end]]")
+       (:end 128)))
+    (parsec-with-input "function f(ex::Expr)
+    kvtuples = [:($(esc(kv.args[end-1])), $(esc(kv.args[end])))
+                for kv in ex.args[2:end]]
+end"
+      (julia-snail-parser--*file))))
+  (should
+   (equal
+    '(((:function 1 "f")
+       ("(A, B)\n   " "[2x * B[end]\n    for x in A[2:end]]")
+       (:end 57)))
+    (parsec-with-input "function f(A, B)
+   [2x * B[end]
+    for x in A[2:end]]
+end"
       (julia-snail-parser--*file)))))

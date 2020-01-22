@@ -71,7 +71,6 @@
 
 (defun julia-snail-parser--*brackets ()
   (parsec-and
-   (julia-snail-parser--*whitespace)
    (parsec-collect-as-string
     ;;"B" ; put this back to debug bracket expression parsing
     (parsec-str "[")
@@ -103,37 +102,82 @@ extract only GROUP (numbered as per MATCH-STRING."
     (parsec-stop :expected regexp
                  :found (parsec-eof-or-char-as-string))))
 
-(defvar julia-snail-parser--rx-other-core
-  '(or "#" "\"" "[" "]"
-       (and (or "end"
-                "module" "baremodule"
-                "function" "macro"
-                "abstract type" "primitive type"
-                "struct" "mutable struct"
-                "if" "while" "for" "begin" "quote" "try" "let")
-            (or line-end blank
-                (syntax punctuation)
-                (syntax open-parenthesis)
-                (syntax close-parenthesis)))))
+;; A brief explanation of the code leading to julia-snail-parser--*other. Since
+;; this parser is really here just to detect blocks in Julia code, it needs to
+;; consume code which does not look like strings, comments, brackets, and
+;; keywords which start and end blocks. This detection is done with some really
+;; nasty regex hacks. julia-snail-parser--*other checks to see if it's about to
+;; read an "other" element (anything except a comment, string, bracket, or
+;; block). If it is, it uses a regex to consume everything up to an element it
+;; thinks is "non-other".
+;;
+;; Needless to say, this is tricky and full of edge and corner cases. In
+;; particular, Julia's use of "end" as a syntactic marker to indicate "end of
+;; array" considerably complicates matters.
+;;
+;; Another fun problem has to do with consuming whitespace and properly
+;; demarcating keywords, so the identifier "append" does not get parsed as "app"
+;; and the keyword "end".
+;;
+;; Why this horrid implementation:
+;; - Because writing a real Julia parser is way too hard. No specifications.
+;; - Because I tried to use Parsec primitives to build this, and it was unusably
+;;   slow.
 
-(defvar julia-snail-parser--rx-other-keywords
-  (rx (+ (or line-start blank "\n" "\r"))
-      (eval julia-snail-parser--rx-other-core)))
+(defvar julia-snail-parser--rx-markers)
+(setq julia-snail-parser--rx-markers
+      '(or "#" "\"" "[" "]"))
 
-(defvar julia-snail-parser--rx-other-main
-  (rx (group (*? (or anything "\n"))
-             (or line-start blank
-                 (syntax open-parenthesis)))
-      (group (eval julia-snail-parser--rx-other-core))))
+(defvar julia-snail-parser--rx-keywords)
+(setq julia-snail-parser--rx-keywords
+      '(or "end"
+           "module" "baremodule"
+           "function" "macro"
+           "abstract type" "primitive type"
+           "struct" "mutable struct"
+           "if" "while" "for" "begin" "quote" "try" "let"))
+
+(defvar julia-snail-parser--rx-other-marker-or-keyword)
+(setq julia-snail-parser--rx-other-marker-or-keyword
+      (rx (or (eval julia-snail-parser--rx-markers)
+              (and (+ (or line-start blank "\n" "\r"))
+                   (eval julia-snail-parser--rx-keywords)
+                   (or line-end blank
+                       (syntax punctuation)
+                       (syntax open-parenthesis)
+                       (syntax close-parenthesis))))))
+
+(defvar julia-snail-parser--rx-other-consume-to-marker)
+(setq julia-snail-parser--rx-other-consume-to-marker
+      (rx (group-n 1 (*? anything))
+          (group-n 2 (eval julia-snail-parser--rx-markers))))
+
+(defvar julia-snail-parser--rx-other-consume-to-keyword)
+(setq julia-snail-parser--rx-other-consume-to-keyword
+      (rx (group-n 1 (*? anything)
+                   (+ (or line-start blank "\n" "\r"
+                          (syntax open-parenthesis)
+                          (syntax close-parenthesis))))
+          (group-n 2 (and (eval julia-snail-parser--rx-keywords)
+                          (or line-end blank
+                              (syntax punctuation)
+                              (syntax open-parenthesis)
+                              (syntax close-parenthesis))))))
 
 (defun julia-snail-parser--*other ()
   (with-syntax-table julia-mode-syntax-table
-    (cond ((looking-at julia-snail-parser--rx-other-keywords)
-           (parsec-stop :expected "'other' syntax"
-                        :found (parsec-eof-or-char-as-string)))
-          ((looking-at julia-snail-parser--rx-other-main)
-           (julia-snail-parser--parsec-re-group julia-snail-parser--rx-other-main 1))
-          (t (parsec-re (rx (* (or anything "\n"))))))))
+    (if (looking-at julia-snail-parser--rx-other-marker-or-keyword)
+        (parsec-stop :expected "'other' syntax"
+                     :found (parsec-eof-or-char-as-string))
+      (let ((match-csb (when (looking-at julia-snail-parser--rx-other-consume-to-marker)
+                         (match-beginning 2)))
+            (match-kw (when (looking-at julia-snail-parser--rx-other-consume-to-keyword)
+                        (match-beginning 2))))
+        (cond ((and match-csb (or (not match-kw) (< match-csb match-kw)))
+               (julia-snail-parser--parsec-re-group julia-snail-parser--rx-other-consume-to-marker 1))
+              ((and match-kw (or (not match-csb) (>= match-csb match-kw)))
+               (julia-snail-parser--parsec-re-group julia-snail-parser--rx-other-consume-to-keyword 1))
+              (t (parsec-re (rx (* anything)))))))))
 
 (defun julia-snail-parser--*expression ()
   (parsec-and
