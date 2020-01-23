@@ -588,7 +588,7 @@ This is not module-context aware."
   (let ((line (s-trim (thing-at-point 'line t))))
     (julia-snail--send-to-repl line)))
 
-(defun julia-snail-send-buffer ()
+(defun julia-snail-send-buffer-file ()
   "Send the current buffer's file into the Julia REPL, and include() it.
 This will occur in the context of the Main module, just as it would at the REPL."
   (interactive)
@@ -678,7 +678,7 @@ This occurs in the context of the current module."
     (define-key map (kbd "C-M-x") #'julia-snail-send-top-level-form)
     (define-key map (kbd "C-c C-r") #'julia-snail-send-region)
     (define-key map (kbd "C-c C-l") #'julia-snail-send-line)
-    (define-key map (kbd "C-c C-k") #'julia-snail-send-buffer)
+    (define-key map (kbd "C-c C-k") #'julia-snail-send-buffer-file)
     map))
 
 (defvar julia-snail-repl-mode-map
