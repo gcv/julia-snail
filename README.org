@@ -26,17 +26,20 @@ On the Emacs side:
 
 ** Configuration
 
-~use-package~:
+*** ~use-package~ setup
 
 #+BEGIN_SRC elisp
 (use-package julia-snail
   :hook (julia-mode . julia-snail-mode)
   :config (progn
-            (add-to-list 'display-buffer-alist '("\\*julia" (display-buffer-reuse-window display-buffer-same-window)))
+            (add-to-list 'display-buffer-alist
+              '("\\*julia" (display-buffer-reuse-window
+                            display-buffer-same-window)))
             ))
 #+END_SRC
 
-Manual setup:
+
+*** Manual setup
 
 #+BEGIN_SRC elisp
 (add-to-list 'load-path "/path/to/julia-snail")
@@ -120,7 +123,7 @@ NB: On a Mac, the Julia binary is typically ~Contents/Resources/julia/bin/julia~
 
 *** Foundational
 
-- The Julia interaction side of the Snail server is single-threaded (using ~@async~). This means the interaction locks up while the REPL is working or running code. Unfortunately, Julia as over version 1.3 does not have user-accessible low-level multithreading primitives necessary to implement a truly multi-threaded Snail server.
+- The Julia interaction side of the Snail server is single-threaded (using ~@async~). This means the interaction locks up while the REPL is working or running code. Unfortunately, Julia as of version 1.3 does not have user-accessible low-level multithreading primitives necessary to implement a truly multi-threaded Snail server.
 
 
 *** Structural
