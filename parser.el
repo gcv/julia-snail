@@ -122,46 +122,48 @@ extract only GROUP (numbered as per MATCH-STRING."
 ;; - Because writing a real Julia parser is way too hard. No specifications.
 ;; - Because I tried to use Parsec primitives to build this, and it was unusably
 ;;   slow.
+;;
+;; Why the horrid repetition of special syntax markers ("#" "\"" "[" "]") and
+;; Julia keyword lists throughout: although rx supports external variables
+;; through its eval special form, and it works fine normally, this idiom freaks
+;; out the byte compiler when it runs in MELPA's sandbox mode. It complains
+;; about referenced variables being void (which is blatantly untrue). I tried
+;; several workarounds, all in vain, so had to resort to copying these lists
+;; between different rx expressions.
 
-(defvar julia-snail-parser--rx-markers)
-(setq julia-snail-parser--rx-markers
-      '(or "#" "\"" "[" "]"))
+(defconst julia-snail-parser--rx-other-marker-or-keyword
+  (rx (or (or "#" "\"" "[" "]")
+          (and (+ (or line-start blank "\n" "\r"))
+               (or "end"
+                   "module" "baremodule"
+                   "function" "macro"
+                   "abstract type" "primitive type"
+                   "struct" "mutable struct"
+                   "if" "while" "for" "begin" "quote" "try" "let")
+               (or line-end blank
+                   (syntax punctuation)
+                   (syntax open-parenthesis)
+                   (syntax close-parenthesis))))))
 
-(defvar julia-snail-parser--rx-keywords)
-(setq julia-snail-parser--rx-keywords
-      '(or "end"
-           "module" "baremodule"
-           "function" "macro"
-           "abstract type" "primitive type"
-           "struct" "mutable struct"
-           "if" "while" "for" "begin" "quote" "try" "let"))
+(defconst julia-snail-parser--rx-other-consume-to-marker
+  (rx (group-n 1 (*? anything))
+      (group-n 2 (or "#" "\"" "[" "]"))))
 
-(defvar julia-snail-parser--rx-other-marker-or-keyword)
-(setq julia-snail-parser--rx-other-marker-or-keyword
-      (rx (or (eval julia-snail-parser--rx-markers)
-              (and (+ (or line-start blank "\n" "\r"))
-                   (eval julia-snail-parser--rx-keywords)
-                   (or line-end blank
-                       (syntax punctuation)
-                       (syntax open-parenthesis)
-                       (syntax close-parenthesis))))))
-
-(defvar julia-snail-parser--rx-other-consume-to-marker)
-(setq julia-snail-parser--rx-other-consume-to-marker
-      (rx (group-n 1 (*? anything))
-          (group-n 2 (eval julia-snail-parser--rx-markers))))
-
-(defvar julia-snail-parser--rx-other-consume-to-keyword)
-(setq julia-snail-parser--rx-other-consume-to-keyword
-      (rx (group-n 1 (*? anything)
-                   (+ (or line-start blank "\n" "\r"
+(defconst julia-snail-parser--rx-other-consume-to-keyword
+  (rx (group-n 1 (*? anything)
+               (+ (or line-start blank "\n" "\r"
+                      (syntax open-parenthesis)
+                      (syntax close-parenthesis))))
+      (group-n 2 (and (or "end"
+                          "module" "baremodule"
+                          "function" "macro"
+                          "abstract type" "primitive type"
+                          "struct" "mutable struct"
+                          "if" "while" "for" "begin" "quote" "try" "let")
+                      (or line-end blank
+                          (syntax punctuation)
                           (syntax open-parenthesis)
-                          (syntax close-parenthesis))))
-          (group-n 2 (and (eval julia-snail-parser--rx-keywords)
-                          (or line-end blank
-                              (syntax punctuation)
-                              (syntax open-parenthesis)
-                              (syntax close-parenthesis))))))
+                          (syntax close-parenthesis))))))
 
 (defun julia-snail-parser--*other ()
   (with-syntax-table julia-mode-syntax-table
