@@ -6,6 +6,7 @@
 (require 'dash)
 (require 'parsec)
 (require 'julia-mode)
+(require 'rx)
 
 
 ;;; --- parser rules (flagged with *)
