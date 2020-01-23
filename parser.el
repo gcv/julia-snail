@@ -9,6 +9,22 @@
 (require 'rx)
 
 
+;;; --- helpers
+
+(defmacro julia-snail-parser--parsec-query (parser &optional placeholder)
+  "Similar to parsec-query, but always returns the point position
+at which the parser started matching. If placeholder is given,
+replace the result of the parser with it."
+  (let ((start (gensym))
+        (res (gensym))
+        (ph (gensym)))
+    `(let ((,start (point))
+           (,res ,parser)
+           (,ph ,placeholder))
+       (list (if ,ph ,ph ,res)
+             ,start))))
+
+
 ;;; --- parser rules (flagged with *)
 
 (defun julia-snail-parser--*whitespace ()
@@ -279,22 +295,6 @@ extract only GROUP (numbered as per MATCH-STRING."
     (parsec-or
      (parsec-eof)
      (parsec-try (julia-snail-parser--*end))))))
-
-
-;;; --- helpers
-
-(defmacro julia-snail-parser--parsec-query (parser &optional placeholder)
-  "Similar to parsec-query, but always returns the point position
-at which the parser started matching. If placeholder is given,
-replace the result of the parser with it."
-  (let ((start (gensym))
-        (res (gensym))
-        (ph (gensym)))
-    `(let ((,start (point))
-           (,res ,parser)
-           (,ph ,placeholder))
-       (list (if ,ph ,ph ,res)
-             ,start))))
 
 
 ;;; --- parse tree processing functions
