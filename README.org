@@ -1,11 +1,11 @@
 * Julia Snail
 
-Snail is a development environment and REPL interaction package for Julia in the spirit of Common Lisp's [[https://common-lisp.net/project/slime/][SLIME]] and Clojure's [[https://cider.mx][CIDER]]. It enables convenient and dynamic REPL-driven development.
+Snail is a development environment and REPL interaction package for Julia in the spirit of Common Lisp’s [[https://common-lisp.net/project/slime/][SLIME]] and Clojure’s [[https://cider.mx][CIDER]]. It enables convenient and dynamic REPL-driven development.
 
 
 ** Features
 
-- REPL display :: Snail (currently) uses [[https://github.com/neovim/libvterm][libvterm]] with [[https://github.com/akermu/emacs-libvterm][Emacs]] bindings to display Julia's native REPL in a good terminal emulator. As a result, the REPL has good performance and far fewer display bugs than attempting to run the REPL in an Emacs-native ~term.el~ buffer.
+- REPL display :: Snail (currently) uses [[https://github.com/neovim/libvterm][libvterm]] with [[https://github.com/akermu/emacs-libvterm][Emacs]] bindings to display Julia’s native REPL in a good terminal emulator. As a result, the REPL has good performance and far fewer display bugs than attempting to run the REPL in an Emacs-native ~term.el~ buffer.
 - REPL interaction :: Snail provides a bridge between Julia code and a Julia process running in a REPL. The bridge allows Emacs to interact with and introspect the Julia image.
 - Cross-referencing :: Snail is integrated with the built-in Emacs [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Xref.html][xref]] system. When a Snail session is active, it supports jumping to definitions of functions and macros loaded in the session.
 - Completion :: Snail is also integrated with the built-in Emacs [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Completion-in-Buffers.html][completion-at-point]] facility. [[http://company-mode.github.io/][company-mode]] completion will also work (provided it is configured with its default ~company-capf~ backend).
@@ -18,12 +18,12 @@ Julia versions 1.0–1.3 are supported. No packages need to be installed on the 
 
 The following dependencies have system-level implications:
 - Emacs 26.2 or later, compiled with module support (~--with-modules~). (This is currently a default compile-time option Emacs distributed with [[https://formulae.brew.sh/formula/emacs][Homebrew]].)
-- [[https://github.com/neovim/libvterm][libvterm]]. Unfortunately, this means Unix-like systems.
+- [[https://github.com/neovim/libvterm][libvterm]]. Unfortunately, this means only Unix-like systems are supported.
 - [[https://github.com/akermu/emacs-libvterm][emacs-libvterm]]
 
-~libvterm~ must be installed first. It is available in [[https://formulae.brew.sh/formula/libvterm][Homebrew]] and [[https://packages.ubuntu.com/eoan/libvterm-dev][Ubuntu 19.10]].
+The ~libvterm~ system library must be installed first. It is available in [[https://formulae.brew.sh/formula/libvterm][Homebrew]] and [[https://packages.ubuntu.com/eoan/libvterm-dev][Ubuntu 19.10]], and in source form on other systems.
 
-It is highly recommended that ~libvterm~'s Emacs bindings are installed next as a separate step. The ~emacs-libvterm~ package is available from [[https://melpa.org/#/vterm][MELPA]]. The following [[https://github.com/jwiegley/use-package][use-package]] invocation will work:
+It is highly recommended that ~libvterm~’s Emacs bindings are installed next as a separate step. The ~emacs-libvterm~ package is available from [[https://melpa.org/#/vterm][MELPA]]. The following [[https://github.com/jwiegley/use-package][use-package]] invocation will work:
 
 #+BEGIN_SRC elisp
 (use-package vterm)
@@ -73,18 +73,18 @@ Once some Julia code has been loaded into the running image, Snail can begin int
 
 The ~julia-snail-mode~ minor mode provides the key binding map with the following commands:
 
-| key     | command                         |                                                                                            |
-|---------+---------------------------------+--------------------------------------------------------------------------------------------|
-| C-c C-z | julia-snail                     | start a REPL if one is not running; flip between REPL buffer and most recent source buffer |
-| C-c C-a | julia-snail-package-activate    | activate the project using the ~Project.toml~ relative to the current buffer's file          |
-| C-c C-d | julia-snail-doc-lookup          | display the docstring of the identifier at point                                           |
-| C-c C-c | julia-snail-send-top-level-form | evaluate the function surrounding the point in the context of the current module           |
-| C-M-x   | julia-snail-send-top-level-form | ditto                                                                                      |
-| C-c C-r | julia-snail-send-region         | evaluate active region in the context of the current module                                |
-| C-c C-l | julia-snail-send-line           | copy current line directly to REPL                                                         |
-| C-c C-k | julia-snail-send-buffer-file    | ~include()~ the current buffer's file in the environment                                     |
+| key     | command                         |                                                          |
+|---------+---------------------------------+----------------------------------------------------------|
+| C-c C-z | julia-snail                     | start a REPL; flip between REPL and source               |
+| C-c C-a | julia-snail-package-activate    | activate the project using ~Project.toml~                  |
+| C-c C-d | julia-snail-doc-lookup          | display the docstring of the identifier at point         |
+| C-c C-c | julia-snail-send-top-level-form | evaluate function around the point in the current module |
+| C-M-x   | julia-snail-send-top-level-form | ditto                                                    |
+| C-c C-r | julia-snail-send-region         | evaluate active region in the current module             |
+| C-c C-l | julia-snail-send-line           | copy current line directly to REPL                       |
+| C-c C-k | julia-snail-send-buffer-file    | ~include()~ the current buffer’s file                      |
 
-Several commands include the note “in the context of the current module”. This means the Snail parser will determine the enclosing ~module...end~ statements, and run the relevant code in that module. If the module has already been loaded, this means its global variables and functions will be available.
+Several commands include the note “in the current module”. This means the Snail parser will determine the enclosing ~module...end~ statements, and run the relevant code in that module. If the module has already been loaded, this means its global variables and functions will be available.
 
 In addition, most ~xref~ commands are available (except ~xref-find-references~). ~xref-find-definitions~, by default bound to ~M-.~ in many programming modes, does a decent job of jumping to function and macro definitions.
 
@@ -130,5 +130,5 @@ The ~julia-snail-executable~ variable can be set the same way to use different v
 
 - The completion search does not include anything pulled into a module with ~using~. Julia does not seem to have a built-in incantation for doing this (~names~ with ~imported=true~ only includes /explicitly/ imported parameters). This can be worked around on the Snail side, by extending the parser to recognize ~using~ statements.
 - Completion does not pick up local variables. This is yet another weakness of the parser.
-- A real eldoc implementation would be great, but difficult to do with Julia's generic functions. The parser would also have to improve (notice a theme here?).
+- A real eldoc implementation would be great, but difficult to do with Julia’s generic functions. The parser would also have to improve (notice a theme here?).
 - A debugger would be great.
