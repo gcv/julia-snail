@@ -25,6 +25,7 @@
 (require 'subr-x)
 (require 'thingatpt)
 (require 'vterm)
+(require 'xref)
 
 (require 'julia-snail-parser "parser.el")
 
