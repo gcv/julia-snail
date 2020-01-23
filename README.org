@@ -38,7 +38,7 @@ Finally, the Emacs ~julia-snail~ package should be installed. Its pure-Emacs dep
 
 ** Configuration
 
-tl;dr for ~use-package~:
+For ~use-package~:
 
 #+BEGIN_SRC elisp
 (use-package julia-snail
@@ -48,9 +48,14 @@ tl;dr for ~use-package~:
             ))
 #+END_SRC
 
-Instructions for non-~use-package~ configurations:
-- ~(require 'julia-snail)~
-- ~(add-hook 'julia-mode-hook #'julia-snail-mode)~
+For manual setup:
+
+#+BEGIN_SRC elisp
+(add-to-list 'load-path "/path/to/julia-snail")
+(require 'julia-snail)
+(add-hook 'julia-mode-hook #'julia-snail-mode)
+#+END_SRC
+
 - Configure ~display-buffer-alist~ to make REPL switching less infuriating.
 - Configure key bindings in ~julia-snail-mode-map~ as desired.
 
@@ -73,7 +78,7 @@ Once some Julia code has been loaded into the running image, Snail can begin int
 
 The ~julia-snail-mode~ minor mode provides the key binding map with the following commands:
 
-| key     | command                         |                                                          |
+| key     | command                         | description                                              |
 |---------+---------------------------------+----------------------------------------------------------|
 | C-c C-z | julia-snail                     | start a REPL; flip between REPL and source               |
 | C-c C-a | julia-snail-package-activate    | activate the project using ~Project.toml~                  |
@@ -93,7 +98,7 @@ Completion also works. Emacs built-in completion features, as well as ~company-c
 
 *** Multiple REPLs
 
-To use multiple REPLs, set the local variables ~julia-snail-repl-buffer~ and ~julia-snail-port~. They must be distinct per-project. They can be set at the [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html][file level]], or at the [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html][directory level]]. The latter approach is recommended, with the ~.dir-locals.el~ file at the root of a project directory.
+To use multiple REPLs, set the local variables ~julia-snail-repl-buffer~ and ~julia-snail-port~. They must be distinct per-project. They can be set at the [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html][file level]], or at the [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html][directory level]]. The latter approach is recommended, using a ~.dir-locals.el~ file at the root of a project directory.
 
 For example, consider two projects: ~Mars~ and ~Venus~, both of which you wish to work on at the same time. They live in different directories.
 
