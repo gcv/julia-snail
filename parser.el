@@ -361,7 +361,7 @@ extract only GROUP (numbered as per MATCH-STRING."
                                   (eq :module
                                       (-first-item block)))
                                 block-path)))
-    (if (endp module-blocks)
+    (if (null module-blocks)
         (list "Main") ; default
       (-map #'-fourth-item module-blocks))))
 
@@ -373,7 +373,7 @@ extract only GROUP (numbered as per MATCH-STRING."
            and do (setq current-top-block nil)
            else do (when (null current-top-block) (setq current-top-block block))
            finally return
-           (if (endp current-top-block)
+           (if (null current-top-block)
                (error "Unable to parse top-level block")
              (list :module (or module (list "Main"))
                    :block current-top-block))))

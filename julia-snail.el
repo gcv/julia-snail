@@ -352,9 +352,7 @@ Julia include on the tmpfile, and then deleting the file."
       ;; may have been chunked. Assume that a successful read signals the end of
       ;; input, but a failed read needs to be concatenated to other upcoming
       ;; reads. Track them in a table hashed by the proc.
-      (let ((candidate (concatenate 'string
-                                    (gethash proc julia-snail--proc-responses)
-                                    str)))
+      (let ((candidate (s-concat (gethash proc julia-snail--proc-responses) str)))
         (condition-case nil
             (let ((read-str (read candidate)))
               ;; read succeeds, so clean up and return its eval value
@@ -652,7 +650,7 @@ This occurs in the context of the current module."
                       "Documentation look up: "
                       (unless current-prefix-arg (julia-snail--identifier-at-point)))))
   (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
-         (name (concatenate 'string (s-join "." module) "." identifier))
+         (name (s-concat (s-join "." module) "." identifier))
          (doc (julia-snail--send-to-server
                 '("Main")
                 (format "@doc %s" name)
