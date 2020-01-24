@@ -197,7 +197,7 @@ symbols, given by MODULE. MODULE can be:
   (make-local-variable 'julia-snail--repl-go-back-target)
   (let ((repl-buf (current-buffer))
         (process-buf (get-buffer-create (julia-snail--process-buffer-name (current-buffer)))))
-    (when (fboundp #'persp-add-buffer) ; perspective-el support
+    (when (fboundp 'persp-add-buffer) ; perspective-el support
       (persp-add-buffer process-buf))
     (with-current-buffer process-buf
       (unless julia-snail--process
