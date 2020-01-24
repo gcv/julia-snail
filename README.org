@@ -1,5 +1,7 @@
 * Julia Snail
 
+[[file:snail.png]]
+
 Snail is a development environment and REPL interaction package for Julia in the spirit of Common Lisp’s [[https://common-lisp.net/project/slime/][SLIME]] and Clojure’s [[https://cider.mx][CIDER]]. It enables convenient and dynamic REPL-driven development.
 
 
