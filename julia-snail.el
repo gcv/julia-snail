@@ -575,11 +575,14 @@ To create multiple REPLs, give these variables distinct values (e.g.:
           (setf (buffer-local-value 'julia-snail--repl-go-back-target repl-buf) source-buf)
           (pop-to-buffer-same-window repl-buf))
       ;; run Julia in a vterm and load the Snail server file
-      (let ((vterm-shell (format "%s -L %s" julia-snail-executable julia-snail--server-file)))
-        (vterm julia-snail-repl-buffer)
+      (let* ((vterm-shell (format "%s -L %s" julia-snail-executable julia-snail--server-file))
+             (vterm-buffer (generate-new-buffer julia-snail-repl-buffer)))
+        (with-current-buffer vterm-buffer
+          (vterm-mode)
+          (julia-snail-repl-mode))
+        (pop-to-buffer vterm-buffer)
         (setq-local julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
-        (setq-local julia-snail--repl-go-back-target source-buf)
-        (julia-snail-repl-mode)))))
+        (setq-local julia-snail--repl-go-back-target source-buf)))))
 
 (defun julia-snail-send-line ()
   "Copy the line at the current point into the REPL and run it.
