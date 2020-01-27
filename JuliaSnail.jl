@@ -147,7 +147,16 @@ Return names of modules and identifiers in the given namespace.
 """
 function lsnames(ns; all=false, imported=false, include_modules=false, recursive=false, prepend_ns=false, first_call=true, pattern=nothing)
    raw = names(ns, all=all, imported=imported)
-   # remove names containing '#' since Elisp doesn't like them
+   # slurp in names of all modules specified with "using", since names() only
+   # includes explicitly imported entries
+   if first_call && imported && ns ∉ (Core, Base)
+      for m in Base.loaded_modules_array()
+         if m != ns && m != Main && m != Core && m != Base && isdefined(ns, nameof(m))
+            append!(raw, names(m))
+         end
+      end
+   end
+   # remove names containing "#" since Elisp doesn't like them
    raw_clean = filter(
       n -> !occursin(r"#", string(n)),
       raw)
