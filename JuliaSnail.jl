@@ -241,14 +241,15 @@ end
 # on the Elisp side by autocompletion to reduce the amount of data transfered
 # from Julia to Emacs.
 apropos_cached_base = nothing
+apropos_cached_core = nothing
 
 """
 Return known definition locations of identifiers matching the pattern in
-namespaces loaded in Main, along with Base and Core.
+namespaces loaded in the given namespace.
 """
-function apropos(pattern)
+function apropos(ns, pattern)
    pattern_rx = Regex(pattern)
-   names = lsnames(Main.Core, all=true, imported=true, include_modules=false, recursive=true, pattern=pattern)
+   names = lsnames(ns, all=true, imported=true, include_modules=false, recursive=true, pattern=pattern)
    # lazy load Base
    global apropos_cached_base
    if apropos_cached_base == nothing
@@ -258,11 +259,20 @@ function apropos(pattern)
       n -> occursin(pattern_rx, n),
       apropos_cached_base)
    append!(names, base_filtered)
+   # lazy load Core
+   global apropos_cached_core
+   if apropos_cached_core == nothing
+      apropos_cached_core = lsnames(Main.Core, all=true, imported=true, include_modules=false, recursive=true, prepend_ns=true)
+   end
+   core_filtered = filter(
+      n -> occursin(pattern_rx, n),
+      apropos_cached_core)
+   append!(names, core_filtered)
    # find the definitions of each result
    res::Array{Tuple{String,String,Int32}} = []
    for name in names
-      ns, n = split_name(name)
-      append!(res, lsdefinitions(ns, n))
+      name_ns, name_n = split_name(name, ns)
+      append!(res, lsdefinitions(name_ns, name_n))
    end
    return res
 end

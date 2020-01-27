@@ -473,7 +473,9 @@ Julia include on the tmpfile, and then deleting the file."
   (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
          (res (julia-snail--send-to-server
                 module
-                (format "Main.JuliaSnail.apropos(\"%s\")" pattern)
+                (format "Main.JuliaSnail.apropos(%s, \"%s\")"
+                        (s-join "." module)
+                        pattern)
                 :async nil)))
     (julia-snail--make-xrefs-helper res)))
 
