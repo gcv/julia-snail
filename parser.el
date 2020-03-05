@@ -1,5 +1,12 @@
 ;;; parser.el --- Julia Snail parser -*- lexical-binding: t -*-
 
+;;; Commentary:
+
+;; This is the Julia Snail parser.
+
+
+;;; Code:
+
 
 ;;; --- requirements
 
@@ -7,6 +14,7 @@
 (require 'parsec)
 (require 'julia-mode)
 (require 'rx)
+(require 'subr-x)
 
 
 ;;; --- helpers
@@ -367,7 +375,7 @@ extract only GROUP (numbered as per MATCH-STRING."
            if (eq :module (-first-item block))
            collect (-fourth-item block) into module
            and do (setq current-top-block nil)
-           else do (when (null current-top-block) (setq current-top-block block))
+           else do (unless current-top-block (setq current-top-block block))
            finally return
            (if (null current-top-block)
                (error "Unable to parse top-level block")
@@ -387,9 +395,11 @@ extract only GROUP (numbered as per MATCH-STRING."
                (julia-snail-parser--query-module block-path))
               ((eq :top-level-block query)
                (julia-snail-parser--query-top-level-block block-path))
-              (t (message (format "Unknown Snail parser query: %s" query))))))))
+              (t (message "Unknown Snail parser query: %s" query)))))))
 
 
 ;;; --- done
 
 (provide 'julia-snail-parser)
+
+;;; parser.el ends here
