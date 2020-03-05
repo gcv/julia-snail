@@ -20,9 +20,8 @@
 ;;; --- helpers
 
 (defmacro julia-snail-parser--parsec-query (parser &optional placeholder)
-  "Similar to parsec-query, but always returns the point position
-at which the parser started matching. If placeholder is given,
-replace the result of the parser with it."
+  "Like `parsec-query', but always return point where PARSER started matching.
+If PLACEHOLDER is given, replace the result of the parser with it."
   (let ((start (gensym))
         (res (gensym))
         (ph (gensym)))
@@ -36,15 +35,18 @@ replace the result of the parser with it."
 ;;; --- parser rules (flagged with *)
 
 (defun julia-snail-parser--*whitespace ()
+  "Parser internal: whitespace matcher."
   (parsec-many-as-string
    (parsec-re "[[:space:]\r\n]")))
 
 (defun julia-snail-parser--*identifier ()
+  "Parser internal: identifier matcher."
   (parsec-and
    (julia-snail-parser--*whitespace)
    (parsec-re "[._[:alnum:]]+")))
 
 (defmacro julia-snail-parser--*keyword (kw)
+  "Parser internal: keyword matcher (KW)."
   `(parsec-and
     (julia-snail-parser--*whitespace)
     (parsec-return
@@ -53,11 +55,13 @@ replace the result of the parser with it."
       (parsec-lookahead (parsec-re "[^[:alnum:]_]")))))
 
 (defun julia-snail-parser--*string-tq ()
+  "Parser internal: triple-quoted string matcher."
   (parsec-and
    (julia-snail-parser--*whitespace)
    (parsec-query (parsec-re "\"\"\"\\(\\(?:.\\|\n\\)*?\\)\"\"\"") :group 1)))
 
 (defun julia-snail-parser--*string-dq ()
+  "Parser internal: double-quoted string matcher."
   (parsec-and
    (julia-snail-parser--*whitespace)
    (parsec-query (parsec-re
@@ -65,6 +69,7 @@ replace the result of the parser with it."
                  :group 1)))
 
 (defun julia-snail-parser--*string-non-standard-literal ()
+  "Parser internal: non-standard literal matcher."
   (parsec-and
    (julia-snail-parser--*whitespace)
    (parsec-query (parsec-re
@@ -75,6 +80,7 @@ replace the result of the parser with it."
                  :group 1)))
 
 (defun julia-snail-parser--*string ()
+  "Parser internal: string matcher."
   (parsec-and
    (julia-snail-parser--*whitespace)
    (parsec-or (julia-snail-parser--*string-tq)
@@ -82,11 +88,13 @@ replace the result of the parser with it."
               (julia-snail-parser--*string-non-standard-literal))))
 
 (defun julia-snail-parser--*comment ()
+  "Parser internal: comment matcher."
   (parsec-and
    (julia-snail-parser--*whitespace)
    (parsec-re "#.*?$")))
 
 (defun julia-snail-parser--*comment-multiline ()
+  "Parser internal: multiline comment matcher."
   ;; use this as an example of the parsec-many parsec-try combination
   (parsec-many
    (parsec-try
@@ -95,6 +103,7 @@ replace the result of the parser with it."
      (parsec-re "#.*?$")))))
 
 (defun julia-snail-parser--*brackets ()
+  "Parser internal: bracketed expression matcher."
   (parsec-and
    (parsec-collect-as-string
     ;;"B" ; put this back to debug bracket expression parsing
@@ -106,6 +115,7 @@ replace the result of the parser with it."
     (parsec-str "]"))))
 
 (defun julia-snail-parser--*end ()
+  "Parser internal: end matcher."
   (if (looking-at (rx (* (or blank "\n")) "#"))
       (parsec-stop :expected "end"
                    :found (parsec-eof-or-char-as-string))
@@ -117,8 +127,8 @@ replace the result of the parser with it."
       :end))))
 
 (defun julia-snail-parser--parsec-re-group (regexp group)
-  "Parse the input matching the regular expression REGEXP, but
-extract only GROUP (numbered as per MATCH-STRING."
+  "Parse the input matching regular expression REGEXP, but extract only GROUP.
+Numbered as per MATCH-STRING."
   (if (looking-at regexp)
       (progn (goto-char (match-end group))
              (match-string group))
@@ -186,6 +196,7 @@ extract only GROUP (numbered as per MATCH-STRING."
                              (syntax close-parenthesis)))))))
 
 (defun julia-snail-parser--*other ()
+  "Parser internal: other expression matcher."
   (with-syntax-table julia-mode-syntax-table
     (if (looking-at julia-snail-parser--rx-other-marker-or-keyword)
         (parsec-stop :expected "'other' syntax"
@@ -201,6 +212,7 @@ extract only GROUP (numbered as per MATCH-STRING."
               (t (parsec-re (rx (* anything)))))))))
 
 (defun julia-snail-parser--*expression ()
+  "Parser internal: expression matcher."
   (parsec-and
    (julia-snail-parser--*whitespace)
    (parsec-or (julia-snail-parser--*comment)
@@ -210,6 +222,7 @@ extract only GROUP (numbered as per MATCH-STRING."
               (julia-snail-parser--*other))))
 
 (defun julia-snail-parser--*start-module ()
+  "Parser internal: module start matcher."
   (-snoc
    (julia-snail-parser--parsec-query (parsec-or
                                       (julia-snail-parser--*keyword "module")
@@ -218,16 +231,19 @@ extract only GROUP (numbered as per MATCH-STRING."
    (julia-snail-parser--*identifier)))
 
 (defun julia-snail-parser--*start-function ()
+  "Parser internal: function start matcher."
   (-snoc
    (julia-snail-parser--parsec-query (julia-snail-parser--*keyword "function") :function)
    (parsec-optional (julia-snail-parser--*identifier))))
 
 (defun julia-snail-parser--*start-macro ()
+  "Parser internal: macro start matcher."
   (-snoc
    (julia-snail-parser--parsec-query (julia-snail-parser--*keyword "macro") :macro)
    (julia-snail-parser--*identifier)))
 
 (defun julia-snail-parser--*start-type ()
+  "Parser internal: type start matcher."
   (-snoc
    (julia-snail-parser--parsec-query (parsec-or
                                       (julia-snail-parser--*keyword "abstract type")
@@ -236,6 +252,7 @@ extract only GROUP (numbered as per MATCH-STRING."
    (julia-snail-parser--*identifier)))
 
 (defun julia-snail-parser--*start-struct ()
+  "Parser internal: struct start matcher."
   (-snoc
    (julia-snail-parser--parsec-query (parsec-or
                                       (julia-snail-parser--*keyword "struct")
@@ -244,27 +261,35 @@ extract only GROUP (numbered as per MATCH-STRING."
    (julia-snail-parser--*identifier)))
 
 (defun julia-snail-parser--*start-if ()
+  "Parser internal: if start matcher."
   (julia-snail-parser--parsec-query (julia-snail-parser--*keyword "if") :if))
 
 (defun julia-snail-parser--*start-while ()
+  "Parser internal: while start matcher."
   (julia-snail-parser--parsec-query (julia-snail-parser--*keyword "while") :while))
 
 (defun julia-snail-parser--*start-for ()
+  "Parser internal: for start matcher."
   (julia-snail-parser--parsec-query (julia-snail-parser--*keyword "for") :for))
 
 (defun julia-snail-parser--*start-begin ()
+  "Parser internal: begin start matcher."
   (julia-snail-parser--parsec-query (julia-snail-parser--*keyword "begin") :begin))
 
 (defun julia-snail-parser--*start-quote ()
+  "Parser internal: quote start matcher."
   (julia-snail-parser--parsec-query (julia-snail-parser--*keyword "quote") :quote))
 
 (defun julia-snail-parser--*start-try ()
+  "Parser internal: try start matcher."
   (julia-snail-parser--parsec-query (julia-snail-parser--*keyword "try") :try))
 
 (defun julia-snail-parser--*start-let ()
+  "Parser internal: let start matcher."
   (julia-snail-parser--parsec-query (julia-snail-parser--*keyword "let") :let))
 
 (defun julia-snail-parser--*block ()
+  "Parser internal: block matcher."
   (parsec-and
    (julia-snail-parser--*whitespace)
    (parsec-collect*
@@ -289,6 +314,7 @@ extract only GROUP (numbered as per MATCH-STRING."
     (julia-snail-parser--*end))))
 
 (defun julia-snail-parser--*file ()
+  "Parser internal: file matcher."
   ;; XXX: This should be simply:
   ;; (parsec-many
   ;;  (julia-snail-parser--*expression))
@@ -304,12 +330,14 @@ extract only GROUP (numbered as per MATCH-STRING."
 ;;; --- parse tree processing functions
 
 (defun julia-snail-parser--parse (buf)
+  "Parser internal: entry point for buffer BUF."
   (save-excursion
     (with-current-buffer buf
       (goto-char (point-min))
       (parsec-parse (julia-snail-parser--*file)))))
 
 (defun julia-snail-parser--blocks (tree)
+  "Parser internal: extract blocks for parse TREE."
   (cond
    ((null tree)
     tree)
@@ -333,6 +361,7 @@ extract only GROUP (numbered as per MATCH-STRING."
                           (julia-snail-parser--blocks (cdr tree)))))))
 
 (defun julia-snail-parser--block-path (blocks pt)
+  "Parser internal: what is the block path for BLOCKS at point PT?"
   (cl-labels ((helper (node)
                       (if (keywordp (-first-item node))
                           (when (and (>= pt (-second-item node))
@@ -358,6 +387,7 @@ extract only GROUP (numbered as per MATCH-STRING."
 ;;; --- queries
 
 (defun julia-snail-parser--query-module (block-path)
+  "Parser internal: extract the module from BLOCK-PATH."
   ;; Remove everything from the list which is not a module, and return the
   ;; resulting module names. Fall back to Main if nothing comes back. Return
   ;; list of module names.
@@ -370,6 +400,7 @@ extract only GROUP (numbered as per MATCH-STRING."
       (-map #'-fourth-item module-blocks))))
 
 (defun julia-snail-parser--query-top-level-block (block-path)
+  "Parser internal: extract the top level block for BLOCK-PATH."
   (cl-loop with current-top-block = nil
            for block in block-path
            if (eq :module (-first-item block))
@@ -386,6 +417,8 @@ extract only GROUP (numbered as per MATCH-STRING."
 ;;; --- entry point
 
 (defun julia-snail-parser-query (buf pt query)
+  "Parser internal: send QUERY for BUF at point PT.
+QUERY can be :module or :top-level-block."
   (let ((tree (julia-snail-parser--parse buf)))
     (if (parsec-error-p tree)
         (error "Buffer does not parse; check Julia syntax")
