@@ -60,8 +60,7 @@
 (make-variable-buffer-local 'julia-snail-buffer)
 
 (defcustom julia-snail-show-error-window t
-  "When t, show compilation errors in separate window. When nil,
-just display them in the minibuffer."
+  "When t: show compilation errors in separate window. When nil: display errors in the minibuffer."
   :tag "Show compilation errors in separate window"
   :group 'julia-snail
   :type 'boolean)
@@ -134,8 +133,8 @@ just display them in the minibuffer."
     (run-with-timer (or timeout 0.2) nil 'delete-overlay overlay)))
 
 (defun julia-snail--construct-module-path (module)
-  "Return a Julia array representing the module path, as Julia
-symbols, given by MODULE. MODULE can be:
+  "Return a Julia array representing the module path of MODULE as Julia symbols.
+MODULE can be:
 - nil, which returns [:Main]
 - an Elisp keyword, which returns [<keyword>], including the
   leading colon in the keyword
@@ -565,8 +564,8 @@ Julia include on the tmpfile, and then deleting the file."
 (defun julia-snail ()
   "Start a Julia REPL and connect to it, or switch if one already exists.
 The following buffer-local variables control it:
-- julia-snail-repl-buffer (default: *julia*)
-- julia-snail-port (default: 10011)
+- `julia-snail-repl-buffer' (default: *julia*)
+- `julia-snail-port' (default: 10011)
 To create multiple REPLs, give these variables distinct values (e.g.:
 *julia my-project-1* and 10012)."
   (interactive)
@@ -620,7 +619,7 @@ This occurs in the context of the current module."
                                      data))))))
 
 (defun julia-snail-send-top-level-form ()
-  "Send the top-level form surrounding the point to the Julia REPL and evaluate it.
+  "Send the top level form around the point to the Julia REPL and evaluate it.
 This occurs in the context of the current module."
   (interactive)
   (let* ((q (julia-snail-parser-query (current-buffer) (point) :top-level-block))
@@ -640,7 +639,7 @@ This occurs in the context of the current module."
                                      "unknown"))))))
 
 (defun julia-snail-package-activate (dir)
-  "Activate a Pkg project in the Julia REPL."
+  "Activate a Pkg project located in DIR in the Julia REPL."
   (interactive "DProject directory: ")
   (let ((expanded-dir (expand-file-name dir)))
     (julia-snail--send-to-server
@@ -650,7 +649,7 @@ This occurs in the context of the current module."
                           (message "Package activated: %s" expanded-dir)))))
 
 (defun julia-snail-doc-lookup (identifier)
-  "Look up Julia documentation for symbol at point."
+  "Look up Julia documentation for symbol at point (IDENTIFIER)."
   (interactive (list (read-string
                       "Documentation look up: "
                       (unless current-prefix-arg (julia-snail--identifier-at-point)))))
@@ -667,6 +666,7 @@ This occurs in the context of the current module."
                      doc))))
 
 (defun julia-snail-repl-go-back ()
+  "Return to a source buffer from a Julia REPL buffer."
   (interactive)
   (when (boundp 'julia-snail--repl-go-back-target)
     (pop-to-buffer julia-snail--repl-go-back-target 'display-buffer-reuse-window)))
