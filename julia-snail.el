@@ -1,7 +1,7 @@
 ;;; julia-snail.el --- Julia Snail -*- lexical-binding: t -*-
 
 
-;; URL: http://github.com/gcv/julia-snail
+;; URL: https://github.com/gcv/julia-snail
 ;; Package-Requires: ((emacs "26.2") (cl-lib "0.5") (dash "2.16.0") (julia-mode "0.3") (s "1.12.0") (parsec "0.1.3") (spinner "1.7.3") (vterm "0.0.1"))
 ;; Version: 1.0.0beta3
 ;; Created: 2019-10-27
@@ -455,7 +455,7 @@ Julia include on the tmpfile, and then deleting the file."
 
 (cl-defmethod xref-backend-definitions ((_backend (eql xref-julia-snail)) identifier)
   "Emacs xref API."
-  (when (null identifier)
+  (unless identifier
     (error "No identifier at point"))
   (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
          ;; Grab everything in the identifier up to the last dot, i.e., the
@@ -759,7 +759,9 @@ turned on in REPL buffers."
   :lighter " Snail Message"
   :keymap '(((kbd "q") . quit-window)))
 
-(provide 'julia-snail)
 
+;;; --- done
+
+(provide 'julia-snail)
 
 ;;; julia-snail.el ends here
