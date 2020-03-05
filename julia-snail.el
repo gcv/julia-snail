@@ -106,12 +106,14 @@
 ;;; --- supporting functions
 
 (defun julia-snail--process-buffer-name (repl-buf)
+  "Return the process buffer name for REPL-BUF."
   (let ((real-buf (get-buffer repl-buf)))
     (unless real-buf
       (error "No REPL buffer found"))
     (format "%s process" (buffer-name (get-buffer real-buf)))))
 
 (defun julia-snail--message-buffer (repl-buf name message)
+  "Return a buffer named NAME linked to REPL-BUF containing MESSAGE."
   (let ((real-buf (get-buffer repl-buf)))
     (unless real-buf
       (error "No REPL buffer found"))
@@ -127,6 +129,7 @@
       msg-buf)))
 
 (defun julia-snail--flash-region (start end &optional timeout)
+  "Highlight the region outlined by START and END for TIMEOUT period."
   ;; borrowed from SLIME
   (let ((overlay (make-overlay start end)))
     (overlay-put overlay 'face 'highlight)
@@ -153,6 +156,7 @@ MODULE can be:
         (t (error "Malformed module specification"))))
 
 (defmacro julia-snail--with-syntax-table (&rest body)
+  "Evaluate BODY with a Snail-specific syntax table."
   (declare (indent defun))
   `(let ((stab (copy-syntax-table)))
      (with-syntax-table stab
@@ -162,14 +166,19 @@ MODULE can be:
        ,@body)))
 
 (defun julia-snail--identifier-at-point ()
+  "Return identifier at point using Snail-specific syntax table."
   (julia-snail--with-syntax-table
     (thing-at-point 'symbol t)))
 
 (defun julia-snail--identifier-at-point-bounds ()
+  "Return the bounds of the identifier at point using Snail-specific syntax table."
   (julia-snail--with-syntax-table
     (bounds-of-thing-at-point 'symbol)))
 
 (defmacro julia-snail--wait-while (condition increment maximum)
+  "Synchronously wait for CONDITION to evaluate to true.
+INCREMENT: polling frequency.
+MAXIMUM: max timeout."
   (let ((sleep-total (gensym))
         (incr (gensym))
         (max (gensym)))
@@ -184,6 +193,7 @@ MODULE can be:
 ;;; --- connection management functions
 
 (defun julia-snail--repl-cleanup ()
+  "REPL buffer cleanup."
   (let ((process-buf (get-buffer (julia-snail--process-buffer-name (current-buffer)))))
     (when process-buf
       (remhash process-buf julia-snail--cache-proc-names-base)
@@ -192,6 +202,7 @@ MODULE can be:
   (setq julia-snail--process nil))
 
 (defun julia-snail--repl-enable ()
+  "REPL buffer minor mode initializer."
   (add-hook 'kill-buffer-hook #'julia-snail--repl-cleanup nil t)
   (make-local-variable 'julia-snail--repl-go-back-target)
   (let ((repl-buf (current-buffer))
@@ -218,14 +229,17 @@ MODULE can be:
           (set-process-filter julia-snail--process #'julia-snail--server-response-filter))))))
 
 (defun julia-snail--repl-disable ()
+  "REPL buffer minor mode cleanup."
   (julia-snail--repl-cleanup))
 
 (defun julia-snail--enable ()
-  ;; placeholder for source buffer minor mode initialization
+  "Source buffer minor mode initializer."
+  ;; placeholder
   )
 
 (defun julia-snail--disable ()
-  ;; placeholder for source buffer minor mode cleanup
+  "Source buffer minor mode cleanup."
+  ;; placeholder
   )
 
 
@@ -341,6 +355,7 @@ Julia include on the tmpfile, and then deleting the file."
         reqid))))
 
 (defun julia-snail--server-response-filter (proc str)
+  "Snail process filter for PROC given input STR; used as argument to `set-process-filter'."
   (when (buffer-live-p (process-buffer proc))
     (with-current-buffer (process-buffer proc)
       ;; insert at the end unconditionally
@@ -366,6 +381,7 @@ Julia include on the tmpfile, and then deleting the file."
  ;;; --- Snail server response handling functions
 
 (defun julia-snail--response-base (reqid)
+  "Snail response handler for REQID, base function."
   (let ((request-info (gethash reqid julia-snail--requests)))
     (when request-info
       ;; tmpfile
@@ -378,6 +394,7 @@ Julia include on the tmpfile, and then deleting the file."
       (remhash reqid julia-snail--requests))))
 
 (defun julia-snail--response-success (reqid result-data)
+  "Snail success response handler for REQID given RESULT-DATA."
   (let* ((request-info (gethash reqid julia-snail--requests))
          (callback-success (julia-snail--request-tracker-callback-success request-info)))
     (when callback-success
@@ -385,6 +402,7 @@ Julia include on the tmpfile, and then deleting the file."
   (julia-snail--response-base reqid))
 
 (defun julia-snail--response-failure (reqid error-message error-stack)
+  "Snail failure response handler for REQID, display ERROR-MESSAGE and ERROR-STACK."
   (if (not julia-snail-show-error-window)
       (message error-message)
     (let* ((request-info (gethash reqid julia-snail--requests))
@@ -404,12 +422,15 @@ Julia include on the tmpfile, and then deleting the file."
 ;;; --- xref implementation
 
 (defun julia-snail-xref-backend ()
+  "Emacs xref API."
   'xref-julia-snail)
 
 (cl-defmethod xref-backend-identifier-at-point ((_backend (eql xref-julia-snail)))
+  "Emacs xref API."
   (julia-snail--identifier-at-point))
 
 (cl-defmethod xref-backend-identifier-completion-table ((_backend (eql xref-julia-snail)))
+  "Emacs xref API."
   (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
          (ns (s-join "." module)))
     (julia-snail--send-to-server
@@ -418,6 +439,7 @@ Julia include on the tmpfile, and then deleting the file."
       :async nil)))
 
 (defun julia-snail--make-xrefs-helper (response)
+  "Emacs xref API helper for RESPONSE."
   (if (or (null response) (eq :nothing response))
       nil
     (mapcar (lambda (candidate)
@@ -432,6 +454,7 @@ Julia include on the tmpfile, and then deleting the file."
             response)))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql xref-julia-snail)) identifier)
+  "Emacs xref API."
   (when (null identifier)
     (error "No identifier at point"))
   (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
@@ -482,12 +505,14 @@ Julia include on the tmpfile, and then deleting the file."
 ;;; --- completion implementation
 
 (defun julia-snail--completions-keywords ()
+  "Julia completion keywords."
   (list "abstract type" "begin" "catch" "do" "else" "elseif" "end"
         "false" "finally" "for" "function" "if" "let" "macro" "module"
         "mutable struct" "nothing" "primitive type" "quote" "struct"
         "true" "try" "undef" "while"))
 
 (defun julia-snail--completions-base ()
+  "Julia completion Base module names."
   (let ((process-buf (get-buffer (julia-snail--process-buffer-name julia-snail-repl-buffer))))
     ;; return (cached) list of Base names
     (if-let ((cached-base (gethash process-buf julia-snail--cache-proc-names-base)))
@@ -500,6 +525,7 @@ Julia include on the tmpfile, and then deleting the file."
                julia-snail--cache-proc-names-base))))
 
 (defun julia-snail--completions-core ()
+  "Julia completion Core module names."
   (let ((process-buf (get-buffer (julia-snail--process-buffer-name julia-snail-repl-buffer))))
     ;; return (cached) list of Core names
     (if-let ((cached-core (gethash process-buf julia-snail--cache-proc-names-core)))
@@ -512,6 +538,7 @@ Julia include on the tmpfile, and then deleting the file."
                julia-snail--cache-proc-names-core))))
 
 (defun julia-snail--completions (identifier)
+  "Completions helper for IDENTIFIER."
   (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
          (ns (-last-item module)))
     (append
@@ -538,6 +565,7 @@ Julia include on the tmpfile, and then deleting the file."
        :async nil))))
 
 (defun julia-snail-completion-at-point ()
+  "Implementation for Emacs `completion-at-point' system."
   (let ((identifier (julia-snail--identifier-at-point))
         (bounds (julia-snail--identifier-at-point-bounds)))
     (when bounds
@@ -551,6 +579,7 @@ Julia include on the tmpfile, and then deleting the file."
 ;;; --- eldoc implementation
 
 (defun julia-snail-eldoc ()
+  "Implementation for ElDoc."
   ;; TODO: Implement something reasonable. This is pretty tricky to do in a
   ;; world of generic functions, since the parser will need to do the work of
   ;; figuring out just which possible signatures of a function are being called
