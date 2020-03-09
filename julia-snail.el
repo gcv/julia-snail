@@ -40,7 +40,7 @@
 (require 'vterm)
 (require 'xref)
 
-(require 'julia-snail-parser "parser.el")
+(require 'julia-snail-parser)
 
 
 ;;; --- customization

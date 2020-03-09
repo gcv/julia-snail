@@ -1,4 +1,4 @@
-;;; parser.el --- Julia Snail parser -*- lexical-binding: t -*-
+;;; julia-snail-parser.el --- Julia Snail parser -*- lexical-binding: t -*-
 
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -449,4 +449,4 @@ QUERY can be :module or :top-level-block."
 
 (provide 'julia-snail-parser)
 
-;;; parser.el ends here
+;;; julia-snail-parser.el ends here
