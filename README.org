@@ -28,7 +28,7 @@ On the Emacs side:
 1. Make sure you have Emacs 26.2 or later, compiled with module support (~--with-modules~). Check the value of ~module-file-suffix~: it should be non-nil. (This is currently a default compile-time option Emacs distributed with [[https://formulae.brew.sh/formula/emacs][Homebrew]].)
 2. Install [[https://github.com/neovim/libvterm][libvterm]]. It is available in [[https://formulae.brew.sh/formula/libvterm][Homebrew]] and [[https://packages.ubuntu.com/eoan/libvterm-dev][Ubuntu 19.10]], and in source form on other systems.
 3. Install [[https://github.com/akermu/emacs-libvterm][emacs-libvterm]] using your Emacs package manager. It is available from [[https://melpa.org/#/vterm][MELPA]]. It is important to do this step separately from the ~julia-snail~ installation, as you may run into compilation problems.
-4. Install ~julia-snail~ using your Emacs package manager (see below for a sample ~use-package~ invocation).
+4. Install ~julia-snail~ using your Emacs package manager (see below for a sample ~use-package~ invocation). It is available on [[https://melpa.org/#/julia-snail][MELPA]] and [[https://stable.melpa.org/#/julia-snail][MELPA Stable]].
 
 
 ** Configuration
