@@ -237,6 +237,9 @@ MAXIMUM: max timeout."
           :repl-buf repl-buf
           :async nil)
         (with-current-buffer repl-buf
+          ;; XXX: This shouldn't be necessary with :async nil in the
+          ;; send-to-repl call above, but maybe it returns too quickly anyway.
+          (julia-snail--wait-while (not (string-equal "julia>" (current-word))) 20 5000)
           (setq julia-snail--process ; NB: buffer-local variable!
                 (open-network-stream "julia-process" process-buf "localhost" julia-snail-port))
           (set-process-filter julia-snail--process #'julia-snail--server-response-filter))))))
