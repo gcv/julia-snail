@@ -600,6 +600,7 @@ Julia include on the tmpfile, and then deleting the file."
   ;; world of generic functions, since the parser will need to do the work of
   ;; figuring out just which possible signatures of a function are being called
   ;; and display documentation accordingly.
+  nil
 )
 
 
