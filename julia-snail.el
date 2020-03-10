@@ -239,7 +239,7 @@ MAXIMUM: max timeout."
         (with-current-buffer repl-buf
           ;; XXX: This shouldn't be necessary with :async nil in the
           ;; send-to-repl call above, but maybe it returns too quickly anyway.
-          (julia-snail--wait-while (not (string-equal "julia>" (current-word))) 20 5000)
+          (julia-snail--wait-while (not (string-equal "julia>" (current-word))) 20 50000)
           (setq julia-snail--process ; NB: buffer-local variable!
                 (open-network-stream "julia-process" process-buf "localhost" julia-snail-port))
           (set-process-filter julia-snail--process #'julia-snail--server-response-filter))))))
@@ -276,7 +276,7 @@ wait for the REPL prompt to return, otherwise return immediately."
     (vterm-send-return)
     (unless async
       ;; wait for the inclusion to succeed (i.e., the prompt prints)
-      (julia-snail--wait-while (not (string-equal "julia>" (current-word))) 20 5000))))
+      (julia-snail--wait-while (not (string-equal "julia>" (current-word))) 20 50000))))
 
 (cl-defun julia-snail--send-to-server
     (module
@@ -285,7 +285,7 @@ wait for the REPL prompt to return, otherwise return immediately."
      (repl-buf (get-buffer julia-snail-repl-buffer))
      (async t)
      (async-poll-interval 20)
-     (async-poll-maximum 1000)
+     (async-poll-maximum 10000)
      (display-error-buffer-on-failure? t)
      callback-success
      callback-failure)
