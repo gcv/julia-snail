@@ -78,6 +78,12 @@
   :group 'julia-snail
   :type 'boolean)
 
+(defcustom julia-snail-async-timeout 10000
+  "When performing asynchronous Snail operations, wait this many milliseconds before timing out."
+  :tag "Timeout for asynchronous Snail operations"
+  :group 'julia-snail
+  :type 'integer)
+
 
 ;;; --- variables
 
@@ -232,14 +238,13 @@ MAXIMUM: max timeout."
         ;; problem and supposedly fixes it, but it does not work for me with
         ;; Julia 1.0.4.
         ;; TODO: Follow-up on https://github.com/JuliaLang/julia/issues/33752
+        ;; XXX: Wait for the Julia prompt to come up before trying to start the server.
+        (julia-snail--wait-while (not (string-equal "julia>" (current-word))) 20 julia-snail-async-timeout)
         (julia-snail--send-to-repl
           (format "JuliaSnail.start(%d);" julia-snail-port)
           :repl-buf repl-buf
           :async nil)
         (with-current-buffer repl-buf
-          ;; XXX: This shouldn't be necessary with :async nil in the
-          ;; send-to-repl call above, but maybe it returns too quickly anyway.
-          (julia-snail--wait-while (not (string-equal "julia>" (current-word))) 20 50000)
           (setq julia-snail--process ; NB: buffer-local variable!
                 (open-network-stream "julia-process" process-buf "localhost" julia-snail-port))
           (set-process-filter julia-snail--process #'julia-snail--server-response-filter))))))
@@ -278,7 +283,7 @@ wait for the REPL prompt to return, otherwise return immediately."
     (vterm-send-return)
     (unless async
       ;; wait for the inclusion to succeed (i.e., the prompt prints)
-      (julia-snail--wait-while (not (string-equal "julia>" (current-word))) 20 50000))))
+      (julia-snail--wait-while (not (string-equal "julia>" (current-word))) 20 julia-snail-async-timeout))))
 
 (cl-defun julia-snail--send-to-server
     (module
@@ -287,7 +292,7 @@ wait for the REPL prompt to return, otherwise return immediately."
      (repl-buf (get-buffer julia-snail-repl-buffer))
      (async t)
      (async-poll-interval 20)
-     (async-poll-maximum 10000)
+     (async-poll-maximum julia-snail-async-timeout)
      (display-error-buffer-on-failure? t)
      callback-success
      callback-failure)

@@ -310,8 +310,8 @@ s-expressions. Special queries also write back their responses as s-expressions.
 """
 function start(port=10011)
    global running = true
+   global server_socket = Sockets.listen(port)
    @async begin
-      global server_socket = Sockets.listen(port)
       while running
          client = Sockets.accept(server_socket)
          push!(client_sockets, client)
