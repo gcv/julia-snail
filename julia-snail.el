@@ -251,11 +251,13 @@ MAXIMUM: max timeout."
 (defun julia-snail--enable ()
   "Source buffer minor mode initializer."
   ;; placeholder
+  nil
   )
 
 (defun julia-snail--disable ()
   "Source buffer minor mode cleanup."
   ;; placeholder
+  nil
   )
 
 
