@@ -116,6 +116,10 @@ If PLACEHOLDER is given, replace the result of the parser with it."
      (julia-snail-parser--*whitespace)
      (parsec-re "#.*?$")))))
 
+;; Necessary for parsing expressions like [x for x in 1:10] or various array
+;; [1:end] things where keywords normally used for blocks get used in list
+;; contexts. This effectively consumes the entire bracketed expression and
+;; forces the parser to ignore it.
 (defun julia-snail-parser--*brackets ()
   "Parser internal: bracketed expression matcher."
   (parsec-and
@@ -127,6 +131,31 @@ If PLACEHOLDER is given, replace the result of the parser with it."
       (parsec-re (rx (not (any "[" "]"))))
       (julia-snail-parser--*brackets)))
     (parsec-str "]"))))
+
+;; Just like julia-snail-parser--*brackets, but for parenthesized expressions.
+;; This turns out to be necessary for expressions like this:
+;; f(x) = (+(g()...) for _ in 1:n)
+;; We also want to detecting structure for expressions like this:
+;; (function(x); return 2x; end)(3)
+(defun julia-snail-parser--*parens ()
+  "Parser internal: parenthesized expression matcher."
+  (parsec-or
+   ;; try to parse a full block located inside parentheses
+   (parsec-try
+    (parsec-collect
+     (parsec-str "(")
+     (julia-snail-parser--*block)
+     (parsec-str ")")))
+   ;; if that fails, just return the parenthetical expression as a string
+   (parsec-and
+    (parsec-collect-as-string
+     ;;"P" ; put this back to debug parenthesized expression parsing
+     (parsec-str "(")
+     (parsec-many-as-string
+      (parsec-or
+       (parsec-re (rx (not (any "(" ")"))))
+       (julia-snail-parser--*parens)))
+     (parsec-str ")")))))
 
 (defun julia-snail-parser--*end ()
   "Parser internal: end matcher."
@@ -172,7 +201,7 @@ Numbered as per MATCH-STRING."
 ;;   slow.
 
 (defconst julia-snail-parser--rx-other-markers
-  '(or "#" "\"" "[" "]"))
+  '(or "#" "\"" "[" "]" "(" ")"))
 
 (defconst julia-snail-parser--rx-other-keywords
   '(or "end"
@@ -232,6 +261,7 @@ Numbered as per MATCH-STRING."
    (parsec-or (julia-snail-parser--*comment)
               (julia-snail-parser--*string)
               (julia-snail-parser--*brackets)
+              (julia-snail-parser--*parens)
               (julia-snail-parser--*block)
               (julia-snail-parser--*other))))
 

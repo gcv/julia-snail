@@ -5,7 +5,7 @@
 
 (require 'ert)
 
-(require 'julia-snail-parser "../parser.el")
+(require 'julia-snail-parser)
 
 
 ;;; --- variables
@@ -79,7 +79,7 @@ three\"\"\"
   (should
    (equal
     '(((:function 1 "f")
-       ("(name)\n   m = " "two" "components = match(r" "(.*?).(.*)" ", name)\n")
+       ("(name)" "m = " "two" "components = match" "(r\"(.*?).(.*)\", name)")
        (:end 74))
       "one" "")
     (parsec-with-input "function f(name)
@@ -155,32 +155,31 @@ end
       (julia-snail-parser--*other))))
   (should
    (equal
-    "prefunction(x) x; "
+    "prefunction"
     (parsec-with-input "prefunction(x) x; end"
       (julia-snail-parser--*other))))
   (should
    (equal
-    "pre_function(x) x; "
+    "pre_function"
     (parsec-with-input "pre_function(x) x; end"
       (julia-snail-parser--*other))))
   (should
    (equal
-    "function_post(x) x; "
+    "function_post"
     (parsec-with-input "function_post(x) x; end"
       (julia-snail-parser--*other))))
   (should
    (equal
-    "functionpost(x) x; "
+    "functionpost"
     (parsec-with-input "functionpost(x) x; end"
       (julia-snail-parser--*other))))
   (should
    (equal
-    "1:(("
+    "1:"
     (parsec-with-input "1:((function(); 1; end)())"
       (julia-snail-parser--*other))))
   (should
-   (equal
-    "("
+   (parsec-error-p
     (parsec-with-input "(function(); 1; end)()*(function(); 2; end)()"
       (julia-snail-parser--*other))))
   (should
@@ -282,7 +281,8 @@ echo
     '((:module 1 "Alpha")
       ("# bravo"
        "charlie"
-       "delta + echo\nfoxtrot = golf()\n"
+       "delta + echo\nfoxtrot = golf"
+       "()"
        "# hotel")
       (:end 70))
     (parsec-with-input "module Alpha
@@ -299,9 +299,9 @@ end
     '((:module 1 "Alpha")
       ("# comment"
        ((:function 26 "t1")
-        ("(x)\n  x + 10\n  a = " "[1, 2, 3]" "a" "[1:end]")
+        ("(x)" "x + 10\n  a = " "[1, 2, 3]" "a" "[1:end]")
         (:end 77))
-       "println(" "hi" ")\n\n")
+       "println" "(\"hi\")")
       (:end 97))
     (parsec-with-input "module Alpha
 
@@ -343,13 +343,13 @@ end"
        ("# comment"
         "echo\n"
         ((:function 29 "t1")
-         ("(x)\n  x + 10\n  a = " "[1, 2, 3]" "a" "[1:end]")
+         ("(x)" "x + 10\n  a = " "[1, 2, 3]" "a" "[1:end]")
          (:end 80))
-        "println(" "hi" ")\n")
+        "println" "(\"hi\")")
        (:end 98))
       ((:module 103 "Bravo")
        (((:function 116 "t2")
-         ("(y)\n")
+         ("(y)")
          (:end 131)))
        (:end 135))
       "")
@@ -406,7 +406,7 @@ end"
    (equal
     '(((:module 1 "Alpha")
        (((:function 14 "f")
-         ("()\n   "
+         ("()"
           ((:for 30)
            ("in A" "[2:end]")
            (:end 49)))
@@ -425,7 +425,7 @@ end"
    (equal
     '(((:module 1 "A")
        (((:function 11 "f")
-         ("(x)\n   one = " "[]")
+         ("(x)" "one = " "[]")
          (:end 37))
         "two = " "[]")
        (:end 52))
@@ -445,14 +445,14 @@ end
   (should
    (equal
     '((:function 1 "xref_backend_identifiers")
-      ("(ns)\n   check = "
+      ("(ns)" "check = "
        ((:function 50 nil)
-        ("(pn)\n      "
+        ("(pn)"
          ((:try 69)
-          ("typeof(eval(pn)) != " "Module\n      catch\n         true\n      ")
+          ("typeof" "(eval(pn))" "!= " "Module\n      catch\n         true\n      ")
           (:end 141)))
         (:end 148))
-       "filter(check, propertynames(Main, true))\n")
+       "filter" "(check, propertynames(Main, true))")
       (:end 196))
     (parsec-with-input "function xref_backend_identifiers(ns)
    check = function(pn)
@@ -473,20 +473,20 @@ end"
        ("x\n  y\n")
        (:end 23))
       ((:macro 28 "m1")
-       ("(x)\n  x\n")
+       ("(x)" "x\n")
        (:end 44))
       ((:struct 49 "Vector")
        ("x\n  y\n  z\n")
        (:end 75))
       ((:function 80 "t1")
-       ("(x)\n  "
+       ("(x)"
         ((:try 97)
          (((:if 105)
            ("alpha\n      i = 0\n      "
             ((:while 132)
              ("i < 10\n        "
               ((:for 153)
-               ("x in 1:3\n          println(x * i)\n        ")
+               ("x in 1:3\n          println" "(x * i)")
                (:end 199)))
              (:end 209))
             "ex = "
@@ -497,10 +497,10 @@ end"
           "catch\n    z = 10\n    "
           ((:begin 285)
            (((:let 297)
-             ("w = z * 4\n        println(w)\n      ")
+             ("w = z * 4\n        println" "(w)")
              (:end 336)))
            (:end 344))
-          "finally\n    stuff()\n  ")
+          "finally\n    stuff" "()")
          (:end 372)))
        (:end 376)))
     (parsec-with-input "
@@ -553,11 +553,12 @@ end"
       (julia-snail-parser--*start-function))))
   (should
    (equal
-    '("("
-      ((:function 2 nil)
-       ("(x); return 2x; ")
-       (:end 26))
-      ")(3)")
+    '(("("
+       ((:function 2 nil)
+        ("(x)" "; return 2x; ")
+        (:end 26))
+       ")")
+      "(3)")
     (parsec-with-input "(function(x); return 2x; end)(3)"
       (julia-snail-parser--*file)))))
 
@@ -565,7 +566,7 @@ end"
   (should
    (equal
     '((:function 1 "f1")
-      ("()\n   C = @Persistent " "[1 2 3]" "append(C, 4)\n")
+      ("()" "C = @Persistent " "[1 2 3]" "append" "(C, 4)")
       (:end 58))
     (parsec-with-input "function f1()
    C = @Persistent [1 2 3]
@@ -574,13 +575,13 @@ end"
       (julia-snail-parser--*block))))
   (equal
    '(((:function 1 "f")
-      ("()\n   "
+      ("()"
        ((:for 17)
         ("a in A" "[end]")
         (:end 36)))
       (:end 40))
      ((:function 45 "g")
-      ("()\n   A" "[end:end]")
+      ("()" "A" "[end:end]")
       (:end 72))
      "")
    (parsec-with-input "function f()
@@ -800,7 +801,7 @@ end
     '(((:module 1 "Alpha")
        ("\ndocstring\n"
         ((:function 32 "test_fn")
-         ("(module_name)\n   " "hi")
+         ("(module_name)" "hi")
          (:end 70)))
        (:end 74))
       "")
@@ -833,7 +834,8 @@ end
   (should
    (equal
     '(((:function 1 "f")
-       ("(ex::Expr)\n    kvtuples = " "[:($(esc(kv.args[end-1])), $(esc(kv.args[end])))\n                for kv in ex.args[2:end]]")
+       ("(ex::Expr)"
+        "kvtuples = " "[:($(esc(kv.args[end-1])), $(esc(kv.args[end])))\n                for kv in ex.args[2:end]]")
        (:end 128)))
     (parsec-with-input "function f(ex::Expr)
     kvtuples = [:($(esc(kv.args[end-1])), $(esc(kv.args[end])))
@@ -843,10 +845,28 @@ end"
   (should
    (equal
     '(((:function 1 "f")
-       ("(A, B)\n   " "[2x * B[end]\n    for x in A[2:end]]")
+       ("(A, B)" "[2x * B[end]\n    for x in A[2:end]]")
        (:end 57)))
     (parsec-with-input "function f(A, B)
    [2x * B[end]
     for x in A[2:end]]
 end"
+      (julia-snail-parser--*file)))))
+
+(ert-deftest jsp-test-parenthesized-expressions ()
+  (should
+   (equal
+    '(("("
+       ((:function 2 nil)
+        ("(x)" "; 2x; ")
+        (:end 19))
+       ")")
+      "(10)")
+    (parsec-with-input "(function(x); 2x; end)(10)"
+      (julia-snail-parser--*file))))
+  ;; now introduce an unterminated for:
+  (should
+   (equal
+    '("f" "(x)" "= " "(+(g()...) for _ in 1:n)")
+    (parsec-with-input "f(x) = (+(g()...) for _ in 1:n)"
       (julia-snail-parser--*file)))))
