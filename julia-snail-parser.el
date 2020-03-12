@@ -61,12 +61,13 @@ If PLACEHOLDER is given, replace the result of the parser with it."
 
 (defmacro julia-snail-parser--*keyword (kw)
   "Parser internal: keyword matcher (KW)."
-  `(parsec-and
-    (julia-snail-parser--*whitespace)
-    (parsec-return
-        (let ((case-fold-search nil))
-          (parsec-str ,kw))
-      (parsec-lookahead (parsec-re "[^[:alnum:]_]")))))
+  `(parsec-try
+    (parsec-and
+     (julia-snail-parser--*whitespace)
+     (parsec-return
+         (let ((case-fold-search nil))
+           (parsec-str ,kw))
+       (parsec-lookahead (parsec-re "[^[:alnum:]_]"))))))
 
 (defun julia-snail-parser--*string-tq ()
   "Parser internal: triple-quoted string matcher."

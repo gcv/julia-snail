@@ -814,6 +814,19 @@ function test_fn(module_name)
 end
 end
 "
+      (julia-snail-parser--*file))))
+  (should
+   (equal
+    '(((:module 1 "Alpha")
+       (((:function 14 "f")
+         ("()" "modules = " "[\"One\", \"Two\"]")
+         (:end 55)))
+       (:end 59)))
+    (parsec-with-input "module Alpha
+function f()
+   modules = [\"One\", \"Two\"]
+end
+end"
       (julia-snail-parser--*file)))))
 
 (ert-deftest jsp-test-brackets ()
