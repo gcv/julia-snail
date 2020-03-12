@@ -238,16 +238,29 @@ MAXIMUM: max timeout."
         ;; problem and supposedly fixes it, but it does not work for me with
         ;; Julia 1.0.4.
         ;; TODO: Follow-up on https://github.com/JuliaLang/julia/issues/33752
-        ;; XXX: Wait for the Julia prompt to come up before trying to start the server.
-        (julia-snail--wait-while (not (string-equal "julia>" (current-word))) 20 julia-snail-async-timeout)
         (julia-snail--send-to-repl
           (format "JuliaSnail.start(%d);" julia-snail-port)
           :repl-buf repl-buf
           :async nil)
-        (with-current-buffer repl-buf
-          (setq julia-snail--process ; NB: buffer-local variable!
-                (open-network-stream "julia-process" process-buf "localhost" julia-snail-port))
-          (set-process-filter julia-snail--process #'julia-snail--server-response-filter))))))
+        ;; connect to the server
+        (let ((netstream (let ((attempt 0)
+                               (max-attempts 5)
+                               (stream nil))
+                           (while (and (< attempt max-attempts) (null stream))
+                             (cl-incf attempt)
+                             (message "Snail connecting to Julia process, attempt %d/5..." attempt)
+                             (condition-case nil
+                                 (setq stream (open-network-stream "julia-process" process-buf "localhost" julia-snail-port))
+                               (error (when (< attempt max-attempts) (sleep-for 0 500)))))
+                           stream)))
+          (if netstream
+              (with-current-buffer repl-buf
+                ;; NB: buffer-local variable!
+                (setq julia-snail--process netstream)
+                (set-process-filter julia-snail--process #'julia-snail--server-response-filter)
+                (message "Snail connected to Julia. Happy hacking!"))
+            ;; something went wrong
+            (error "Failed to connect to Snail server")))))))
 
 (defun julia-snail--repl-disable ()
   "REPL buffer minor mode cleanup."

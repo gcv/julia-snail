@@ -309,8 +309,23 @@ during evaluation are captured and sent back to the client as Elisp
 s-expressions. Special queries also write back their responses as s-expressions.
 """
 function start(port=10011)
-   global running = true
+   global running = false
    global server_socket = Sockets.listen(port)
+   let wait_result = timedwait(function(); server_socket.status == Base.StatusActive; end,
+                               5.0)
+      if :timedout == wait_result
+         println(stderr, "ERROR: Timeout while waiting to open server socket for Snail.")
+         println(stderr, "ERROR: Snail will not work correctly.")
+      elseif :error == wait_result
+         println(stderr, "ERROR: Timeout while waiting to open server socket for Snail.")
+         println(stderr, "ERROR: Snail will not work correctly.")
+      elseif :ok == wait_result
+         running = true
+      else
+         println(stderr, "ERROR: Something broke spectacularly.")
+         println(stderr, "ERROR: Snail will not work correctly.")
+      end
+   end
    @async begin
       while running
          client = Sockets.accept(server_socket)
