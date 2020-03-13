@@ -686,7 +686,8 @@ This occurs in the context of the current module."
 
 (defun julia-snail-send-top-level-form ()
   "Send the top level form around the point to the Julia REPL and evaluate it.
-This occurs in the context of the current module."
+This occurs in the context of the current module.
+Currently only works on blocks terminated with `end'."
   (interactive)
   (let* ((q (julia-snail-parser-query (current-buffer) (point) :top-level-block))
          (module (plist-get q :module))

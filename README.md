@@ -108,7 +108,7 @@ The `julia-snail-mode` minor mode provides a key binding map (`julia-snail-mode-
 | C-c C-z | julia-snail                     | start a REPL; flip between REPL and source               |
 | C-c C-a | julia-snail-package-activate    | activate the project using `Project.toml`                |
 | C-c C-d | julia-snail-doc-lookup          | display the docstring of the identifier at point         |
-| C-c C-c | julia-snail-send-top-level-form | evaluate function around the point in the current module |
+| C-c C-c | julia-snail-send-top-level-form | evaluate code block around the point in the current module; only works with blocks terminated with `end` |
 | C-M-x   | julia-snail-send-top-level-form | ditto                                                    |
 | C-c C-r | julia-snail-send-region         | evaluate active region in the current module             |
 | C-c C-l | julia-snail-send-line           | copy current line directly to REPL                       |
