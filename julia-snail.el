@@ -290,7 +290,7 @@ MAXIMUM: max timeout."
 wait for the REPL prompt to return, otherwise return immediately."
   (declare (indent defun))
   (unless repl-buf
-    (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
+    (user-error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
   (with-current-buffer repl-buf
     (vterm-send-string str)
     (vterm-send-return)
@@ -315,7 +315,7 @@ When :async is t (default), return the request id. When :async is
 nil, wait for the result and return it."
   (declare (indent defun))
   (unless repl-buf
-    (error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
+    (user-error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
   (let* ((process-buf (get-buffer (julia-snail--process-buffer-name repl-buf)))
          (module-ns (julia-snail--construct-module-path module))
          (reqid (format "%04x%04x" (random (expt 16 4)) (random (expt 16 4))))
@@ -492,7 +492,7 @@ Julia include on the tmpfile, and then deleting the file."
 (cl-defmethod xref-backend-definitions ((_backend (eql xref-julia-snail)) identifier)
   "Emacs xref API."
   (unless identifier
-    (error "No identifier at point"))
+    (user-error "No identifier at point"))
   (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
          ;; Grab everything in the identifier up to the last dot, i.e., the
          ;; fully-qualified module name, and everything after the last dot,
@@ -674,7 +674,7 @@ This will occur in the context of the Main module, just as it would at the REPL.
 This occurs in the context of the current module."
   (interactive)
   (if (null (use-region-p))
-      (error "No region selected")
+      (user-error "No region selected")
     (let ((text (buffer-substring-no-properties (region-beginning) (region-end)))
           (module (julia-snail-parser-query (current-buffer) (point) :module)))
       (julia-snail--send-to-server-via-tmp-file

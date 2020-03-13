@@ -454,7 +454,7 @@ Numbered as per MATCH-STRING."
            else do (unless current-top-block (setq current-top-block block))
            finally return
            (if (null current-top-block)
-               (error "Unable to parse top-level block")
+               (user-error "Unable to parse top-level block; only code blocks terminated with `end' are supported")
              (list :module (or module (list "Main"))
                    :block current-top-block))))
 
@@ -466,7 +466,7 @@ Numbered as per MATCH-STRING."
 QUERY can be :module or :top-level-block."
   (let ((tree (julia-snail-parser--parse buf)))
     (if (parsec-error-p tree)
-        (error "Buffer does not parse; check Julia syntax")
+        (user-error "Buffer does not parse; check Julia syntax")
       (let* ((blocks (julia-snail-parser--blocks tree))
              (block-path (julia-snail-parser--block-path blocks pt)))
         (cond ((eq :module query)
