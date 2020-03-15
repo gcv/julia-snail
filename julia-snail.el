@@ -226,8 +226,12 @@ MAXIMUM: max timeout."
   (make-local-variable 'julia-snail--repl-go-back-target)
   (let ((repl-buf (current-buffer))
         (process-buf (get-buffer-create (julia-snail--process-buffer-name (current-buffer)))))
-    (when (fboundp 'persp-add-buffer) ; perspective-el support
+    (when (and (featurep 'perspective) (bound-and-true-p persp-mode)) ; perspective-el support
+      (declare-function persp-add-buffer "perspective.el")
       (persp-add-buffer process-buf))
+    (when (and (featurep 'persp-mode) (bound-and-true-p persp-mode)) ; persp-mode support
+      (declare-function persp-add-buffer "persp-mode.el")
+      (persp-add-buffer process-buf nil '(switchorno nil)))
     (with-current-buffer process-buf
       (unless julia-snail--process
         (setq julia-snail-port (buffer-local-value 'julia-snail-port repl-buf))
