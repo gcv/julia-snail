@@ -231,6 +231,7 @@ MAXIMUM: max timeout."
       (persp-add-buffer process-buf))
     (when (and (featurep 'persp-mode) (bound-and-true-p persp-mode)) ; persp-mode support
       (declare-function persp-add-buffer "persp-mode.el")
+      (declare-function get-current-persp "persp-mode.el")
       (persp-add-buffer process-buf (get-current-persp) nil))
     (with-current-buffer process-buf
       (unless julia-snail--process
