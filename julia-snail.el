@@ -644,7 +644,7 @@ To create multiple REPLs, give these variables distinct values (e.g.:
     (if repl-buf
         (progn
           (setf (buffer-local-value 'julia-snail--repl-go-back-target repl-buf) source-buf)
-          (pop-to-buffer-same-window repl-buf))
+          (pop-to-buffer repl-buf))
       ;; run Julia in a vterm and load the Snail server file
       (let* ((vterm-shell (format "%s -L %s" julia-snail-executable julia-snail--server-file))
              (vterm-buffer (generate-new-buffer julia-snail-repl-buffer)))
