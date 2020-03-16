@@ -883,3 +883,21 @@ end"
     '("f" "(x)" "= " "(+(g()...) for _ in 1:n)")
     (parsec-with-input "f(x) = (+(g()...) for _ in 1:n)"
       (julia-snail-parser--*file)))))
+
+(ert-deftest jsp-test-include-expressions ()
+  (should
+   (equal
+    '(((:module 1 "Alpha")
+       ((:include 14 "a1.jl")
+        ((:function 31 "f1")
+         ("()" "return value")
+         (:end 63)))
+       (:end 67)))
+    (parsec-with-input "module Alpha
+include(\"a1.jl\")
+function f1()
+   \"return value\"
+end
+include(\"a2.jl\")
+end"
+      (julia-snail-parser--*file)))))

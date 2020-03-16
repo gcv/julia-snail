@@ -261,10 +261,23 @@ Numbered as per MATCH-STRING."
    (julia-snail-parser--*whitespace)
    (parsec-or (julia-snail-parser--*comment)
               (julia-snail-parser--*string)
+              (julia-snail-parser--*include)
               (julia-snail-parser--*brackets)
               (julia-snail-parser--*parens)
               (julia-snail-parser--*block)
               (julia-snail-parser--*other))))
+
+(defun julia-snail-parser--*include ()
+  "Parser internal: include() calls."
+  (-snoc
+   (julia-snail-parser--parsec-query (julia-snail-parser--*keyword "include")
+                                     :include)
+   (parsec-and
+    (parsec-str "(")
+    (julia-snail-parser--*whitespace)
+    (parsec-return
+        (julia-snail-parser--*string)
+      (parsec-str ")")))))
 
 (defun julia-snail-parser--*start-module ()
   "Parser internal: module start matcher."
