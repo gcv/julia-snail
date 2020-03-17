@@ -891,8 +891,9 @@ end"
        ((:include 14 "a1.jl")
         ((:function 31 "f1")
          ("()" "return value")
-         (:end 63)))
-       (:end 67)))
+         (:end 63))
+        (:include 67 "a2.jl"))
+       (:end 84)))
     (parsec-with-input "module Alpha
 include(\"a1.jl\")
 function f1()
@@ -900,4 +901,83 @@ function f1()
 end
 include(\"a2.jl\")
 end"
+      (julia-snail-parser--*file))))
+  ;; embedded in a comment
+  (should
+   (equal
+    '(((:module 1 "Alpha")
+       ("# include(\"a1.jl\")"
+        ((:function 33 "f1")
+         ("()" "return value")
+         (:end 65))
+        (:include 69 "a2.jl"))
+       (:end 86)))
+    (parsec-with-input "module Alpha
+# include(\"a1.jl\")
+function f1()
+   \"return value\"
+end
+include(\"a2.jl\")
+end"
       (julia-snail-parser--*file)))))
+
+(ert-deftest jsp-test-query-includes ()
+  ;; just one module with includes
+  (should
+   (equal
+    '((:module "Alpha"
+               ((:include "a1.jl")
+                (:include "a2.jl"))))
+    (julia-snail-parser--includes
+     (parsec-with-input "module Alpha
+include(\"a1.jl\")
+function f1()
+   \"return value\"
+end
+include(\"a2.jl\")
+end"
+       (julia-snail-parser--*file)))))
+  ;; separate modules in one file
+  (should
+   (equal
+    '((:module "Alpha"
+               ((:include "a1.jl")
+                (:include "a2.jl")))
+      (:module "Bravo"
+               ((:include "b1.jl")
+                (:include "b2.jl"))))
+    (julia-snail-parser--includes
+     (parsec-with-input "module Alpha
+include(\"a1.jl\")
+function f1()
+   \"return value\"
+end
+include(\"a2.jl\")
+end
+module Bravo
+include(\"b1.jl\")
+include(\"b2.jl\")
+end"
+       (julia-snail-parser--*file)))))
+  ;; embedded modules
+  (should
+   (equal
+    '((:module "Alpha"
+               ((:include "a1.jl")
+                (:include "a2.jl")
+                (:module "Bravo"
+                         ((:include "b1.jl")
+                          (:include "b2.jl"))))))
+    (julia-snail-parser--includes
+     (parsec-with-input "module Alpha
+include(\"a1.jl\")
+function f1()
+   \"return value\"
+end
+include(\"a2.jl\")
+module Bravo
+include(\"b1.jl\")
+include(\"b2.jl\")
+end
+end"
+       (julia-snail-parser--*file))))))

@@ -418,6 +418,34 @@ Numbered as per MATCH-STRING."
     (-remove #'null (cons (julia-snail-parser--blocks (car tree))
                           (julia-snail-parser--blocks (cdr tree)))))))
 
+(defun julia-snail-parser--includes (tree)
+  "Parser internal: extract includes and the modules housing them for parse tree TREE."
+  (cond
+   ((null tree)
+    tree)
+   ((atom tree)
+    nil)
+   ((and (listp tree)
+         (keywordp (-first-item tree))
+         (eq :include (-first-item tree)))
+    (list (-first-item tree)
+          (substring-no-properties (-third-item tree))))
+   ((and (listp tree)
+         (listp (-first-item tree))
+         (keywordp (-first-item (-first-item tree)))
+         (eq :module (-first-item (-first-item tree))))
+    (let* ((block tree)
+           (head (-first-item block))
+           (body (-second-item block))
+           (tail (-last-item block)))
+      (-remove #'null (list (-first-item head)
+                            (when (-third-item head) (substring-no-properties (-third-item head)))
+                            (unless (equal body tail)
+                              (-remove #'null (-map #'julia-snail-parser--includes body)))))))
+   (t ; list
+    (-remove #'null (cons (julia-snail-parser--includes (car tree))
+                          (julia-snail-parser--includes (cdr tree)))))))
+
 (defun julia-snail-parser--block-path (blocks pt)
   "Parser internal: what is the block path for BLOCKS at point PT?"
   (cl-labels ((helper (node)
@@ -472,10 +500,10 @@ Numbered as per MATCH-STRING."
                    :block current-top-block))))
 
 
-;;; --- entry point
+;;; --- interface functions
 
 (defun julia-snail-parser-query (buf pt query)
-  "Parser internal: send QUERY for BUF at point PT.
+  "Send parser QUERY for buffer BUF at point PT.
 QUERY can be :module or :top-level-block."
   (let ((tree (julia-snail-parser--parse buf)))
     (if (parsec-error-p tree)
@@ -487,6 +515,14 @@ QUERY can be :module or :top-level-block."
               ((eq :top-level-block query)
                (julia-snail-parser--query-top-level-block block-path))
               (t (message "Unknown Snail parser query: %s" query)))))))
+
+(defun julia-snail-parser-includes (buf)
+  "Parse buffer BUF and build a tree of include() calls.
+Return :error if the parser fails."
+  (let ((tree (julia-snail-parser--parse buf)))
+    (if (parsec-error-p tree)
+        :error
+      (julia-snail-parser--includes tree))))
 
 
 ;;; --- done
