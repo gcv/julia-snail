@@ -40,23 +40,7 @@ On the Emacs side:
 
 ```elisp
 (use-package julia-snail
-  :hook (julia-mode . julia-snail-mode)
-  :config (progn
-            ;; order matters, unfortunately:
-            (add-to-list 'display-buffer-alist
-                         ;; match buffers named "*julia" in general
-                         '("\\*julia"
-                           ;; actions:
-                           (display-buffer-reuse-window display-buffer-same-window)))
-            (add-to-list 'display-buffer-alist
-                         ;; when displaying buffers named "*julia" in REPL mode
-                         '((lambda (bufname _action)
-                             (and (string-match-p "\\*julia" bufname)
-                                  (with-current-buffer bufname
-                                    (bound-and-true-p julia-snail-repl-mode))))
-                           ;; actions:
-                           (display-buffer-reuse-window display-buffer-pop-up-window)))
-            ))
+  :hook (julia-mode . julia-snail-mode))
 ```
 
 
@@ -68,17 +52,25 @@ On the Emacs side:
 (add-hook 'julia-mode-hook #'julia-snail-mode)
 ```
 
-- Configure `display-buffer-alist` to make REPL window switching smoother.
-- Configure key bindings in `julia-snail-mode-map` as desired.
+Then configure key bindings in `julia-snail-mode-map` as desired.
 
 
 ### `display-buffer-alist` notes
 
 Window and buffer display behavior is one of the worst defaults Emacs ships with. [Please refer to remarks on the subject written elsewhere](https://github.com/nex3/perspective-el/#some-musings-on-emacs-window-layouts). Some packages go to great lengths to provide clean custom window management (e.g., Magit), but Snail does not have the resources to implement such elaborate schemes.
 
-The configuration above makes various `display-buffer` operations Snail uses have more-or-less sane behavior which disturbs the user’s window layout as little as possible.
+Snail uses the Emacs `display-buffer` system to pop up windows, and tries to do so in the most sane manner possible. Most information pop-ups (except the REPL) can be dismissed by pressing `q`, and this should restore the window configuration in most cases. With Emacs defaults, Snail should also reuse existing windows as much as possible, i.e., calling `julia-snail` from a source buffer will switch an already-visible REPL window, and calling `julia-snail` from a REPL window will switch back to a source buffer and reuse already-visible windows.
 
-It is likely that most users will want the default REPL pop-up behavior to split the window vertically, however the default `split-window-sensibly` implementation only splits that way if `split-height-threshold` is smaller than the current window height. `split-height-threshold` defaults to 80 (lines), and relatively few windows will be that tall. Therefore, consider adding something like the following to your configuration:
+However, `display-buffer` will (by default) split windows if the target buffer is not visible. To prevent splits altogether, try the following:
+
+```
+(add-to-list 'display-buffer-alist
+             '("\\*julia" (display-buffer-reuse-window display-buffer-same-window)))
+```
+
+(If you like this setting, and find other Emacs packages’ splitting irritating, consider replacing the `"\\*julia"` regexp with `".*"`: this will suppress pretty much all window splits.)
+
+It is likely that most users will want the default REPL pop-up behavior to split the window vertically, but the default `split-window-sensibly` implementation only splits that way if `split-height-threshold` is smaller than the current window height. `split-height-threshold` defaults to 80 (lines), and relatively few windows will be that tall. Therefore, consider adding something like the following to your configuration:
 
 ```elisp
 (setq split-height-threshold 15)
