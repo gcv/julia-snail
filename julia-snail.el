@@ -454,7 +454,7 @@ Julia include on the tmpfile, and then deleting the file."
                           (format "%s\n\n%s" error-message (s-join "\n" error-stack))))
            (callback-failure (julia-snail--request-tracker-callback-failure request-info)))
       (when (julia-snail--request-tracker-display-error-buffer-on-failure? request-info)
-        (display-buffer error-buffer))
+        (pop-to-buffer error-buffer))
       (when callback-failure
         (funcall callback-failure))))
   (julia-snail--response-base reqid))
@@ -732,16 +732,18 @@ Currently only works on blocks terminated with `end'."
                 (format "@doc %s" name)
                 :display-error-buffer-on-failure? nil
                 :async nil)))
-    (display-buffer (julia-snail--message-buffer
-                     julia-snail-repl-buffer
-                     (format "documentation: %s" identifier)
-                     doc))))
+    (pop-to-buffer (julia-snail--message-buffer
+                    julia-snail-repl-buffer
+                    (format "documentation: %s" identifier)
+                    (if (eq :nothing doc)
+                        "Documentation not found!\nDouble-check your package activation and imports."
+                      doc)))))
 
 (defun julia-snail-repl-go-back ()
   "Return to a source buffer from a Julia REPL buffer."
   (interactive)
   (when (boundp 'julia-snail--repl-go-back-target)
-    (pop-to-buffer julia-snail--repl-go-back-target 'display-buffer-reuse-window)))
+    (pop-to-buffer julia-snail--repl-go-back-target)))
 
 
 ;;; --- keymaps
