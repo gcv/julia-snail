@@ -102,6 +102,9 @@
 (defvar julia-snail--proc-responses
   (make-hash-table :test #'equal))
 
+(defvar julia-snail--cache-proc-implicit-file-module
+  (make-hash-table :test #'equal))
+
 (defvar julia-snail--cache-proc-names-base
   (make-hash-table :test #'equal))
 
@@ -217,6 +220,7 @@ MAXIMUM: max timeout."
     (when process-buf
       (remhash process-buf julia-snail--cache-proc-names-base)
       (remhash process-buf julia-snail--cache-proc-names-core)
+      (remhash process-buf julia-snail--cache-proc-implicit-file-module)
       (kill-buffer process-buf)))
   (setq julia-snail--process nil))
 
@@ -460,6 +464,27 @@ Julia include on the tmpfile, and then deleting the file."
   (julia-snail--response-base reqid))
 
 
+;;; --- Julia module tracking implementation
+
+(defun julia-snail--module-make-implicit-module-map (includes)
+  "Invert INCLUDES to map from filename to containing module."
+  ;; This takes the includes from the AST and treats each :include as a leaf,
+  ;; and associates it with the path to reach it.
+  (let ((mapping (make-hash-table :test #'equal)))
+    (cl-labels ((helper (tree path)
+                        (cond ((eq :include (-first-item tree))
+                               (puthash (-second-item tree) path mapping))
+                              ((eq :module (-first-item tree))
+                               (let ((new-path (-snoc path (-second-item tree))))
+                                 (cl-loop for node in (-third-item tree) do
+                                          (helper node new-path))))
+                              (t
+                               (cl-loop for node in tree do
+                                        (helper node path))))))
+      (helper includes (list))
+      mapping)))
+
+
 ;;; --- xref implementation
 
 (defun julia-snail-xref-backend ()
@@ -690,6 +715,7 @@ This will occur in the context of the Main module, just as it would at the REPL.
                                                "report, the easier it will be to fix."))))
                                 (pop-to-buffer error-buffer))
                             ;; successful load
+                            (julia-snail--module-merge-includes filename includes)
                             (message "%s loaded" filename))))))
 
 (defun julia-snail-send-region ()

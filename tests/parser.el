@@ -959,7 +959,7 @@ include(\"b1.jl\")
 include(\"b2.jl\")
 end"
        (julia-snail-parser--*file)))))
-  ;; embedded modules
+  ;; nested modules
   (should
    (equal
     '((:module "Alpha"
