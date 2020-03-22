@@ -489,6 +489,27 @@ Julia include on the tmpfile, and then deleting the file."
       (helper includes (list))
       mapping)))
 
+(defun julia-snail--module-merge-includes (current-filename includes)
+  "Update file module cache using INCLUDES tree parsed from CURRENT-FILENAME."
+  (let* ((process-buf (get-buffer (julia-snail--process-buffer-name julia-snail-repl-buffer)))
+         (proc-includes (or (gethash process-buf
+                                     julia-snail--cache-proc-implicit-file-module)
+                            (puthash process-buf (make-hash-table :test #'equal)
+                                     julia-snail--cache-proc-implicit-file-module)))
+         (current-file-module (gethash (expand-file-name current-filename) proc-includes))
+         (implicit-file-modules (julia-snail--module-make-implicit-module-map includes)))
+    ;; expand file names and prepend current file module
+    (cl-loop for k being the hash-keys of implicit-file-modules using (hash-values v) do
+             (remhash k implicit-file-modules)
+             (puthash (expand-file-name k)
+                      (if current-file-module (append current-file-module v) v)
+                      implicit-file-modules))
+    ;; merge includes with the proc-includes table
+    (cl-loop for k being the hash-keys of implicit-file-modules using (hash-values v) do
+             (puthash k v proc-includes))
+    ;; done
+    proc-includes))
+
 
 ;;; --- xref implementation
 
