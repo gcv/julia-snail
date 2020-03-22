@@ -214,13 +214,18 @@ MAXIMUM: max timeout."
 
 ;;; --- connection management functions
 
+(defun julia-snail--clear-proc-caches (process-buf)
+  "Clear connection-specific internal Snail xref, completion, and module caches."
+  (when process-buf
+    (remhash process-buf julia-snail--cache-proc-names-base)
+    (remhash process-buf julia-snail--cache-proc-names-core)
+    (remhash process-buf julia-snail--cache-proc-implicit-file-module)))
+
 (defun julia-snail--repl-cleanup ()
   "REPL buffer cleanup."
   (let ((process-buf (get-buffer (julia-snail--process-buffer-name (current-buffer)))))
+    (julia-snail--clear-proc-caches process-buf)
     (when process-buf
-      (remhash process-buf julia-snail--cache-proc-names-base)
-      (remhash process-buf julia-snail--cache-proc-names-core)
-      (remhash process-buf julia-snail--cache-proc-implicit-file-module)
       (kill-buffer process-buf)))
   (setq julia-snail--process nil))
 
@@ -788,6 +793,17 @@ Currently only works on blocks terminated with `end'."
   (interactive)
   (when (boundp 'julia-snail--repl-go-back-target)
     (pop-to-buffer julia-snail--repl-go-back-target)))
+
+(defun julia-snail-clear-caches ()
+  "Clear connection-specific internal Snail xref, completion, and module caches.
+Useful if something seems to wrong."
+  (interactive)
+  (when (or julia-snail-mode julia-snail-repl-mode)
+    (let ((process-buf (get-buffer (julia-snail--process-buffer-name
+                                    (if julia-snail-mode
+                                        julia-snail-repl-buffer
+                                      (current-buffer))))))
+      (julia-snail--clear-proc-caches process-buf))))
 
 
 ;;; --- keymaps
