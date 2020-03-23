@@ -720,7 +720,7 @@ end
                       (:if 60 70 nil))))
     (should
      (equal
-      (list :module '("Main")
+      (list :module nil
             :block '(:function 50 80 "f1"))
       (julia-snail-parser--query-top-level-block block-path)))))
 
@@ -746,8 +746,7 @@ end
       '("Alpha" "Bravo")
       (julia-snail-parser-query (current-buffer) 55 :module)))
     (should
-     (equal
-      '("Main")
+     (null
       (julia-snail-parser-query (current-buffer) 550 :module)))
     (should
      (equal
@@ -758,8 +757,7 @@ end
       '("Delta")
       (julia-snail-parser-query (current-buffer) 585 :module)))
     (should
-     (equal
-      '("Main")
+     (null
       (julia-snail-parser-query (current-buffer) 787 :module)))))
 
 (ert-deftest jsp-test-query-file-top-level-block ()

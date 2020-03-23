@@ -475,14 +475,13 @@ Numbered as per MATCH-STRING."
 (defun julia-snail-parser--query-module (block-path)
   "Parser internal: extract the module from BLOCK-PATH."
   ;; Remove everything from the list which is not a module, and return the
-  ;; resulting module names. Fall back to Main if nothing comes back. Return
-  ;; list of module names.
+  ;; resulting module names.
   (let ((module-blocks (-filter (lambda (block)
                                   (eq :module
                                       (-first-item block)))
                                 block-path)))
     (if (null module-blocks)
-        (list "Main") ; default
+        nil ; default
       (-map #'-fourth-item module-blocks))))
 
 (defun julia-snail-parser--query-top-level-block (block-path)
@@ -496,7 +495,7 @@ Numbered as per MATCH-STRING."
            finally return
            (if (null current-top-block)
                (user-error "Unable to parse top-level block; only code blocks terminated with `end' are supported")
-             (list :module (or module (list "Main"))
+             (list :module module
                    :block current-top-block))))
 
 
