@@ -145,6 +145,26 @@ The `julia-snail-executable` variable can be set at the file level or at the dir
 NB: On a Mac, the Julia binary is typically `Contents/Resources/julia/bin/julia` inside the distribution app bundle. You must either make sure `julia-snail-executable` is set to an absolute path, or configure your Emacs `exec-path` to correctly find the `julia` binary.
 
 
+### Module-nested `include`s
+
+Consider the following file, call it `alpha.jl`:
+
+```julia
+module Alpha
+
+include("alpha-1.jl")
+include("alpha-2.jl")
+
+end
+```
+
+Everything in the files `alpha-1.jl` and `alpha-2.jl` is inside the `Alpha` module, but neither of these files will mention that module explicitly. Snail supports this by using its parser to track `include(...)` calls and their module context. This feature works with nested modules.
+
+Using it requires some care. The root file which contains the module declaration (`alpha.jl` in this example) must be loaded using `julia-snail-send-buffer-file` first. If this does not happen, the parser will not have the opportunity to learn where `alpha-1.jl` and `alpha-2.jl` fit in the module hierarchy, and will assume their parent module is `Main`.
+
+Furthermore, if `alpha-1.jl` is refactored to sit outside the `Alpha` module, or moved in the directory structure, Snail must be informed. To do this, call the `julia-snail-clear-caches` command.
+
+
 ## Future improvements
 
 ### Foundational

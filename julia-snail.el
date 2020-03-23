@@ -323,8 +323,8 @@ wait for the REPL prompt to return, otherwise return immediately."
      (display-error-buffer-on-failure? t)
      callback-success
      callback-failure)
-  "Send str to Snail server, and evaluate it in the context of
-module. Run callback-success and callback-failure as appropriate.
+  "Send STR to Snail server, and evaluate it in the context of MODULE.
+Run callback-success and callback-failure as appropriate.
 When :async is t (default), return the request id. When :async is
 nil, wait for the result and return it."
   (declare (indent defun))
@@ -510,6 +510,24 @@ Julia include on the tmpfile, and then deleting the file."
     ;; done
     proc-includes))
 
+(defun julia-snail--module-for-file (file)
+  "Retrieve the module for FILE from `julia-snail--cache-proc-implicit-file-module' table."
+  (let* ((filename (expand-file-name file))
+         (process-buf (get-buffer (julia-snail--process-buffer-name julia-snail-repl-buffer)))
+         (proc-includes (gethash process-buf julia-snail--cache-proc-implicit-file-module
+                                 (make-hash-table :test #'equal)))
+         (parent-modules (gethash filename proc-includes (list))))
+    parent-modules))
+
+(defun julia-snail--module-at-point (&optional partial-module)
+  "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
+  (let ((partial-module (or partial-module
+                            (julia-snail-parser-query (current-buffer) (point) :module)))
+        (module-for-file (julia-snail--module-for-file (buffer-file-name))))
+    (if module-for-file
+        (append module-for-file partial-module)
+      partial-module)))
+
 
 ;;; --- xref implementation
 
@@ -523,7 +541,7 @@ Julia include on the tmpfile, and then deleting the file."
 
 (cl-defmethod xref-backend-identifier-completion-table ((_backend (eql xref-julia-snail)))
   "Emacs xref API."
-  (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+  (let* ((module (julia-snail--module-at-point))
          (ns (s-join "." module)))
     (julia-snail--send-to-server
       module
@@ -549,7 +567,7 @@ Julia include on the tmpfile, and then deleting the file."
   "Emacs xref API."
   (unless identifier
     (user-error "No identifier at point"))
-  (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+  (let* ((module (julia-snail--module-at-point))
          ;; Grab everything in the identifier up to the last dot, i.e., the
          ;; fully-qualified module name, and everything after the last dot,
          ;; which should be the symbol in the module.
@@ -584,7 +602,7 @@ Julia include on the tmpfile, and then deleting the file."
   nil)
 
 (cl-defmethod xref-backend-apropos ((_backend (eql xref-julia-snail)) pattern)
-  (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+  (let* ((module (julia-snail--module-at-point))
          (res (julia-snail--send-to-server
                 module
                 (format "Main.JuliaSnail.apropos(%s, \"%s\")"
@@ -611,7 +629,7 @@ Julia include on the tmpfile, and then deleting the file."
         cached-base
       (puthash process-buf
                (julia-snail--send-to-server
-                 (list "Main")
+                 :Main
                  "Main.JuliaSnail.lsnames(Main.Base, all=true, imported=true, include_modules=true, recursive=true)"
                  :async nil)
                julia-snail--cache-proc-names-base))))
@@ -624,14 +642,14 @@ Julia include on the tmpfile, and then deleting the file."
         cached-core
       (puthash process-buf
                (julia-snail--send-to-server
-                 (list "Main")
+                 :Main
                  "Main.JuliaSnail.lsnames(Main.Core, all=true, imported=true, include_modules=true, recursive=false)"
                  :async nil)
                julia-snail--cache-proc-names-core))))
 
 (defun julia-snail--completions (identifier)
   "Completions helper for IDENTIFIER."
-  (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+  (let* ((module (julia-snail--module-at-point))
          (ns (-last-item module)))
     (append
      (julia-snail--completions-keywords)
@@ -718,10 +736,12 @@ This is not module-context aware."
   "Send the current buffer's file into the Julia REPL, and include() it.
 This will occur in the context of the Main module, just as it would at the REPL."
   (interactive)
-  (let ((filename buffer-file-name)
-        (includes (julia-snail-parser-includes (current-buffer))))
+  (let* ((filename (expand-file-name buffer-file-name))
+         (module (or (julia-snail--module-for-file filename) '("Main")))
+         (includes (julia-snail-parser-includes (current-buffer))))
+    (julia-snail--module-merge-includes filename includes)
     (julia-snail--send-to-server
-      :Main
+      module
       (format "include(\"%s\");" filename)
       :callback-success (lambda (&optional _data)
                           (if (eq :error includes)
@@ -742,7 +762,9 @@ This will occur in the context of the Main module, just as it would at the REPL.
                                 (pop-to-buffer error-buffer))
                             ;; successful load
                             (julia-snail--module-merge-includes filename includes)
-                            (message "%s loaded" filename))))))
+                            (message "%s loaded: module %s"
+                                     filename
+                                     (julia-snail--construct-module-path module)))))))
 
 (defun julia-snail-send-region ()
   "Send the region (requires transient-mark) to the Julia REPL and evaluate it.
@@ -751,13 +773,14 @@ This occurs in the context of the current module."
   (if (null (use-region-p))
       (user-error "No region selected")
     (let ((text (buffer-substring-no-properties (region-beginning) (region-end)))
-          (module (julia-snail-parser-query (current-buffer) (point) :module)))
+          (module (julia-snail--module-at-point)))
       (julia-snail--send-to-server-via-tmp-file
-        module text
+        module
+        text
         :callback-success (lambda (&optional data)
-                            (message "Selected region evaluated: module %s, result: %s"
-                                     (julia-snail--construct-module-path module)
-                                     data))))))
+                            (message "Selected region evaluated: %s, module %s"
+                                     data
+                                     (julia-snail--construct-module-path module)))))))
 
 (defun julia-snail-send-top-level-form ()
   "Send the top level form around the point to the Julia REPL and evaluate it.
@@ -765,7 +788,7 @@ This occurs in the context of the current module.
 Currently only works on blocks terminated with `end'."
   (interactive)
   (let* ((q (julia-snail-parser-query (current-buffer) (point) :top-level-block))
-         (module (plist-get q :module))
+         (module (julia-snail--module-at-point (plist-get q :module)))
          (block-description (plist-get q :block))
          (block-start (-second-item block-description))
          (block-end (-third-item block-description))
@@ -774,11 +797,11 @@ Currently only works on blocks terminated with `end'."
     (julia-snail--send-to-server-via-tmp-file
       module text
       :callback-success (lambda (&optional _data)
-                          (message "Top-level form evaluated: module %s, %s"
-                                   (julia-snail--construct-module-path module)
+                          (message "Top-level form evaluated: %s, module %s"
                                    (if (-fourth-item block-description)
                                        (-fourth-item block-description)
-                                     "unknown"))))))
+                                     "unknown")
+                                   (julia-snail--construct-module-path module))))))
 
 (defun julia-snail-package-activate (dir)
   "Activate a Pkg project located in DIR in the Julia REPL."
@@ -795,10 +818,10 @@ Currently only works on blocks terminated with `end'."
   (interactive (list (read-string
                       "Documentation look up: "
                       (unless current-prefix-arg (julia-snail--identifier-at-point)))))
-  (let* ((module (julia-snail-parser-query (current-buffer) (point) :module))
+  (let* ((module (julia-snail--module-at-point))
          (name (s-concat (s-join "." module) "." identifier))
          (doc (julia-snail--send-to-server
-                '("Main")
+                :Main
                 (format "@doc %s" name)
                 :display-error-buffer-on-failure? nil
                 :async nil)))
