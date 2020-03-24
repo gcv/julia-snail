@@ -452,8 +452,10 @@ Julia include on the tmpfile, and then deleting the file."
                           repl-buf
                           "error"
                           (format "%s\n\n%s" error-message (s-join "\n" error-stack))))
+         
            (callback-failure (julia-snail--request-tracker-callback-failure request-info)))
       (when (julia-snail--request-tracker-display-error-buffer-on-failure? request-info)
+        (julia-snail--setup-compilation-mode error-buffer julia-snail--basedir)
         (pop-to-buffer error-buffer))
       (when callback-failure
         (funcall callback-failure))))
@@ -786,6 +788,56 @@ Currently only works on blocks terminated with `end'."
       (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
       (julia-snail--disable))))
 
+
+;; set error buffer to compilation mode, so that one may directly jump to the relevant files
+;; adapted from julia-repl by Tamas Papp
+
+(cl-defun julia-snail--capture-basedir (executable-path)
+  "Attempt to obtain the Julia base directory by querying the Julia executable.
+When NIL, this was unsuccessful."
+  (let* ((prefix "OK") ; prefix is used to verify that there was no error and help with extraction
+         (expr (concat "print(\"" prefix
+                       "\" * normpath(joinpath(VERSION ≤ v\"0.7-\" ? JULIA_HOME : Sys.BINDIR, "
+                       "Base.DATAROOTDIR, \"julia\", \"base\")))"))
+         (switches " --history-file=no --startup-file=no -qe ")
+         (maybe-basedir (shell-command-to-string
+                         (concat executable-path switches (concat "'" expr "'")))))
+    (when (string-prefix-p prefix maybe-basedir)
+      (substring maybe-basedir (length prefix)))))
+
+(defvar-local julia-snail--basedir 
+  (julia-snail--capture-basedir julia-snail-executable)
+  )
+
+(defvar julia-snail--compilation-regexp-alist
+  '(;; matches "while loading /tmp/Foo.jl, in expression starting on line 2"
+    (julia-load-error . ("while loading \\([^ ><()\t\n,'\";:]+\\), in expression starting on line \\([0-9]+\\)" 1 2))
+    ;; matches "around /tmp/Foo.jl:2", also starting with "at" or "Revise"
+    (julia-loc . ("\\(around\\|at\\|Revise\\) \\([^ ><()\t\n,'\";:]+\\):\\([0-9]+\\)" 2 3))
+    ;; matches "omitting file /tmp/Foo.jl due to parsing error near line 2", from Revise.parse_source!
+    (julia-warn-revise . ("omitting file \\([^ ><()\t\n,'\";:]+\\) due to parsing error near line \\([0-9]+\\)" 1 2))
+    )
+  "Specifications for highlighting error locations.
+Uses function ‘compilation-shell-minor-mode’.")
+
+(defun julia-snail--setup-compilation-mode (message-buffer basedir)
+  "Setup compilation mode for the the current buffer in MESSAGE-BUFFER.
+BASEDIR is used for resolving relative paths."
+  (with-current-buffer message-buffer
+    (setq-local compilation-error-regexp-alist-alist
+                julia-snail--compilation-regexp-alist)
+    (setq-local compilation-error-regexp-alist
+                (mapcar #'car compilation-error-regexp-alist-alist))
+    (compilation-mode)
+    (when basedir
+      (setq-local compilation-search-path (list basedir))
+      (message basedir)
+      )
+    ))
+
+
+
+
 ;;;###autoload
 (define-minor-mode julia-snail-repl-mode
   "A minor mode for interactive Julia development. Should only be
@@ -803,6 +855,9 @@ turned on in REPL buffers."
   :init-value nil
   :lighter " Snail Message"
   :keymap '(((kbd "q") . quit-window)))
+
+
+
 
 
 ;;; --- done
