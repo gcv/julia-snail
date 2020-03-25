@@ -108,6 +108,9 @@
 (defvar julia-snail--cache-proc-names-core
   (make-hash-table :test #'equal))
 
+(defvar julia-snail--cache-proc-names-basedir
+  (make-hash-table :test #'equal))
+
 (defvar julia-snail--repl-go-back-target)
 
 
@@ -217,6 +220,7 @@ MAXIMUM: max timeout."
     (when process-buf
       (remhash process-buf julia-snail--cache-proc-names-base)
       (remhash process-buf julia-snail--cache-proc-names-core)
+      (remhash process-buf julia-snail--cache-proc-names-basedir)
       (kill-buffer process-buf)))
   (setq julia-snail--process nil))
 
@@ -263,7 +267,11 @@ MAXIMUM: max timeout."
                 ;; NB: buffer-local variable!
                 (setq julia-snail--process netstream)
                 (set-process-filter julia-snail--process #'julia-snail--server-response-filter)
-                (message "Snail connected to Julia. Happy hacking!"))
+                (message "Snail connected to Julia. Happy hacking!")
+                ;; Query base directory, and cache
+                (puthash repl-buf (julia-snail--capture-basedir repl-buf)
+                         julia-snail--cache-proc-names-basedir)
+                )
             ;; something went wrong
             (error "Failed to connect to Snail server")))))))
 
@@ -454,11 +462,11 @@ Julia include on the tmpfile, and then deleting the file."
                           (format "%s\n\n%s" error-message (s-join "\n" error-stack))))
          
            (callback-failure (julia-snail--request-tracker-callback-failure request-info)))
-      (when (julia-snail--request-tracker-display-error-buffer-on-failure? request-info)
-        (julia-snail--setup-compilation-mode error-buffer julia-snail--basedir)
-        (pop-to-buffer error-buffer))
-      (when callback-failure
-        (funcall callback-failure))))
+           (when (julia-snail--request-tracker-display-error-buffer-on-failure? request-info)
+             (julia-snail--setup-compilation-mode error-buffer (gethash repl-buf julia-snail--cache-proc-names-basedir))
+             (pop-to-buffer error-buffer))
+           (when callback-failure
+             (funcall callback-failure))))
   (julia-snail--response-base reqid))
 
 
@@ -792,22 +800,14 @@ Currently only works on blocks terminated with `end'."
 ;; set error buffer to compilation mode, so that one may directly jump to the relevant files
 ;; adapted from julia-repl by Tamas Papp
 
-(cl-defun julia-snail--capture-basedir (executable-path)
-  "Attempt to obtain the Julia base directory by querying the Julia executable.
-When NIL, this was unsuccessful."
-  (let* ((prefix "OK") ; prefix is used to verify that there was no error and help with extraction
-         (expr (concat "print(\"" prefix
-                       "\" * normpath(joinpath(VERSION ≤ v\"0.7-\" ? JULIA_HOME : Sys.BINDIR, "
-                       "Base.DATAROOTDIR, \"julia\", \"base\")))"))
-         (switches " --history-file=no --startup-file=no -qe ")
-         (maybe-basedir (shell-command-to-string
-                         (concat executable-path switches (concat "'" expr "'")))))
-    (when (string-prefix-p prefix maybe-basedir)
-      (substring maybe-basedir (length prefix)))))
-
-(defvar-local julia-snail--basedir 
-  (julia-snail--capture-basedir julia-snail-executable)
+(cl-defun julia-snail--capture-basedir (buf)
+  (julia-snail--send-to-server
+    :Main
+    "normpath(joinpath(VERSION ≤ v\"0.7-\" ? JULIA_HOME : Sys.BINDIR, Base.DATAROOTDIR, \"julia\", \"base\"))"
+    :repl-buf buf
+    :async nil)
   )
+
 
 (defvar julia-snail--compilation-regexp-alist
   '(;; matches "while loading /tmp/Foo.jl, in expression starting on line 2"
@@ -832,11 +832,7 @@ BASEDIR is used for resolving relative paths."
     (when basedir
       (setq-local compilation-search-path (list basedir))
       (message basedir)
-      )
-    ))
-
-
-
+      )))
 
 ;;;###autoload
 (define-minor-mode julia-snail-repl-mode
