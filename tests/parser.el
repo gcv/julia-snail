@@ -5,30 +5,8 @@
 
 (require 'ert)
 
+(require 'julia-snail)
 (require 'julia-snail-parser)
-
-
-;;; --- variables
-
-(defvar jsp-test-file-blocks.jl
-  ;; XXX: Obnoxious Elisp path construction for "files/blocks.jl".
-  (concat
-   (file-name-as-directory
-    (concat (if load-file-name
-                (file-name-directory load-file-name)
-              (file-name-as-directory default-directory))
-            "files"))
-   "blocks.jl"))
-
-(defvar jsp-test-file-bad-syntax.jl
-  ;; XXX: Obnoxious Elisp path construction for "files/bad-syntax.jl".
-  (concat
-   (file-name-as-directory
-    (concat (if load-file-name
-                (file-name-directory load-file-name)
-              (file-name-as-directory default-directory))
-            "files"))
-   "bad-syntax.jl"))
 
 
 ;;; --- tests
@@ -598,7 +576,7 @@ end
 (ert-deftest jsp-test-whole-file-blocks ()
   (let ((blocks
          (with-temp-buffer
-           (insert-file jsp-test-file-blocks.jl)
+           (insert-file (julia-snail-test-file-path "blocks.jl"))
            (-> (current-buffer)
                julia-snail-parser--parse
                julia-snail-parser--blocks)))
@@ -726,13 +704,13 @@ end
 
 (ert-deftest jsp-test-query-fail-to-parse ()
   (with-temp-buffer
-    (insert-file jsp-test-file-bad-syntax.jl)
+    (insert-file (julia-snail-test-file-path "bad-syntax.jl"))
     (should-error
      (julia-snail-parser-query (current-buffer) 1 :module))))
 
 (ert-deftest jsp-test-query-file-module ()
   (with-temp-buffer
-    (insert-file jsp-test-file-blocks.jl)
+    (insert-file (julia-snail-test-file-path "blocks.jl"))
     (should
      (equal
       '("Alpha")
@@ -762,7 +740,7 @@ end
 
 (ert-deftest jsp-test-query-file-top-level-block ()
   (with-temp-buffer
-    (insert-file jsp-test-file-blocks.jl)
+    (insert-file (julia-snail-test-file-path "blocks.jl"))
     (should-error
      (julia-snail-parser-query (current-buffer) 1 :top-level-block))
     (should

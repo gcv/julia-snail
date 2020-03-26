@@ -211,6 +211,19 @@ MAXIMUM: max timeout."
          (sleep-for 0 ,incr)
          (setf ,sleep-total (+ ,sleep-total ,incr))))))
 
+(defun julia-snail-test-file-path (file)
+  "Return a test file "
+  ;; XXX: Obnoxious Elisp path construction.
+  (let ((location (file-name-directory (locate-library "julia-snail"))))
+    (concat
+     (file-name-as-directory
+      (concat (if load-file-name
+                  (file-name-directory load-file-name)
+                (file-name-as-directory location))
+              (file-name-as-directory "tests")
+              (file-name-as-directory "files")))
+     file)))
+
 
 ;;; --- connection management functions
 
