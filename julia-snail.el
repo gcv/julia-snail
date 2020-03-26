@@ -41,7 +41,7 @@
 (require 'xref)
 
 (require 'julia-snail-parser)
-
+(require 'julia-snail-history)
 
 ;;; --- customization
 
