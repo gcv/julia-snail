@@ -113,6 +113,16 @@
 
 (defvar julia-snail--repl-go-back-target)
 
+(defvar julia-snail--compilation-regexp-alist
+  '(;; matches "while loading /tmp/Foo.jl, in expression starting on line 2"
+    (julia-load-error . ("while loading \\([^ ><()\t\n,'\";:]+\\), in expression starting on line \\([0-9]+\\)" 1 2))
+    ;; matches "around /tmp/Foo.jl:2", also starting with "at" or "Revise"
+    (julia-loc . ("\\(around\\|at\\|Revise\\) \\([^ ><()\t\n,'\";:]+\\):\\([0-9]+\\)" 2 3))
+    ;; matches "omitting file /tmp/Foo.jl due to parsing error near line 2", from Revise.parse_source!
+    (julia-warn-revise . ("omitting file \\([^ ><()\t\n,'\";:]+\\) due to parsing error near line \\([0-9]+\\)" 1 2))
+    )
+  "Specifications for highlighting error locations.
+Uses function ‘compilation-shell-minor-mode’.")
 
 ;;; --- Snail protocol request tracking data structure
 
@@ -211,6 +221,12 @@ MAXIMUM: max timeout."
          (sleep-for 0 ,incr)
          (setf ,sleep-total (+ ,sleep-total ,incr))))))
 
+(defun julia-snail--capture-basedir (buf)
+  (julia-snail--send-to-server
+    :Main
+    "normpath(joinpath(VERSION ≤ v\"0.7-\" ? JULIA_HOME : Sys.BINDIR, Base.DATAROOTDIR, \"julia\", \"base\"))"
+    :repl-buf buf
+    :async nil))
 
 ;;; --- connection management functions
 
@@ -269,7 +285,7 @@ MAXIMUM: max timeout."
                 (set-process-filter julia-snail--process #'julia-snail--server-response-filter)
                 (message "Snail connected to Julia. Happy hacking!")
                 ;; Query base directory, and cache
-                (puthash repl-buf (julia-snail--capture-basedir repl-buf)
+                (puthash process-buf (julia-snail--capture-basedir repl-buf)
                          julia-snail--cache-proc-names-basedir)
                 )
             ;; something went wrong
@@ -456,17 +472,18 @@ Julia include on the tmpfile, and then deleting the file."
       (message error-message)
     (let* ((request-info (gethash reqid julia-snail--requests))
            (repl-buf (julia-snail--request-tracker-repl-buf request-info))
+           (process-buf (get-buffer (julia-snail--process-buffer-name repl-buf)))
            (error-buffer (julia-snail--message-buffer
                           repl-buf
                           "error"
                           (format "%s\n\n%s" error-message (s-join "\n" error-stack))))
-         
+           
            (callback-failure (julia-snail--request-tracker-callback-failure request-info)))
-           (when (julia-snail--request-tracker-display-error-buffer-on-failure? request-info)
-             (julia-snail--setup-compilation-mode error-buffer (gethash repl-buf julia-snail--cache-proc-names-basedir))
-             (pop-to-buffer error-buffer))
-           (when callback-failure
-             (funcall callback-failure))))
+      (when (julia-snail--request-tracker-display-error-buffer-on-failure? request-info)
+        (julia-snail--setup-compilation-mode error-buffer (gethash process-buf julia-snail--cache-proc-names-basedir))
+        (pop-to-buffer error-buffer))
+      (when callback-failure
+        (funcall callback-failure))))
   (julia-snail--response-base reqid))
 
 
@@ -799,26 +816,6 @@ Currently only works on blocks terminated with `end'."
 
 ;; set error buffer to compilation mode, so that one may directly jump to the relevant files
 ;; adapted from julia-repl by Tamas Papp
-
-(cl-defun julia-snail--capture-basedir (buf)
-  (julia-snail--send-to-server
-    :Main
-    "normpath(joinpath(VERSION ≤ v\"0.7-\" ? JULIA_HOME : Sys.BINDIR, Base.DATAROOTDIR, \"julia\", \"base\"))"
-    :repl-buf buf
-    :async nil)
-  )
-
-
-(defvar julia-snail--compilation-regexp-alist
-  '(;; matches "while loading /tmp/Foo.jl, in expression starting on line 2"
-    (julia-load-error . ("while loading \\([^ ><()\t\n,'\";:]+\\), in expression starting on line \\([0-9]+\\)" 1 2))
-    ;; matches "around /tmp/Foo.jl:2", also starting with "at" or "Revise"
-    (julia-loc . ("\\(around\\|at\\|Revise\\) \\([^ ><()\t\n,'\";:]+\\):\\([0-9]+\\)" 2 3))
-    ;; matches "omitting file /tmp/Foo.jl due to parsing error near line 2", from Revise.parse_source!
-    (julia-warn-revise . ("omitting file \\([^ ><()\t\n,'\";:]+\\) due to parsing error near line \\([0-9]+\\)" 1 2))
-    )
-  "Specifications for highlighting error locations.
-Uses function ‘compilation-shell-minor-mode’.")
 
 (defun julia-snail--setup-compilation-mode (message-buffer basedir)
   "Setup compilation mode for the the current buffer in MESSAGE-BUFFER.
