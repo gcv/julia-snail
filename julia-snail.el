@@ -709,7 +709,7 @@ The following buffer-local variables control it:
 To create multiple REPLs, give these variables distinct values (e.g.:
 *julia my-project-1* and 10012)."
   (interactive)
-  (let ((source-buf (current-buffer))
+  (let ((source-buf (when (eq 'julia-mode major-mode) (current-buffer)))
         (repl-buf (get-buffer julia-snail-repl-buffer)))
     (if repl-buf
         (progn
@@ -722,8 +722,9 @@ To create multiple REPLs, give these variables distinct values (e.g.:
           (vterm-mode)
           (julia-snail-repl-mode))
         (pop-to-buffer vterm-buffer)
-        (setq-local julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
-        (setq-local julia-snail--repl-go-back-target source-buf)))))
+        (when source-buf
+          (setq-local julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
+          (setq-local julia-snail--repl-go-back-target source-buf))))))
 
 (defun julia-snail-send-line ()
   "Copy the line at the current point into the REPL and run it.
@@ -841,7 +842,7 @@ Currently only works on blocks terminated with `end'."
 (defun julia-snail-repl-go-back ()
   "Return to a source buffer from a Julia REPL buffer."
   (interactive)
-  (when (boundp 'julia-snail--repl-go-back-target)
+  (when (bound-and-true-p julia-snail--repl-go-back-target)
     (pop-to-buffer julia-snail--repl-go-back-target)))
 
 (defun julia-snail-clear-caches ()
