@@ -21,7 +21,7 @@ Snail is a development environment and REPL interaction package for Julia in the
 
 ## Installation
 
-Julia versions 1.0–1.3 work. No packages need to be installed on the Julia side (other than Julia itself).
+Julia versions 1.0–1.4 work. No packages need to be installed on the Julia side (other than Julia itself).
 
 On the Emacs side:
 
@@ -149,7 +149,7 @@ NB: On a Mac, the Julia binary is typically `Contents/Resources/julia/bin/julia`
 
 ### Foundational
 
-- The Julia interaction side of the Snail server is single-threaded (using `@async`). This means the interaction locks up while the REPL is working or running code. Unfortunately, Julia as of version 1.2 does not have user-accessible low-level multithreading primitives necessary to implement a truly multi-threaded Snail server.
+- The Julia interaction side of the Snail server is single-threaded (using `@async`). This means the interaction locks up while the REPL is working or running code. Unfortunately, Julia as of version 1.2 does not have user-accessible low-level multithreading primitives necessary to implement a truly multi-threaded Snail server. The newer `Threads.@spawn` macro needs to be investigated.
 
 
 ### Structural
