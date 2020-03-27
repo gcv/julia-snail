@@ -111,7 +111,7 @@
 (defvar julia-snail--cache-proc-names-core
   (make-hash-table :test #'equal))
 
-(defvar julia-snail--cache-proc-names-basedir
+(defvar julia-snail--cache-proc-basedir
   (make-hash-table :test #'equal))
 
 (defvar julia-snail--repl-go-back-target)
@@ -125,7 +125,8 @@
     (julia-warn-revise . ("omitting file \\([^ ><()\t\n,'\";:]+\\) due to parsing error near line \\([0-9]+\\)" 1 2))
     )
   "Specifications for highlighting error locations.
-Uses function ‘compilation-shell-minor-mode’.")
+Uses function `compilation-shell-minor-mode'.")
+
 
 ;;; --- pre-declarations
 
@@ -265,7 +266,7 @@ MAXIMUM: max timeout."
     (remhash process-buf julia-snail--cache-proc-implicit-file-module)
     (remhash process-buf julia-snail--cache-proc-names-base)
     (remhash process-buf julia-snail--cache-proc-names-core)
-    (remhash process-buf julia-snail--cache-proc-names-basedir)))
+    (remhash process-buf julia-snail--cache-proc-basedir)))
 
 (defun julia-snail--repl-cleanup ()
   "REPL buffer cleanup."
@@ -321,7 +322,7 @@ MAXIMUM: max timeout."
                 (message "Snail connected to Julia. Happy hacking!")
                 ;; Query base directory, and cache
                 (puthash process-buf (julia-snail--capture-basedir repl-buf)
-                         julia-snail--cache-proc-names-basedir))
+                         julia-snail--cache-proc-basedir))
             ;; something went wrong
             (error "Failed to connect to Snail server")))))))
 
@@ -513,7 +514,7 @@ Julia include on the tmpfile, and then deleting the file."
                           (format "%s\n\n%s" error-message (s-join "\n" error-stack))))
            (callback-failure (julia-snail--request-tracker-callback-failure request-info)))
       (when (julia-snail--request-tracker-display-error-buffer-on-failure? request-info)
-        (julia-snail--setup-compilation-mode error-buffer (gethash process-buf julia-snail--cache-proc-names-basedir))
+        (julia-snail--setup-compilation-mode error-buffer (gethash process-buf julia-snail--cache-proc-basedir))
         (pop-to-buffer error-buffer))
       (when callback-failure
         (funcall callback-failure))))
