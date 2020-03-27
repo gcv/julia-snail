@@ -218,7 +218,7 @@ MAXIMUM: max timeout."
          (setf ,sleep-total (+ ,sleep-total ,incr))))))
 
 (defun julia-snail-test-file-path (file)
-  "Return a test file "
+  "Test suite accessory: Return path to FILE in the test area."
   ;; XXX: Obnoxious Elisp path construction.
   (let ((location (file-name-directory (locate-library "julia-snail"))))
     (concat
@@ -229,6 +229,12 @@ MAXIMUM: max timeout."
               (file-name-as-directory "tests")
               (file-name-as-directory "files")))
      file)))
+
+(defun julia-snail-test-send-buffer-file-sync ()
+  "Test suite accessory: Same as julia-snail-send-buffer-file, but synchronous."
+  (let ((reqid (julia-snail-send-buffer-file))) ; wait for async result to return
+    (julia-snail--wait-while
+     (gethash reqid julia-snail--requests) 50 1500)))
 
 
 ;;; --- connection management functions
@@ -764,7 +770,6 @@ This will occur in the context of the Main module, just as it would at the REPL.
          (filename (expand-file-name buffer-file-name))
          (module (or (julia-snail--module-for-file filename) '("Main")))
          (includes (julia-snail-parser-includes (current-buffer))))
-    (julia-snail--module-merge-includes filename includes)
     (julia-snail--send-to-server
       module
       (format "include(\"%s\");" filename)

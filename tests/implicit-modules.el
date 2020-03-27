@@ -30,7 +30,7 @@
           (let ((process-buf (get-buffer (julia-snail--process-buffer-name repl-buf))))
             ;; look at the result of evaluating "implicit-none.jl"
             (with-current-buffer source-buf-1
-              (julia-snail-send-buffer-file))
+              (julia-snail-test-send-buffer-file-sync))
             (let ((file-includes (gethash process-buf julia-snail--cache-proc-implicit-file-module)))
               (should (hash-table-empty-p file-includes)))))
       (kill-buffer source-buf-1))))
@@ -39,38 +39,38 @@
   (let ((repl-buf (format "*julia* %s" (symbol-name (gensym))))
         (source-buf-1 (find-file (julia-snail-test-file-path "implicit-multiple.jl")))
         (source-buf-2 (find-file (expand-file-name "b2.jl"))))
-   (unwind-protect
-       (js-with-julia-session repl-buf
-         (julia-snail)
-         (let ((process-buf (get-buffer (julia-snail--process-buffer-name repl-buf))))
-           ;; look at the result of evaluating "implicit-multiple.jl"
-           (with-current-buffer source-buf-1
-             (julia-snail-send-buffer-file))
-           (let ((file-includes (gethash process-buf julia-snail--cache-proc-implicit-file-module)))
-             (should
-              (equal
-               '("Alpha")
-               (gethash (expand-file-name "a1.jl") file-includes)))
-             (should
-              (equal
-               '("Alpha")
-               (gethash (expand-file-name "a2.jl") file-includes)))
-             (should
-              (equal
-               '("Bravo")
-               (gethash (expand-file-name "b1.jl") file-includes)))
-             (should
-              (equal
-               '("Bravo")
-               (gethash (expand-file-name "b2.jl") file-includes))))
-           ;; look at the result of diving into "b2.jl", which contains a nested
-           ;; include() in a module
-           (with-current-buffer source-buf-2
-             (julia-snail-send-buffer-file)
-             (let ((file-includes (gethash process-buf julia-snail--cache-proc-implicit-file-module)))
-               (should
-                (equal
-                 '("Bravo" "Charlie")
-                 (gethash (expand-file-name "b3.jl") file-includes)))))))
-     (kill-buffer source-buf-2)
-     (kill-buffer source-buf-1))))
+    (unwind-protect
+        (js-with-julia-session repl-buf
+          (julia-snail)
+          (let ((process-buf (get-buffer (julia-snail--process-buffer-name repl-buf))))
+            ;; look at the result of evaluating "implicit-multiple.jl"
+            (with-current-buffer source-buf-1
+              (julia-snail-test-send-buffer-file-sync))
+            (let ((file-includes (gethash process-buf julia-snail--cache-proc-implicit-file-module)))
+              (should
+               (equal
+                '("Alpha")
+                (gethash (expand-file-name "a1.jl") file-includes)))
+              (should
+               (equal
+                '("Alpha")
+                (gethash (expand-file-name "a2.jl") file-includes)))
+              (should
+               (equal
+                '("Bravo")
+                (gethash (expand-file-name "b1.jl") file-includes)))
+              (should
+               (equal
+                '("Bravo")
+                (gethash (expand-file-name "b2.jl") file-includes))))
+            ;; look at the result of diving into "b2.jl", which contains a nested
+            ;; include() in a module
+            (with-current-buffer source-buf-2
+              (julia-snail-test-send-buffer-file-sync))
+            (let ((file-includes (gethash process-buf julia-snail--cache-proc-implicit-file-module)))
+              (should
+               (equal
+                '("Bravo" "Charlie")
+                (gethash (expand-file-name "b3.jl") file-includes))))))
+      (kill-buffer source-buf-2)
+      (kill-buffer source-buf-1))))
