@@ -541,7 +541,8 @@ Julia include on the tmpfile, and then deleting the file."
 (defun julia-snail--module-at-point (&optional partial-module)
   "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
   (let ((partial-module (or partial-module
-                            (julia-snail-parser-query (current-buffer) (point) :module)))
+                            (julia-snail-parser-query (current-buffer) (point) :module)
+                            '("Main")))
         (module-for-file (julia-snail--module-for-file (buffer-file-name))))
     (if module-for-file
         (append module-for-file partial-module)
@@ -598,9 +599,12 @@ Julia include on the tmpfile, and then deleting the file."
                                        (match-string 2 identifier))
                                (list module identifier))))
          (identifier-ns (-first-item identifier-split))
-         (identifier-ns-real (if (listp identifier-ns)
-                                 (-last-item identifier-ns)
-                               identifier-ns))
+         (identifier-ns-real (cond ((listp identifier-ns)
+                                    (-last-item identifier-ns))
+                                   ((null identifier-ns)
+                                    "Main")
+                                   (t
+                                    identifier-ns)))
          (identifier-name (-second-item identifier-split))
          (res (julia-snail--send-to-server
                 module
