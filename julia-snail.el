@@ -813,36 +813,38 @@ This will occur in the context of the Main module, just as it would at the REPL.
          (filename (expand-file-name buffer-file-name))
          (module (or (julia-snail--module-for-file filename) '("Main")))
          (includes (julia-snail-parser-includes (current-buffer))))
-    (julia-snail--send-to-server
-      module
-      (format "include(\"%s\");" filename)
-      :callback-success (lambda (&optional _data)
-                          ;; julia-snail-repl-buffer must be rebound here from
-                          ;; jsrb-save, because the callback will run in a
-                          ;; different scope, in which the correct binding of
-                          ;; julia-snail-repl-buffer will have disappeared
-                          (let* ((julia-snail-repl-buffer jsrb-save)
-                                 (repl-buf (get-buffer julia-snail-repl-buffer)))
-                            (if (eq :error includes)
-                                (let ((error-buffer
-                                       (julia-snail--message-buffer
-                                        repl-buf
-                                        "error"
-                                        (concat filename
-                                                " loaded in Julia, but the Snail parser failed.\n\n"
-                                                "Please report this as a parser bug:\n\n"
-                                                "https://github.com/gcv/julia-snail/issues\n\n"
-                                                "Please try to narrow down the code which Snail fails to parse.\n"
-                                                "The easiest way of doing this is to bisect the failing source file by\n"
-                                                "commenting out successive halves.\n"
-                                                "The more information about code which Snail cannot parse you include in the bug\n"
-                                                "report, the easier it will be to fix."))))
-                                  (pop-to-buffer error-buffer))
-                              ;; successful load
-                              (julia-snail--module-merge-includes filename includes)
-                              (message "%s loaded: module %s"
-                                       filename
-                                       (julia-snail--construct-module-path module))))))))
+    (when (or (not (buffer-modified-p))
+              (y-or-n-p (format "'%s' is not saved, send to Julia anyway? " filename)))
+      (julia-snail--send-to-server
+        module
+        (format "include(\"%s\");" filename)
+        :callback-success (lambda (&optional _data)
+                            ;; julia-snail-repl-buffer must be rebound here from
+                            ;; jsrb-save, because the callback will run in a
+                            ;; different scope, in which the correct binding of
+                            ;; julia-snail-repl-buffer will have disappeared
+                            (let* ((julia-snail-repl-buffer jsrb-save)
+                                   (repl-buf (get-buffer julia-snail-repl-buffer)))
+                              (if (eq :error includes)
+                                  (let ((error-buffer
+                                         (julia-snail--message-buffer
+                                          repl-buf
+                                          "error"
+                                          (concat filename
+                                                  " loaded in Julia, but the Snail parser failed.\n\n"
+                                                  "Please report this as a parser bug:\n\n"
+                                                  "https://github.com/gcv/julia-snail/issues\n\n"
+                                                  "Please try to narrow down the code which Snail fails to parse.\n"
+                                                  "The easiest way of doing this is to bisect the failing source file by\n"
+                                                  "commenting out successive halves.\n"
+                                                  "The more information about code which Snail cannot parse you include in the bug\n"
+                                                  "report, the easier it will be to fix."))))
+                                    (pop-to-buffer error-buffer))
+                                ;; successful load
+                                (julia-snail--module-merge-includes filename includes)
+                                (message "%s loaded: module %s"
+                                         filename
+                                         (julia-snail--construct-module-path module)))))))))
 
 (defun julia-snail-send-region ()
   "Send the region (requires transient-mark) to the Julia REPL and evaluate it.
