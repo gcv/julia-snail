@@ -5,30 +5,8 @@
 
 (require 'ert)
 
+(require 'julia-snail)
 (require 'julia-snail-parser)
-
-
-;;; --- variables
-
-(defvar jsp-test-file-blocks.jl
-  ;; XXX: Obnoxious Elisp path construction for "files/blocks.jl".
-  (concat
-   (file-name-as-directory
-    (concat (if load-file-name
-                (file-name-directory load-file-name)
-              (file-name-as-directory default-directory))
-            "files"))
-   "blocks.jl"))
-
-(defvar jsp-test-file-bad-syntax.jl
-  ;; XXX: Obnoxious Elisp path construction for "files/bad-syntax.jl".
-  (concat
-   (file-name-as-directory
-    (concat (if load-file-name
-                (file-name-directory load-file-name)
-              (file-name-as-directory default-directory))
-            "files"))
-   "bad-syntax.jl"))
 
 
 ;;; --- tests
@@ -598,7 +576,7 @@ end
 (ert-deftest jsp-test-whole-file-blocks ()
   (let ((blocks
          (with-temp-buffer
-           (insert-file jsp-test-file-blocks.jl)
+           (insert-file (julia-snail-test-file-path "blocks.jl"))
            (-> (current-buffer)
                julia-snail-parser--parse
                julia-snail-parser--blocks)))
@@ -720,19 +698,19 @@ end
                       (:if 60 70 nil))))
     (should
      (equal
-      (list :module '("Main")
+      (list :module nil
             :block '(:function 50 80 "f1"))
       (julia-snail-parser--query-top-level-block block-path)))))
 
 (ert-deftest jsp-test-query-fail-to-parse ()
   (with-temp-buffer
-    (insert-file jsp-test-file-bad-syntax.jl)
+    (insert-file (julia-snail-test-file-path "bad-syntax.jl"))
     (should-error
      (julia-snail-parser-query (current-buffer) 1 :module))))
 
 (ert-deftest jsp-test-query-file-module ()
   (with-temp-buffer
-    (insert-file jsp-test-file-blocks.jl)
+    (insert-file (julia-snail-test-file-path "blocks.jl"))
     (should
      (equal
       '("Alpha")
@@ -746,8 +724,7 @@ end
       '("Alpha" "Bravo")
       (julia-snail-parser-query (current-buffer) 55 :module)))
     (should
-     (equal
-      '("Main")
+     (null
       (julia-snail-parser-query (current-buffer) 550 :module)))
     (should
      (equal
@@ -758,13 +735,12 @@ end
       '("Delta")
       (julia-snail-parser-query (current-buffer) 585 :module)))
     (should
-     (equal
-      '("Main")
+     (null
       (julia-snail-parser-query (current-buffer) 787 :module)))))
 
 (ert-deftest jsp-test-query-file-top-level-block ()
   (with-temp-buffer
-    (insert-file jsp-test-file-blocks.jl)
+    (insert-file (julia-snail-test-file-path "blocks.jl"))
     (should-error
      (julia-snail-parser-query (current-buffer) 1 :top-level-block))
     (should
@@ -883,3 +859,101 @@ end"
     '("f" "(x)" "= " "(+(g()...) for _ in 1:n)")
     (parsec-with-input "f(x) = (+(g()...) for _ in 1:n)"
       (julia-snail-parser--*file)))))
+
+(ert-deftest jsp-test-include-expressions ()
+  (should
+   (equal
+    '(((:module 1 "Alpha")
+       ((:include 14 "a1.jl")
+        ((:function 31 "f1")
+         ("()" "return value")
+         (:end 63))
+        (:include 67 "a2.jl"))
+       (:end 84)))
+    (parsec-with-input "module Alpha
+include(\"a1.jl\")
+function f1()
+   \"return value\"
+end
+include(\"a2.jl\")
+end"
+      (julia-snail-parser--*file))))
+  ;; embedded in a comment
+  (should
+   (equal
+    '(((:module 1 "Alpha")
+       ("# include(\"a1.jl\")"
+        ((:function 33 "f1")
+         ("()" "return value")
+         (:end 65))
+        (:include 69 "a2.jl"))
+       (:end 86)))
+    (parsec-with-input "module Alpha
+# include(\"a1.jl\")
+function f1()
+   \"return value\"
+end
+include(\"a2.jl\")
+end"
+      (julia-snail-parser--*file)))))
+
+(ert-deftest jsp-test-query-includes ()
+  ;; just one module with includes
+  (should
+   (equal
+    '((:module "Alpha"
+               ((:include "a1.jl")
+                (:include "a2.jl"))))
+    (julia-snail-parser--includes
+     (parsec-with-input "module Alpha
+include(\"a1.jl\")
+function f1()
+   \"return value\"
+end
+include(\"a2.jl\")
+end"
+       (julia-snail-parser--*file)))))
+  ;; separate modules in one file
+  (should
+   (equal
+    '((:module "Alpha"
+               ((:include "a1.jl")
+                (:include "a2.jl")))
+      (:module "Bravo"
+               ((:include "b1.jl")
+                (:include "b2.jl"))))
+    (julia-snail-parser--includes
+     (parsec-with-input "module Alpha
+include(\"a1.jl\")
+function f1()
+   \"return value\"
+end
+include(\"a2.jl\")
+end
+module Bravo
+include(\"b1.jl\")
+include(\"b2.jl\")
+end"
+       (julia-snail-parser--*file)))))
+  ;; nested modules
+  (should
+   (equal
+    '((:module "Alpha"
+               ((:include "a1.jl")
+                (:include "a2.jl")
+                (:module "Bravo"
+                         ((:include "b1.jl")
+                          (:include "b2.jl"))))))
+    (julia-snail-parser--includes
+     (parsec-with-input "module Alpha
+include(\"a1.jl\")
+function f1()
+   \"return value\"
+end
+include(\"a2.jl\")
+module Bravo
+include(\"b1.jl\")
+include(\"b2.jl\")
+end
+end"
+       (julia-snail-parser--*file))))))
