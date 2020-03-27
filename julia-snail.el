@@ -170,6 +170,20 @@ Uses function `compilation-shell-minor-mode'.")
         (julia-snail-message-buffer-mode))
       msg-buf)))
 
+;; set error buffer to compilation mode, so that one may directly jump to the relevant files
+;; adapted from julia-repl by Tamas Papp
+(defun julia-snail--setup-compilation-mode (message-buffer basedir)
+  "Setup compilation mode for the the current buffer in MESSAGE-BUFFER.
+BASEDIR is used for resolving relative paths."
+  (with-current-buffer message-buffer
+    (setq-local compilation-error-regexp-alist-alist
+                julia-snail--compilation-regexp-alist)
+    (setq-local compilation-error-regexp-alist
+                (mapcar #'car compilation-error-regexp-alist-alist))
+    (compilation-mode)
+    (when basedir
+      (setq-local compilation-search-path (list basedir)))))
+
 (defun julia-snail--flash-region (start end &optional timeout)
   "Highlight the region outlined by START and END for TIMEOUT period."
   ;; borrowed from SLIME
@@ -951,23 +965,6 @@ Useful if something seems to wrong."
       (remove-function (local 'eldoc-documentation-function) #'julia-snail-eldoc)
       (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
       (julia-snail--disable))))
-
-
-;; set error buffer to compilation mode, so that one may directly jump to the relevant files
-;; adapted from julia-repl by Tamas Papp
-(defun julia-snail--setup-compilation-mode (message-buffer basedir)
-  "Setup compilation mode for the the current buffer in MESSAGE-BUFFER.
-BASEDIR is used for resolving relative paths."
-  (with-current-buffer message-buffer
-    (setq-local compilation-error-regexp-alist-alist
-                julia-snail--compilation-regexp-alist)
-    (setq-local compilation-error-regexp-alist
-                (mapcar #'car compilation-error-regexp-alist-alist))
-    (compilation-mode)
-    (when basedir
-      (setq-local compilation-search-path (list basedir))
-      (message basedir)
-      )))
 
 ;;;###autoload
 (define-minor-mode julia-snail-repl-mode
