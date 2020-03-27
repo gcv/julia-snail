@@ -114,6 +114,12 @@
 (defvar julia-snail--repl-go-back-target)
 
 
+;;; --- pre-declarations
+
+(defvar julia-snail-mode)
+(defvar julia-snail-repl-mode)
+
+
 ;;; --- Snail protocol request tracking data structure
 
 (cl-defstruct julia-snail--request-tracker
