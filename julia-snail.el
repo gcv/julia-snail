@@ -114,7 +114,7 @@
 (defvar julia-snail--cache-proc-basedir
   (make-hash-table :test #'equal))
 
-(defvar julia-snail--repl-go-back-target)
+(defvar-local julia-snail--repl-go-back-target nil)
 
 (defvar julia-snail--compilation-regexp-alist
   '(;; matches "while loading /tmp/Foo.jl, in expression starting on line 2"
@@ -293,7 +293,6 @@ MAXIMUM: max timeout."
 (defun julia-snail--repl-enable ()
   "REPL buffer minor mode initializer."
   (add-hook 'kill-buffer-hook #'julia-snail--repl-cleanup nil t)
-  (make-local-variable 'julia-snail--repl-go-back-target)
   (let ((repl-buf (current-buffer))
         (process-buf (get-buffer-create (julia-snail--process-buffer-name (current-buffer)))))
     (when (and (featurep 'perspective) (bound-and-true-p persp-mode)) ; perspective-el support
@@ -787,14 +786,17 @@ To create multiple REPLs, give these variables distinct values (e.g.:
           (pop-to-buffer repl-buf))
       ;; run Julia in a vterm and load the Snail server file
       (let* ((vterm-shell (format "%s -L %s" julia-snail-executable julia-snail--server-file))
-             (vterm-buffer (generate-new-buffer julia-snail-repl-buffer)))
-        (with-current-buffer vterm-buffer
+             (vterm-buf (generate-new-buffer julia-snail-repl-buffer)))
+        (with-current-buffer vterm-buf
           (vterm-mode)
+          (when source-buf
+            ;; XXX: SETTING BUFFER-LOCAL VARIABLES MUST HAPPEN AFTER
+            ;; INITIALIZING vterm-mode!!! Something resets buffer-local
+            ;; variables in that initialization.
+            (setq julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
+            (setq julia-snail--repl-go-back-target source-buf))
           (julia-snail-repl-mode))
-        (pop-to-buffer vterm-buffer)
-        (when source-buf
-          (setq-local julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
-          (setq-local julia-snail--repl-go-back-target source-buf))))))
+        (pop-to-buffer vterm-buf)))))
 
 (defun julia-snail-send-line ()
   "Copy the line at the current point into the REPL and run it.
