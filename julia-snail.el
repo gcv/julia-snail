@@ -788,7 +788,11 @@ To create multiple REPLs, give these variables distinct values (e.g.:
       (let* ((vterm-shell (format "%s -L %s" julia-snail-executable julia-snail--server-file))
              (vterm-buf (generate-new-buffer julia-snail-repl-buffer)))
         (with-current-buffer vterm-buf
-          (vterm-mode)
+          ;; XXX: Set the error color to red to work around breakage relating to
+          ;; some color themes and terminal combinations, see
+          ;; https://github.com/gcv/julia-snail/issues/11
+          (let ((process-environment (append '("JULIA_ERROR_COLOR=red") process-environment)))
+            (vterm-mode))
           (when source-buf
             ;; XXX: SETTING BUFFER-LOCAL VARIABLES MUST HAPPEN AFTER
             ;; INITIALIZING vterm-mode!!! Something resets buffer-local
