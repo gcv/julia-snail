@@ -233,8 +233,8 @@ MODULE can be:
 
 (defmacro julia-snail--wait-while (condition increment maximum)
   "Synchronously wait for CONDITION to evaluate to true.
-INCREMENT: polling frequency.
-MAXIMUM: max timeout."
+INCREMENT: polling frequency, ms.
+MAXIMUM: max timeout, ms."
   (let ((sleep-total (gensym))
         (incr (gensym))
         (max (gensym)))
