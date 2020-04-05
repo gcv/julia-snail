@@ -957,3 +957,30 @@ include(\"b2.jl\")
 end
 end"
        (julia-snail-parser--*file))))))
+
+(ert-deftest jsp-test-anonymous-functions ()
+  (should
+   (equal
+    '("f = "
+      ((:function 5 nil)
+       ("()" "42\n")
+       (:end 22)))
+    (parsec-with-input "f = function ()
+  42
+end"
+      (julia-snail-parser--*file))))
+  (should
+   (equal
+    '(((:struct 1 "sample")
+       ("a\n")
+       (:end 19))
+      ((:function 23 nil)
+       ("(x::sample)" "(b)" "x.a + b\n")
+       (:end 57)))
+    (parsec-with-input "struct sample
+  a
+end
+function (x::sample)(b)
+  x.a + b
+end"
+      (julia-snail-parser--*file)))))

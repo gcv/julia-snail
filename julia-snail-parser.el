@@ -136,7 +136,7 @@ If PLACEHOLDER is given, replace the result of the parser with it."
 ;; Just like julia-snail-parser--*brackets, but for parenthesized expressions.
 ;; This turns out to be necessary for expressions like this:
 ;; f(x) = (+(g()...) for _ in 1:n)
-;; We also want to detecting structure for expressions like this:
+;; We also want to detect structure for expressions like this:
 ;; (function(x); return 2x; end)(3)
 (defun julia-snail-parser--*parens ()
   "Parser internal: parenthesized expression matcher."
@@ -292,7 +292,10 @@ Numbered as per MATCH-STRING."
   "Parser internal: function start matcher."
   (-snoc
    (julia-snail-parser--parsec-query (julia-snail-parser--*keyword "function") :function)
-   (parsec-optional (julia-snail-parser--*identifier))))
+   (parsec-optional
+    (parsec-and
+     (parsec-optional (julia-snail-parser--*whitespace))
+     (parsec-optional (julia-snail-parser--*identifier))))))
 
 (defun julia-snail-parser--*start-macro ()
   "Parser internal: macro start matcher."
