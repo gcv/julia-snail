@@ -587,12 +587,12 @@ Julia include on the tmpfile, and then deleting the file."
 (defun julia-snail--module-at-point (&optional partial-module)
   "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
   (let ((partial-module (or partial-module
-                            (julia-snail-parser-query (current-buffer) (point) :module)
-                            '("Main")))
+                            (julia-snail-parser-query (current-buffer) (point) :module)))
         (module-for-file (julia-snail--module-for-file (buffer-file-name))))
-    (if module-for-file
-        (append module-for-file partial-module)
-      partial-module)))
+    (or (if module-for-file
+            (append module-for-file partial-module)
+          partial-module)
+        '("Main"))))
 
 
 ;;; --- xref implementation
