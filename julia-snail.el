@@ -933,7 +933,7 @@ Useful if something seems to wrong."
                                       (current-buffer))))))
       (julia-snail--clear-proc-caches process-buf))))
 
-(defun julia-snail-refresh-module-cache ()
+(defun julia-snail-update-module-cache ()
   "Update cache of implicit modules referenced in current source file.
 This is not necessary when files are loaded into the Julia
 environment using `julia-snail-send-buffer-file', but it is
@@ -960,7 +960,7 @@ autocompletion aware of the available modules."
     (define-key map (kbd "C-c C-r") #'julia-snail-send-region)
     (define-key map (kbd "C-c C-l") #'julia-snail-send-line)
     (define-key map (kbd "C-c C-k") #'julia-snail-send-buffer-file)
-    (define-key map (kbd "C-c C-R") #'julia-snail-refresh-module-cache)
+    (define-key map (kbd "C-c C-m u") #'julia-snail-update-module-cache)
     map))
 
 (defvar julia-snail-repl-mode-map

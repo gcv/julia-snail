@@ -105,7 +105,7 @@ The `julia-snail-mode` minor mode provides a key binding map (`julia-snail-mode-
 | C-c C-r | julia-snail-send-region         | evaluate active region in the current module             |
 | C-c C-l | julia-snail-send-line           | copy current line directly to REPL                       |
 | C-c C-k | julia-snail-send-buffer-file    | `include()` the current buffer’s file                    |
-| C-c C-R | julia-snail-refresh-module-cache| update module-nested `include` cache (mainly for Revise) |
+| C-c C-R | julia-snail-update-module-cache | update module-nested `include` cache (mainly for Revise) |
 
 Several commands include the note “in the current module”. This means the Snail parser will determine the enclosing `module...end` statements, and run the relevant code in that module. If the module has already been loaded, this means its global variables and functions will be available.
 
@@ -161,7 +161,7 @@ end
 
 Everything in the files `alpha-1.jl` and `alpha-2.jl` is inside the `Alpha` module, but neither of these files will mention that module explicitly. Snail supports this by using its parser to track `include(...)` calls and their module context. This feature works with nested modules.
 
-Using this feature requires some care. The root file which contains the module declaration (`alpha.jl` in this example) must be loaded using `julia-snail-send-buffer-file` first (or, for [Revise](https://github.com/timholy/Revise.jl) users, `julia-snail-refresh-module-cache`). If this does not happen, the parser will not have the opportunity to learn where `alpha-1.jl` and `alpha-2.jl` fit in the module hierarchy, and will assume their parent module is `Main`. The same applies to any deeper nesting of files (i.e., if `alpha-1.jl` then does `include("alpha-1.1.jl")`, then `julia-snail-send-buffer-file` or `julia-snail-refresh-module-cache` must be executed from `alpha-1.jl`).
+Using this feature requires some care. The root file which contains the module declaration (`alpha.jl` in this example) must be loaded using `julia-snail-send-buffer-file` first (or, for [Revise](https://github.com/timholy/Revise.jl) users, `julia-snail-update-module-cache`). If this does not happen, the parser will not have the opportunity to learn where `alpha-1.jl` and `alpha-2.jl` fit in the module hierarchy, and will assume their parent module is `Main`. The same applies to any deeper nesting of files (i.e., if `alpha-1.jl` then does `include("alpha-1.1.jl")`, then `julia-snail-send-buffer-file` or `julia-snail-update-module-cache` must be executed from `alpha-1.jl`).
 
 Furthermore, if `alpha-1.jl` is refactored to sit outside the `Alpha` module, or moved in the directory structure, Snail must be informed. To do this, call the `julia-snail-clear-caches` command.
 
