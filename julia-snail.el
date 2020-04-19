@@ -944,8 +944,7 @@ autocompletion aware of the available modules."
          (module (or (julia-snail--module-for-file filename) '("Main")))
          (includes (julia-snail-parser-includes (current-buffer))))
     (julia-snail--module-merge-includes filename includes)
-    (message "Caches updated: module %s"
-             filename
+    (message "Caches updated: parent module %s"
              (julia-snail--construct-module-path module))))
 
 
