@@ -755,6 +755,33 @@ Julia include on the tmpfile, and then deleting the file."
        (format "Main.JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=true, recursive=true)" ns)
        :async nil))))
 
+;; (defun julia-snail-completion-at-point ()
+;;   "Implementation for Emacs `completion-at-point' system."
+;;   (let ((identifier (julia-snail--identifier-at-point))
+;;         (bounds (julia-snail--identifier-at-point-bounds)))
+;;     (when bounds
+;;       (list (car bounds)
+;;             (cdr bounds)
+;;             (completion-table-dynamic
+;;              (lambda (_) (julia-snail--completions identifier)))
+;;             :exclusive 'yes))))
+
+;;TODO: need to handle the case where the module at point is not defined
+;; not sure if it is better to do so from the elisp side or from the server
+;; side
+(defun julia-snail--repl-completions (identifier)
+  (let* ((module (julia-snail--module-at-point)))
+    (let ((comp (split-string
+                 (julia-snail--send-to-server
+                   :Main
+                   (format "JuliaSnail.replcompletion(\"%s\", %d, %s)"
+                           identifier
+                           (length identifier)
+                           (car module))
+                   :async nil)
+                 ",")))
+      comp)))
+
 (defun julia-snail-completion-at-point ()
   "Implementation for Emacs `completion-at-point' system."
   (let ((identifier (julia-snail--identifier-at-point))
@@ -763,8 +790,10 @@ Julia include on the tmpfile, and then deleting the file."
       (list (car bounds)
             (cdr bounds)
             (completion-table-dynamic
-             (lambda (_) (julia-snail--completions identifier)))
+             (lambda (_) (julia-snail--repl-completions identifier)))
             :exclusive 'yes))))
+
+
 
 
 ;;; --- eldoc implementation

@@ -20,6 +20,7 @@ module JuliaSnail
 import Markdown
 import Printf
 import Sockets
+import REPL.REPLCompletions
 
 
 export start, stop
@@ -293,6 +294,13 @@ function apropos(ns, pattern)
       append!(res, lsdefinitions(name_ns, name_n))
    end
    return res
+end
+
+### -- code completion using REPL completion
+
+function replcompletion(identifier, pos, mod)
+    cs,_,_ = REPLCompletions.completions(identifier,pos,mod)
+    return join(REPLCompletions.completion_text.(cs),",")
 end
 
 
