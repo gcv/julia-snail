@@ -933,6 +933,21 @@ Useful if something seems to wrong."
                                       (current-buffer))))))
       (julia-snail--clear-proc-caches process-buf))))
 
+(defun julia-snail-refresh-module-cache ()
+  "Update cache of implicit modules referenced in current source file.
+This is not necessary when files are loaded into the Julia
+environment using `julia-snail-send-buffer-file', but it is
+useful for a workflow using Revise.jl. It makes xref and
+autocompletion aware of the available modules."
+  (interactive)
+  (let* ((filename (expand-file-name buffer-file-name))
+         (module (or (julia-snail--module-for-file filename) '("Main")))
+         (includes (julia-snail-parser-includes (current-buffer))))
+    (julia-snail--module-merge-includes filename includes)
+    (message "Caches updated: module %s"
+             filename
+             (julia-snail--construct-module-path module))))
+
 
 ;;; --- keymaps
 
@@ -946,6 +961,7 @@ Useful if something seems to wrong."
     (define-key map (kbd "C-c C-r") #'julia-snail-send-region)
     (define-key map (kbd "C-c C-l") #'julia-snail-send-line)
     (define-key map (kbd "C-c C-k") #'julia-snail-send-buffer-file)
+    (define-key map (kbd "C-c C-R") #'julia-snail-refresh-module-cache)
     map))
 
 (defvar julia-snail-repl-mode-map
