@@ -766,22 +766,24 @@ Julia include on the tmpfile, and then deleting the file."
 ;;              (lambda (_) (julia-snail--completions identifier)))
 ;;             :exclusive 'yes))))
 
-;;TODO: need to handle the case where the module at point is not defined
-;; not sure if it is better to do so from the elisp side or from the server
-;; side
 (defun julia-snail--repl-completions (identifier)
   (let* ((module (julia-snail--module-at-point)))
-    (let ((comp (split-string
-                 (julia-snail--send-to-server
-                   :Main
-                   (format "JuliaSnail.replcompletion(\"%s\", %d, %s)"
-                           identifier
-                           (length identifier)
-                           (car module))
-                   :async nil)
-                 ",")))
-      comp)))
+    (split-string
+     (julia-snail--send-to-server
+       :Main
+       (format "try; JuliaSnail.replcompletion(\"%s\", %d, %s); catch; JuliaSnail.replcompletion(\"%s\", %d, Main); end"
+               identifier
+               (length identifier)
+               (s-join "." module)
+               identifier
+               (length identifier))
+       :async nil)
+     ",")))
 
+;;TODO: how to add support for the case Module.f -> Module.func?
+;; seems that this is currently not working because REPLCompletions will return only the completion
+;; strings after the dot (e.g. "func"), and completion-at-point seems to filter this out because it expects
+;; to find a match for "Module.f" (if I understand correctly)
 (defun julia-snail-completion-at-point ()
   "Implementation for Emacs `completion-at-point' system."
   (let ((identifier (julia-snail--identifier-at-point))
