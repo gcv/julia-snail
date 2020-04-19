@@ -852,12 +852,13 @@ This will occur in the context of the Main module, just as it would at the REPL.
 
 (defun julia-snail-send-region ()
   "Send the region (requires transient-mark) to the Julia REPL and evaluate it.
-This occurs in the context of the current module."
+Normally, this occurs in the context of the current module.
+If a prefix arg is used, this instead occurs in the context of Main."
   (interactive)
   (if (null (use-region-p))
       (user-error "No region selected")
     (let ((text (buffer-substring-no-properties (region-beginning) (region-end)))
-          (module (julia-snail--module-at-point)))
+          (module (if current-prefix-arg :Main (julia-snail--module-at-point))))
       (julia-snail--send-to-server-via-tmp-file
         module
         text
