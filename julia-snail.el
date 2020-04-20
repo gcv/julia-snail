@@ -755,17 +755,6 @@ Julia include on the tmpfile, and then deleting the file."
        (format "Main.JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=true, recursive=true)" ns)
        :async nil))))
 
-;; (defun julia-snail-completion-at-point ()
-;;   "Implementation for Emacs `completion-at-point' system."
-;;   (let ((identifier (julia-snail--identifier-at-point))
-;;         (bounds (julia-snail--identifier-at-point-bounds)))
-;;     (when bounds
-;;       (list (car bounds)
-;;             (cdr bounds)
-;;             (completion-table-dynamic
-;;              (lambda (_) (julia-snail--completions identifier)))
-;;             :exclusive 'yes))))
-
 (defun julia-snail--repl-completions (identifier)
   (let* ((module (julia-snail--module-at-point)))
     (split-string
@@ -780,23 +769,20 @@ Julia include on the tmpfile, and then deleting the file."
        :async nil)
      ",")))
 
-;;TODO: how to add support for the case Module.f -> Module.func?
-;; seems that this is currently not working because REPLCompletions will return only the completion
-;; strings after the dot (e.g. "func"), and completion-at-point seems to filter this out because it expects
-;; to find a match for "Module.f" (if I understand correctly)
 (defun julia-snail-completion-at-point ()
   "Implementation for Emacs `completion-at-point' system."
   (let ((identifier (julia-snail--identifier-at-point))
         (bounds (julia-snail--identifier-at-point-bounds)))
     (when bounds
-      (list (car bounds)
+      ;; we want the string starting point passed to `completion-at-point' to be after
+      ;; the last "." in `identifier' so that completions of the form Module.f ->
+      ;; Module.func work (since `julia-snail--repl-completions' will return only "func" in
+      ;; this case)
+      (list (- (cdr bounds) (length (car (last (s-split "\\." identifier)))))
             (cdr bounds)
             (completion-table-dynamic
              (lambda (_) (julia-snail--repl-completions identifier)))
             :exclusive 'yes))))
-
-
-
 
 ;;; --- eldoc implementation
 
