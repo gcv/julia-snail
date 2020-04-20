@@ -210,6 +210,7 @@ Numbered as per MATCH-STRING."
        "function" "macro"
        "abstract type" "primitive type"
        "struct" "mutable struct"
+       "include"
        "if" "while" "for" "begin" "quote" "try" "let"))
 
 (defconst julia-snail-parser--rx-other-marker-or-keyword

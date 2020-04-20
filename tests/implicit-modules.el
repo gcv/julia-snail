@@ -35,6 +35,17 @@
               (should (hash-table-empty-p file-includes)))))
       (kill-buffer source-buf-1))))
 
+(ert-deftest js-test-export-parse ()
+  (let ((source-buf (find-file (julia-snail-test-file-path "implicit-export.jl"))))
+    (unwind-protect
+        (with-current-buffer source-buf
+          (should
+           (equal
+            '((:module "MyModule" ((:include "file1.jl")
+                                   (:include "file2.jl"))))
+            (julia-snail-parser-includes (get-buffer (current-buffer))))))
+      (kill-buffer source-buf))))
+
 (ert-deftest js-test-multiple ()
   (let ((repl-buf (format "*julia* %s" (symbol-name (gensym))))
         (source-buf-1 (find-file (julia-snail-test-file-path "implicit-multiple.jl")))
