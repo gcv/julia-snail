@@ -85,15 +85,18 @@
   :type 'integer)
 
 
+;;; --- constants
+
+(defconst julia-snail--server-file
+  (concat (if load-file-name
+              (file-name-directory load-file-name)
+            (file-name-as-directory default-directory))
+          "JuliaSnail.jl"))
+
+
 ;;; --- variables
 
 (defvar-local julia-snail--process nil)
-
-(defvar julia-snail--server-file
-  (concat (if load-file-name
-                (file-name-directory load-file-name)
-              (file-name-as-directory default-directory))
-          "JuliaSnail.jl"))
 
 ;;; TODO: Maybe this should hash by proc+reqid rather than just reqid?
 (defvar julia-snail--requests
