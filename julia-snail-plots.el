@@ -14,6 +14,8 @@
 
 
 (defun julia-snail--init-plotting (buf)
+  (progn
+    (server-start)
       (julia-snail--send-to-server
         :Main
         "pushdisplay(JuliaSnail.EmacsDisplay());"
@@ -23,7 +25,7 @@
                             (progn
                               (message "Plotting inside Emacs turned on")
                               (setq julia-snail--plotting t)
-                              )) ))
+                              )) )))
 
 (defun julia-snail--cancel-plotting (buf)
   (julia-snail--send-to-server
