@@ -300,7 +300,7 @@ end
 
 function replcompletion(identifier, pos, mod)
     cs,_,_ = REPLCompletions.completions(identifier,pos,mod)
-    return join(REPLCompletions.completion_text.(cs),",")
+    return REPLCompletions.completion_text.(cs)
 end
 
 

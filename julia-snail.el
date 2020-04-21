@@ -757,7 +757,6 @@ Julia include on the tmpfile, and then deleting the file."
 
 (defun julia-snail--repl-completions (identifier)
   (let* ((module (julia-snail--module-at-point)))
-    (split-string
      (julia-snail--send-to-server
        :Main
        (format "try; JuliaSnail.replcompletion(\"%s\", %d, %s); catch; JuliaSnail.replcompletion(\"%s\", %d, Main); end"
@@ -766,8 +765,7 @@ Julia include on the tmpfile, and then deleting the file."
                (s-join "." module)
                identifier
                (length identifier))
-       :async nil)
-     ",")))
+       :async nil)))
 
 (defun julia-snail-completion-at-point ()
   "Implementation for Emacs `completion-at-point' system."
