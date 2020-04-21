@@ -189,8 +189,13 @@ function lsnames(ns; all=false, imported=false, include_modules=false, recursive
       n -> @ignoreerr(n == :missing || Core.eval(ns, n) ≠ ns, false),
       raw_clean)
    # separate out output by module and non-module
+   # NB: The raw_clean to all filter used to say "∉ (DataType, UnionAll)". This
+   # had to do with removing various names in namespaces which contained "#" and
+   # "##" symbols. They are now filtered higher up by string. The DataType
+   # filter killed autocompletion for structs. Leaving the UnionAll filter alone
+   # for now, since it does not seem to do any harm.
    all = filter(
-      n -> @ignoreerr(typeof(Core.eval(ns, n)) ∉ (DataType, UnionAll), false),
+      n -> @ignoreerr(typeof(Core.eval(ns, n)) ≠ UnionAll, false),
       raw_clean)
    modules = filter(
       n -> @ignoreerr(typeof(Core.eval(ns, n)) == Module, false),
