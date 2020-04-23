@@ -157,7 +157,7 @@ Uses function `compilation-shell-minor-mode'.")
       (error "No REPL buffer found"))
     (format "%s process" (buffer-name (get-buffer real-buf)))))
 
-(defun julia-snail--message-buffer (repl-buf name message)
+(cl-defun julia-snail--message-buffer (repl-buf name message &key (markdown nil))
   "Return a buffer named NAME linked to REPL-BUF containing MESSAGE."
   (let ((real-buf (get-buffer repl-buf)))
     (unless real-buf
@@ -169,8 +169,17 @@ Uses function `compilation-shell-minor-mode'.")
         (erase-buffer)
         (insert message)
         (goto-char (point-min))
+        (when (and markdown (fboundp 'markdown-mode))
+          (defvar markdown-hide-markup)
+          (declare-function markdown-mode "markdown-mode.el")
+          (declare-function markdown-view-mode "markdown-mode.el")
+          (let ((markdown-hide-markup t))
+            ;; older versions of markdown-mode do not have markdown-view-mode
+            (if (fboundp 'markdown-view-mode)
+                (markdown-view-mode)
+              (markdown-mode))))
         (read-only-mode 1)
-        (julia-snail-message-buffer-mode))
+        (julia-snail-message-buffer-mode 1))
       msg-buf)))
 
 ;; set error buffer to compilation mode, so that one may directly jump to the relevant files
@@ -918,7 +927,8 @@ Currently only works on blocks terminated with `end'."
                     (format "documentation: %s" identifier)
                     (if (eq :nothing doc)
                         "Documentation not found!\nDouble-check your package activation and imports."
-                      doc)))))
+                      doc)
+                    :markdown t))))
 
 (defun julia-snail-repl-go-back ()
   "Return to a source buffer from a Julia REPL buffer."
