@@ -734,7 +734,7 @@ Julia include on the tmpfile, and then deleting the file."
           (lambda (c) (s-prepend identifier c))
           (let ((res (julia-snail--send-to-server
                        module
-                       (format "Main.JuliaSnail.lsnames(%s, all=false, imported=false, include_modules=false, recursive=false)" dotless)
+                       (format "Main.JuliaSnail.lsnames(%s, all=true, imported=false, include_modules=false, recursive=false)" dotless)
                        :display-error-buffer-on-failure? nil
                        :async nil)))
             (if (eq :nothing res)
