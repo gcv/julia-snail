@@ -21,6 +21,13 @@ function Base.display(d::EmacsDisplayType,::MIME{Symbol("image/png")}, x)
     return
 end
 
+function Base.display(d::EmacsDisplayType,x :: Array{Base.StackTraces.StackFrame,1})
+    str = repr.(x)
+    el = elexpr((Symbol("julia-snail--show-trace"),str))
+    pipeline(`emacsclient --eval $el`,stdout=devnull) |> run;
+end
+
+
 
 function Base.display(d::EmacsDisplayType,x)
     if showable("image/png", x)

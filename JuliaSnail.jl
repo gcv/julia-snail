@@ -380,54 +380,5 @@ end
 
 
 ### Some functions for displaying plots inside of Emacs
-
-struct EmacsDisplayType <: Base.AbstractDisplay
-end
-
-function EmacsDisplay()
-    eval(init_graphics)
-    EmacsDisplayType()
-end
-
-function displaysvg(d::EmacsDisplayType,svg::String)
-    el = elexpr((Symbol("julia-snail--draw-plot"),svg))
-    cmd = `emacsclient --eval $el`
-    run(cmd)
-end
-
-init_graphics =
-    quote
-        import Plots.Plot, Base.display
-        function Base.display(d::EmacsDisplayType,plt::Plot)
-            io = IOBuffer();
-                show(io, MIME("image/svg+xml"), plt)
-            #show(io, MIME("image/png"), plt)
-            sv = String(take!(io))
-            close(io)
-            displaysvg(d,sv)
-        end
-    end
-
-
-
-# function Base.display(d::EmacsDisplayType, ::MIME{Symbol("image/png")}, x)
-#     img = stringmime(MIME("image/png"), x)
-
-# #    imgdata = "data:image/png;base64, $(img)"
-
-#     displayimg(d, x)
-# end
-# Base.displayable(d::EmacsDisplayType, ::MIME{Symbol("image/png")}) = true
-
-# function Base.display(d::EmacsDisplayType, ::MIME{Symbol("image/svg")}, x)
-#     img = stringmime(MIME("image/png"), x)
-
-#     imgdata = "data:image/png;base64, $(img)"
-
-#     displayimg(d, imgdata)
-# end
-
-# Base.displayable(d::EmacsDisplayType, ::MIME{Symbol("image/svg")}) = true
-
-#include("EmacsDisplay.jl")
+include("EmacsDisplay.jl")
 end

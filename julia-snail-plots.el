@@ -1,3 +1,9 @@
+(define-minor-mode julia-snail-plot-mode
+  "A minor mode for displaying a Julia plot inside an Emacs buffer."
+  :init-value nil
+  :lighter "Julia Plot"
+  :keymap '(((kbd "q") . julia-snail--quit-plot-window)))
+
 (defcustom julia-snail-single-plot t
   "If true, plots are showed one-by-one. If false, plots are inserted successively in the plotting buffer"
   :tag "Julia plotting"
@@ -5,10 +11,11 @@
   :type 'boolean)
 
 (defvar julia-snail--plotting nil)
-(defun julia-snail--draw-plot (im)
+
+(defun julia-snail--draw-plot (im encoded)
   (if julia-snail-single-plot
-      (julia-snail--show-svg im)
-    (julia-snail--insert-svg im)
+      (julia-snail--show-im im encoded)
+    (julia-snail--insert-im im encoded)
     )
   )
 
@@ -50,22 +57,52 @@
     ))
 
 
-(defun julia-snail--show-svg (im)
+(defun julia-snail--show-trace (trace)
+  (let* ((repl-buf (get-buffer julia-snail-repl-buffer))
+         (msg (format "%s\n\n%s" "Stacktrace:" (s-join "\n" trace)))
+         (error-buffer (julia-snail--message-buffer repl-buf "Julia error" msg))
+         (process-buf (get-buffer (julia-snail--process-buffer-name repl-buf)))
+         )
+    (julia-snail--setup-compilation-mode error-buffer (gethash process-buf julia-snail--cache-proc-basedir))
+    (pop-to-buffer error-buffer)
+  ))
+
+
+
+(defun julia-snail--show-im (im decode)
   (interactive)
   (let ((buf (get-buffer-create "*julia plot*")))
     (with-current-buffer buf
-    (fundamental-mode)
-    (setq buffer-read-only nil) 
+      (fundamental-mode)
+      (message "plotting")
+
+      (setq buffer-read-only nil)
+
     (erase-buffer)
     (insert im)
+    (if decode (base64-decode-region (point-min) (point-max)))
     (pop-to-buffer buf)
     (image-mode)
-    ))
-  )
+    (julia-snail-plot-mode)
+    )))
 
-(defun julia-snail--insert-svg (im)
+(defun julia-snail--quit-plot-window ()
   (interactive)
-  (let ((buf (get-buffer-create "*julia plots*")) (img (create-image im 'svg t)))
+  (progn
+    (with-current-buffer julia-snail-repl-buffer
+      (goto-char (point-max))
+      )
+    (pop-to-buffer julia-snail-repl-buffer)
+    ))
+
+
+
+(defun julia-snail--insert-im (im decode)
+  (interactive)
+  (progn
+    (if decode (setq im (base64-decode-string im)))
+
+    (let ((buf (get-buffer-create "*julia plots*")) (img (create-image im nil t)))
     (with-current-buffer buf
       (goto-char (point-max))
       (unless  (= (point-max) (point-min))
@@ -77,36 +114,9 @@
       (insert-char ?\n 2)
       (pop-to-buffer buf)
       )
-    )
+    ))
   )
 
 
 (provide 'julia-snail-plots)
-
-(defun my-overline ()
-  (let* ((beg (line-beginning-position))
-         (end (line-end-position))
-         (overline (make-overlay beg end))
-         (str (propertize
-               ;;  a space with one pixel height
-               (concat (propertize "\s" 'display '(space :height (1)))
-                       ;; visible content alone should determine the line height
-                       (propertize "\n" 'line-height t))
-               'face '(:background "gray"))))
-    ;; delete overlay if containing text is removed from buffer
-    (overlay-put overline 'evaporate t)
-    ;; place the single pixel newline before to look like an overline
-    (overlay-put overline 'before-string str)
-    overline))
-
-(defun insert-png (im)
-  (interactive)
-  (let ((buf (get-buffer-create "*julia plots*")) (img (create-image im 'png t)))
-    (with-current-buffer buf
-      (goto-char (point-max))
-      (insert-image img)
-      (pop-to-buffer buf)
-      )
-    )
-  )
 
