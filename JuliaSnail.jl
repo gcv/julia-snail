@@ -189,21 +189,26 @@ function lsnames(ns; all=false, imported=false, include_modules=false, recursive
       n -> @ignoreerr(n == :missing || Core.eval(ns, n) ≠ ns, false),
       raw_clean)
    # separate out output by module and non-module
-   all = filter(
-      n -> @ignoreerr(typeof(Core.eval(ns, n)) ∉ (DataType, UnionAll), false),
+   # NB: The raw_clean to all_names filter used to say "∉ (DataType, UnionAll)".
+   # This had to do with removing various names in namespaces which contained
+   # "#" and "##" symbols. They are now filtered higher up by string. The
+   # DataType filter killed autocompletion for structs. Leaving the UnionAll
+   # filter alone for now, since it does not seem to do any harm.
+   all_names = filter(
+      n -> @ignoreerr(typeof(Core.eval(ns, n)) ≠ UnionAll, false),
       raw_clean)
-   modules = filter(
+   module_names = filter(
       n -> @ignoreerr(typeof(Core.eval(ns, n)) == Module, false),
-      all)
+      all_names)
    res = map(
       v -> prepend_ns ? string(ns, ".", v) : string(v),
-      setdiff(all, modules))
+      setdiff(all_names, module_names))
    # deal with modules
-   include_modules && append!(res, map(string, modules))
+   include_modules && append!(res, map(string, module_names))
    if recursive
-      for m in modules
+      for m in module_names
          new_ns = getfield(ns, m)
-         append!(res, lsnames(new_ns, all=false, imported=false, include_modules=include_modules, recursive=true, prepend_ns=true, first_call=false))
+         append!(res, lsnames(new_ns, all=all, imported=false, include_modules=include_modules, recursive=true, prepend_ns=true, first_call=false))
       end
    end
    if first_call

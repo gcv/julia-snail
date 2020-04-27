@@ -711,7 +711,7 @@ Julia include on the tmpfile, and then deleting the file."
       (puthash process-buf
                (julia-snail--send-to-server
                  :Main
-                 "Main.JuliaSnail.lsnames(Main.Base, all=true, imported=true, include_modules=true, recursive=true)"
+                 "Main.JuliaSnail.lsnames(Main.Base, all=false, imported=true, include_modules=true, recursive=true)"
                  :async nil)
                julia-snail--cache-proc-names-base))))
 
@@ -724,7 +724,7 @@ Julia include on the tmpfile, and then deleting the file."
       (puthash process-buf
                (julia-snail--send-to-server
                  :Main
-                 "Main.JuliaSnail.lsnames(Main.Core, all=true, imported=true, include_modules=true, recursive=false)"
+                 "Main.JuliaSnail.lsnames(Main.Core, all=false, imported=true, include_modules=true, recursive=false)"
                  :async nil)
                julia-snail--cache-proc-names-core))))
 
@@ -743,7 +743,7 @@ Julia include on the tmpfile, and then deleting the file."
           (lambda (c) (s-prepend identifier c))
           (let ((res (julia-snail--send-to-server
                        module
-                       (format "Main.JuliaSnail.lsnames(%s, all=false, imported=false, include_modules=false, recursive=false)" dotless)
+                       (format "Main.JuliaSnail.lsnames(%s, all=true, imported=false, include_modules=false, recursive=false)" dotless)
                        :display-error-buffer-on-failure? nil
                        :async nil)))
             (if (eq :nothing res)
