@@ -48,7 +48,7 @@
 
 
 
-(defun julia-snail-plot-in-emacs ()
+(defun julia-snail-toggle-plotting-in-emacs ()
 "Turn on/off plotting in emacs"
     (interactive)
     (if julia-snail--plotting
