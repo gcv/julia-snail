@@ -50,10 +50,12 @@
 
 (defun julia-snail-toggle-plotting-in-emacs ()
 "Turn on/off plotting in emacs"
-    (interactive)
+(interactive)
+(let ( (repl-buf  (get-buffer julia-snail-repl-buffer)))
     (if julia-snail--plotting
-        (julia-snail--cancel-plotting (current-buffer))
-        (julia-snail--init-plotting (current-buffer))
+        (julia-snail--cancel-plotting repl-buf)
+        (julia-snail--init-plotting repl-buf)
+        )
     ))
 
 
