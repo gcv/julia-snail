@@ -10,7 +10,13 @@
   :group 'julia-snail
   :type 'boolean)
 
-(defvar julia-snail--plotting nil)
+;; (defun julia-snail--has-emacs-display (buf)
+;;     (string-equal (julia-snail--send-to-server
+;;     :JuliaSnail
+;;     "repr(typeof(Base.Multimedia.displays[end]))"
+;;     :async nil)  "Main.JuliaSnail.EmacsDisplayType"))
+  
+
 
 (defun julia-snail--draw-plot (im encoded)
   (if julia-snail-single-plot
@@ -20,43 +26,18 @@
   )
 
 
-(defun julia-snail--init-plotting (buf)
-  (progn
-    (server-start)
-      (julia-snail--send-to-server
-        :Main
-        "pushdisplay(JuliaSnail.EmacsDisplay());"
-        :repl-buf buf
-        :async nil
-        :callback-success (lambda (&optional _data)
-                            (progn
-                              (message "Plotting inside Emacs turned on")
-                              (setq julia-snail--plotting t)
-                              )) )))
-
-(defun julia-snail--cancel-plotting (buf)
-  (julia-snail--send-to-server
-    :Main
-    "popdisplay();"
-    :repl-buf buf
-    :async nil
-    :callback-success (lambda (&optional _data)
-                        (progn
-                          (message "Plotting inside Emacs turned off")
-                          (setq julia-snail--plotting nil)
-                          )) ))
-
-
 
 (defun julia-snail-toggle-plotting-in-emacs ()
 "Turn on/off plotting in emacs"
 (interactive)
 (let ( (repl-buf  (get-buffer julia-snail-repl-buffer)))
-    (if julia-snail--plotting
-        (julia-snail--cancel-plotting repl-buf)
-        (julia-snail--init-plotting repl-buf)
-        )
-    ))
+  (server-start)
+  (message (julia-snail--send-to-server
+     :JuliaSnail
+     "toggle_display()"
+     :repl-buf repl-buf
+     :async nil
+    ))))
 
 
 (defun julia-snail--show-trace (trace)

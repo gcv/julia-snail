@@ -38,3 +38,14 @@ function Base.display(d::EmacsDisplayType,x)
         throw(MethodError(Base.display,(d,x)))
     end
 end
+
+function toggle_display()
+    dd = Base.Multimedia.displays[end]
+    if  isa(dd,Main.JuliaSnail.EmacsDisplayType)
+        popdisplay()
+        return "Emacs plotting turned off"
+    else
+        pushdisplay(JuliaSnail.EmacsDisplay());
+        return "Emacs plotting turned on"
+    end
+end
