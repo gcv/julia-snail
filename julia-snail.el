@@ -755,6 +755,17 @@ Julia include on the tmpfile, and then deleting the file."
        (format "Main.JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=true, recursive=true)" ns)
        :async nil))))
 
+(defun julia-snail-completion-at-point ()
+  "Implementation for Emacs `completion-at-point' system."
+  (let ((identifier (julia-snail--identifier-at-point))
+        (bounds (julia-snail--identifier-at-point-bounds)))
+    (when bounds
+      (list (car bounds)
+            (cdr bounds)
+            (completion-table-dynamic
+             (lambda (_) (julia-snail--completions identifier)))
+            :exclusive 'no))))
+
 (defun julia-snail--repl-completions (identifier)
   (let* ((module (julia-snail--module-at-point)))
      (julia-snail--send-to-server
@@ -767,8 +778,8 @@ Julia include on the tmpfile, and then deleting the file."
                (length identifier))
        :async nil)))
 
-(defun julia-snail-completion-at-point ()
-  "Implementation for Emacs `completion-at-point' system."
+(defun julia-snail-repl-completion-at-point ()
+  "Implementation for Emacs `completion-at-point' system using REPL.REPLCompletions as the provider."
   (let ((identifier (julia-snail--identifier-at-point))
         (bounds (julia-snail--identifier-at-point-bounds)))
     (when bounds
@@ -780,7 +791,7 @@ Julia include on the tmpfile, and then deleting the file."
             (cdr bounds)
             (completion-table-dynamic
              (lambda (_) (julia-snail--repl-completions identifier)))
-            :exclusive 'yes))))
+            :exclusive 'no))))
 
 ;;; --- eldoc implementation
 
@@ -1012,8 +1023,10 @@ autocompletion aware of the available modules."
           (julia-snail--enable)
           (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t)
           (add-function :before-until (local 'eldoc-documentation-function) #'julia-snail-eldoc)
+          (add-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point nil t)
           (add-hook 'completion-at-point-functions #'julia-snail-completion-at-point nil t))
       (remove-hook 'completion-at-point-functions #'julia-snail-completion-at-point t)
+      (remove-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point t)
       (remove-function (local 'eldoc-documentation-function) #'julia-snail-eldoc)
       (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
       (julia-snail--disable))))
