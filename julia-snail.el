@@ -231,6 +231,7 @@ MODULE can be:
        (modify-syntax-entry ?. "_")
        (modify-syntax-entry ?@ "_")
        (modify-syntax-entry ?= " ")
+       (modify-syntax-entry ?\\ "_")
        ,@body)))
 
 (defun julia-snail--identifier-at-point ()
@@ -770,27 +771,39 @@ Julia include on the tmpfile, and then deleting the file."
   (let* ((module (julia-snail--module-at-point)))
      (julia-snail--send-to-server
        :Main
-       (format "try; JuliaSnail.replcompletion(\"%s\", %d, %s); catch; JuliaSnail.replcompletion(\"%s\", %d, Main); end"
+       (format "try; JuliaSnail.replcompletion(\"%1$s\", %2$s); catch; JuliaSnail.replcompletion(\"%1$s\", Main); end"
                identifier
-               (length identifier)
                (s-join "." module)
-               identifier
-               (length identifier))
+               )
        :async nil)))
 
 (defun julia-snail-repl-completion-at-point ()
   "Implementation for Emacs `completion-at-point' system using REPL.REPLCompletions as the provider."
   (let ((identifier (julia-snail--identifier-at-point))
-        (bounds (julia-snail--identifier-at-point-bounds)))
+        (bounds (julia-snail--identifier-at-point-bounds))
+        (split-on "\\.")
+        (prefix "")
+        start pos)
     (when bounds
+      ;; Check for leading "\" (for latex symbol completions), we need to add an extra "\\" to
+      ;; make sure that the string which arrives to the completion provider on the server starts with "\\".
+      (when (s-equals-p (substring identifier 0 1) "\\")
+        (setq prefix "\\"))
+      ;; check if identifier at point is inside a string and attach the opening quotes so
+      ;; we get path completion.
+      (when (s-equals-p (buffer-substring-no-properties (- (car bounds) 1) (car bounds)) "\"")
+        (setq identifier (s-concat "\\\"" identifier))
+        (setq split-on "/")
+        )
       ;; we want the string starting point passed to `completion-at-point' to be after
       ;; the last "." in `identifier' so that completions of the form Module.f ->
       ;; Module.func work (since `julia-snail--repl-completions' will return only "func" in
       ;; this case)
-      (list (- (cdr bounds) (length (car (last (s-split "\\." identifier)))))
+      (setq start (- (cdr bounds) (length (car (last (s-split split-on identifier))))))
+      (list start
             (cdr bounds)
             (completion-table-dynamic
-             (lambda (_) (julia-snail--repl-completions identifier)))
+             (lambda (_) (julia-snail--repl-completions (concat prefix identifier))))
             :exclusive 'no))))
 
 ;;; --- eldoc implementation

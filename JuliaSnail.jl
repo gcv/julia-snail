@@ -298,8 +298,8 @@ end
 
 ### -- code completion using REPL completion
 
-function replcompletion(identifier, pos, mod)
-    cs,_,_ = REPLCompletions.completions(identifier,pos,mod)
+function replcompletion(identifier,mod)
+    cs,_,_ = REPLCompletions.completions(identifier, length(identifier), mod)
     return REPLCompletions.completion_text.(cs)
 end
 
