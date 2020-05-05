@@ -19,6 +19,7 @@ module JuliaSnail
 
 import Markdown
 import Printf
+import REPL
 import Sockets
 
 
@@ -346,14 +347,14 @@ function start(port=10011)
                resp = elexpr((Symbol("julia-snail--response-success"),
                               input.reqid,
                               result))
-               println(client, resp)
+               send_to_client(resp, client)
             catch err
                try
                   resp = elexpr((Symbol("julia-snail--response-failure"),
                                  input.reqid,
                                  sprint(showerror, err),
                                  string.(stacktrace(catch_backtrace()))))
-                  println(client, resp)
+                  send_to_client(resp, client)
                catch err2
                   if isa(err2, ArgumentError)
                      println("JuliaSnail: ", err2.msg)
@@ -380,6 +381,45 @@ function stop()
       client = pop!(client_sockets)
       close(client)
    end
+end
+
+"""
+Send data back to a client.
+
+For Emacs, this should be a string containing Elisp which Emacs will eval. It
+can be constructed from Julia data structures using elexpr.
+
+The client_socket parameter is optional. If specified, it will send data to that
+client. If omitted, then send_to_client will look at the client socket list. If
+that list only has one entry, it will send the data to that socket. If that list
+has multiple entries, send_to_client will prompt the user at the REPL to select
+which client should receive the message.
+"""
+function send_to_client(expr, client_socket=nothing)
+   if client_socket == nothing
+      if isempty(client_sockets)
+         throw("No client connections available")
+      elseif 1 == length(client_sockets)
+         client_socket = first(client_sockets)
+      else
+         # force the user to choose the client socket
+         options = map(
+            function(cs)
+            gsn = Sockets.getpeername(cs)
+            Printf.@sprintf("%s:%d", gsn[1], gsn[2])
+            end,
+            client_sockets
+         )
+         menu = REPL.TerminalMenus.RadioMenu(options)
+         choice = REPL.TerminalMenus.request("Send expression to which Snail client?", menu)
+         client_socket = client_sockets[choice]
+         # TODO: Ask if this should be the default socket from now on, and save
+         # in default_client_socket variable. Use default_client_variable
+         # automatically if it is set. Clean up default_client_variable on
+         # disconnect.
+      end
+   end
+   println(client_socket, expr)
 end
 
 
