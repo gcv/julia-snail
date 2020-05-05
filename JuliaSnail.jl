@@ -271,7 +271,7 @@ function apropos(ns, pattern)
    # lazy load Base
    global apropos_cached_base
    if apropos_cached_base == nothing
-      apropos_cached_base = lsnames(Main.Base, all=true, imported=true, include_modules=false, recursive=true, prepend_ns=true)
+      apropos_cached_base = lsnames(Main.Base, all=false, imported=true, include_modules=true, recursive=true, prepend_ns=true)
    end
    base_filtered = filter(
       n -> occursin(pattern_rx, n),
@@ -280,7 +280,7 @@ function apropos(ns, pattern)
    # lazy load Core
    global apropos_cached_core
    if apropos_cached_core == nothing
-      apropos_cached_core = lsnames(Main.Core, all=true, imported=true, include_modules=false, recursive=true, prepend_ns=true)
+      apropos_cached_core = lsnames(Main.Core, all=false, imported=true, include_modules=true, recursive=true, prepend_ns=true)
    end
    core_filtered = filter(
       n -> occursin(pattern_rx, n),
