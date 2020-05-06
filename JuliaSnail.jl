@@ -19,6 +19,7 @@ module JuliaSnail
 
 import Markdown
 import Printf
+import REPL
 import Sockets
 
 
@@ -189,21 +190,26 @@ function lsnames(ns; all=false, imported=false, include_modules=false, recursive
       n -> @ignoreerr(n == :missing || Core.eval(ns, n) ≠ ns, false),
       raw_clean)
    # separate out output by module and non-module
-   all = filter(
-      n -> @ignoreerr(typeof(Core.eval(ns, n)) ∉ (DataType, UnionAll), false),
+   # NB: The raw_clean to all_names filter used to say "∉ (DataType, UnionAll)".
+   # This had to do with removing various names in namespaces which contained
+   # "#" and "##" symbols. They are now filtered higher up by string. The
+   # DataType filter killed autocompletion for structs. Leaving the UnionAll
+   # filter alone for now, since it does not seem to do any harm.
+   all_names = filter(
+      n -> @ignoreerr(typeof(Core.eval(ns, n)) ≠ UnionAll, false),
       raw_clean)
-   modules = filter(
+   module_names = filter(
       n -> @ignoreerr(typeof(Core.eval(ns, n)) == Module, false),
-      all)
+      all_names)
    res = map(
       v -> prepend_ns ? string(ns, ".", v) : string(v),
-      setdiff(all, modules))
+      setdiff(all_names, module_names))
    # deal with modules
-   include_modules && append!(res, map(string, modules))
+   include_modules && append!(res, map(string, module_names))
    if recursive
-      for m in modules
+      for m in module_names
          new_ns = getfield(ns, m)
-         append!(res, lsnames(new_ns, all=false, imported=false, include_modules=include_modules, recursive=true, prepend_ns=true, first_call=false))
+         append!(res, lsnames(new_ns, all=all, imported=false, include_modules=include_modules, recursive=true, prepend_ns=true, first_call=false))
       end
    end
    if first_call
@@ -266,7 +272,7 @@ function apropos(ns, pattern)
    # lazy load Base
    global apropos_cached_base
    if apropos_cached_base == nothing
-      apropos_cached_base = lsnames(Main.Base, all=true, imported=true, include_modules=false, recursive=true, prepend_ns=true)
+      apropos_cached_base = lsnames(Main.Base, all=false, imported=true, include_modules=true, recursive=true, prepend_ns=true)
    end
    base_filtered = filter(
       n -> occursin(pattern_rx, n),
@@ -275,7 +281,7 @@ function apropos(ns, pattern)
    # lazy load Core
    global apropos_cached_core
    if apropos_cached_core == nothing
-      apropos_cached_core = lsnames(Main.Core, all=true, imported=true, include_modules=false, recursive=true, prepend_ns=true)
+      apropos_cached_core = lsnames(Main.Core, all=false, imported=true, include_modules=true, recursive=true, prepend_ns=true)
    end
    core_filtered = filter(
       n -> occursin(pattern_rx, n),
@@ -341,14 +347,14 @@ function start(port=10011)
                resp = elexpr((Symbol("julia-snail--response-success"),
                               input.reqid,
                               result))
-               println(client, resp)
+               send_to_client(resp, client)
             catch err
                try
                   resp = elexpr((Symbol("julia-snail--response-failure"),
                                  input.reqid,
                                  sprint(showerror, err),
                                  string.(stacktrace(catch_backtrace()))))
-                  println(client, resp)
+                  send_to_client(resp, client)
                catch err2
                   if isa(err2, ArgumentError)
                      println("JuliaSnail: ", err2.msg)
@@ -375,6 +381,45 @@ function stop()
       client = pop!(client_sockets)
       close(client)
    end
+end
+
+"""
+Send data back to a client.
+
+For Emacs, this should be a string containing Elisp which Emacs will eval. It
+can be constructed from Julia data structures using elexpr.
+
+The client_socket parameter is optional. If specified, it will send data to that
+client. If omitted, then send_to_client will look at the client socket list. If
+that list only has one entry, it will send the data to that socket. If that list
+has multiple entries, send_to_client will prompt the user at the REPL to select
+which client should receive the message.
+"""
+function send_to_client(expr, client_socket=nothing)
+   if client_socket == nothing
+      if isempty(client_sockets)
+         throw("No client connections available")
+      elseif 1 == length(client_sockets)
+         client_socket = first(client_sockets)
+      else
+         # force the user to choose the client socket
+         options = map(
+            function(cs)
+            gsn = Sockets.getpeername(cs)
+            Printf.@sprintf("%s:%d", gsn[1], gsn[2])
+            end,
+            client_sockets
+         )
+         menu = REPL.TerminalMenus.RadioMenu(options)
+         choice = REPL.TerminalMenus.request("Send expression to which Snail client?", menu)
+         client_socket = client_sockets[choice]
+         # TODO: Ask if this should be the default socket from now on, and save
+         # in default_client_socket variable. Use default_client_variable
+         # automatically if it is set. Clean up default_client_variable on
+         # disconnect.
+      end
+   end
+   println(client_socket, expr)
 end
 
 
