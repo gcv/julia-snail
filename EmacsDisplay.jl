@@ -1,31 +1,25 @@
+# Some code for displaying Julia plots inside an Emacs buffer
+# Design inspired by ElectronDisplay.jl
+
 import Base64.stringmime
 
 struct EmacsDisplayType <: Base.AbstractDisplay
 end
 
-function EmacsDisplay()
-    EmacsDisplayType()
-end
-
 function Base.display(d::EmacsDisplayType,::MIME{Symbol("image/svg+xml")}, x)
     imdata =repr("image/svg+xml",x)
     el = elexpr((Symbol("julia-snail--draw-plot"),imdata,Symbol("nil")))
-    pipeline(`emacsclient --eval $el`,stdout=devnull) |> run;
+    send_to_client(el)
     return
 end
 
 function Base.display(d::EmacsDisplayType,::MIME{Symbol("image/png")}, x)
     imdata =stringmime("image/png",x)
     el = elexpr((Symbol("julia-snail--draw-plot"),imdata,1))
-    pipeline(`emacsclient --eval $el`,stdout=devnull) |> run;
+    send_to_client(el)
     return
 end
 
-function Base.display(d::EmacsDisplayType,x :: Array{Base.StackTraces.StackFrame,1})
-    str = repr.(x)
-    el = elexpr((Symbol("julia-snail--show-trace"),str))
-    pipeline(`emacsclient --eval $el`,stdout=devnull) |> run;
-end
 
 
 
@@ -39,13 +33,27 @@ function Base.display(d::EmacsDisplayType,x)
     end
 end
 
+"""
+    toggle_display()
+
+Turn the Emacs display on/off. If on, any object that can be displayed as png or svg will be displayed inside of Emacs. 
+"""
 function toggle_display()
     dd = Base.Multimedia.displays[end]
     if  isa(dd,Main.JuliaSnail.EmacsDisplayType)
         popdisplay()
         return "Emacs plotting turned off"
     else
-        pushdisplay(JuliaSnail.EmacsDisplay());
+        pushdisplay(JuliaSnail.EmacsDisplayType());
         return "Emacs plotting turned on"
     end
 end
+
+
+# demo code for displaying a stack trace in its own Emacs window
+# not plotting per se, disabled
+# function Base.display(d::EmacsDisplayType,x :: Array{Base.StackTraces.StackFrame,1})
+#     str = repr.(x)
+#     el = elexpr((Symbol("julia-snail--show-trace"),str))
+#     send_to_client(el)
+# end
