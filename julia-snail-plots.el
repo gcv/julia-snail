@@ -5,6 +5,13 @@
   :keymap '(((kbd "q") . julia-snail--quit-plot-window)))
 
 
+(defcustom julia-snail-pop-plot nil
+  "If true, when a plot is displayed inside Emacs, the plot buffer gets the focus (e.g., for zooming and panning). Hit q to return to REPL. If nil, the plot window is displayed but focus remains on the REPL buffer."
+  :tag "Julia plotting"
+  :group 'julia-snail
+  :type 'boolean)  
+
+
 ;; entry point from Julia - modify here to support different display modes
 (defun julia-snail--draw-plot (im encoded)
   (julia-snail--show-im im encoded))
@@ -25,14 +32,17 @@
 ;; Insert "im" (a string) into the buffer, decode if necessary, and call image-mode
 (defun julia-snail--show-im (im decode)
   (interactive)
-  (let ((buf (get-buffer-create "*julia plot*")))
+  (let ((buf (get-buffer-create "*julia plots*")))
     (with-current-buffer buf
       (fundamental-mode)
       (setq buffer-read-only nil)
       (erase-buffer)
       (insert im)
       (if decode (base64-decode-region (point-min) (point-max)))
-      (pop-to-buffer buf)
+
+
+      (if julia-snail-pop-plot (pop-to-buffer buf)
+        (display-buffer buf))
       (image-mode)
       (julia-snail-plot-mode)
       (goto-char (point-min))
