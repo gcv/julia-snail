@@ -231,18 +231,27 @@ MODULE can be:
        (modify-syntax-entry ?. "_")
        (modify-syntax-entry ?@ "_")
        (modify-syntax-entry ?= " ")
-       (modify-syntax-entry ?\\ "_")
        ,@body)))
+
+(defun julia-snail--bslash-before-p (pos)
+  (char-equal (char-before pos) ?\\))
 
 (defun julia-snail--identifier-at-point ()
   "Return identifier at point using Snail-specific syntax table."
   (julia-snail--with-syntax-table
-    (thing-at-point 'symbol t)))
+    (let ((identifier (thing-at-point 'symbol t))
+          (start (car (bounds-of-thing-at-point 'symbol))))
+      (if (julia-snail--bslash-before-p start)
+          (concat "\\" identifier)
+        identifier))))
 
 (defun julia-snail--identifier-at-point-bounds ()
   "Return the bounds of the identifier at point using Snail-specific syntax table."
   (julia-snail--with-syntax-table
-    (bounds-of-thing-at-point 'symbol)))
+    (let ((bounds (bounds-of-thing-at-point 'symbol)))
+      (if (julia-snail--bslash-before-p (car bounds))
+          `(,(- (car bounds) 1) . ,(cdr bounds))
+        bounds))))
 
 (defmacro julia-snail--wait-while (condition increment maximum)
   "Synchronously wait for CONDITION to evaluate to true.
@@ -784,19 +793,19 @@ Julia include on the tmpfile, and then deleting the file."
         (prefix "")
         start)
     (when bounds
-      ;; Check for leading "\" (for latex symbol completions), we need to add an extra "\\" to
+      ;; If identifier starts with a backslash we need to add an extra "\\" to
       ;; make sure that the string which arrives to the completion provider on the server starts with "\\".
       (when (s-equals-p (substring identifier 0 1) "\\")
         (setq prefix "\\"))
       ;; check if identifier at point is inside a string and attach the opening quotes so
       ;; we get path completion.
-      (when (s-equals-p (buffer-substring-no-properties (- (car bounds) 1) (car bounds)) "\"")
-        (setq identifier (s-concat "\\\"" identifier))
+      (when (char-equal (char-before (car bounds)) ?\")
+        (setq identifier (concat "\\\"" identifier))
+        ;; TODO: add support for Windows paths (splitting on "\\" when appropriate)
         (setq split-on "/"))
-      ;; we want the string starting point passed to `completion-at-point' to be after
-      ;; the last "." in `identifier' so that completions of the form Module.f ->
-      ;; Module.func work (since `julia-snail--repl-completions' will return only "func" in
-      ;; this case)
+      ;; If identifier is not a string, we split on "." so that completions of
+      ;; the form Module.f -> Module.func work (since
+      ;; `julia-snail--repl-completions' will return only "func" in this case)
       (setq start (- (cdr bounds) (length (car (last (s-split split-on identifier))))))
       (list start
             (cdr bounds)
