@@ -773,8 +773,7 @@ Julia include on the tmpfile, and then deleting the file."
        :Main
        (format "try; JuliaSnail.replcompletion(\"%1$s\", %2$s); catch; JuliaSnail.replcompletion(\"%1$s\", Main); end"
                identifier
-               (s-join "." module)
-               )
+               (s-join "." module))
        :async nil)))
 
 (defun julia-snail-repl-completion-at-point ()
@@ -783,7 +782,7 @@ Julia include on the tmpfile, and then deleting the file."
         (bounds (julia-snail--identifier-at-point-bounds))
         (split-on "\\.")
         (prefix "")
-        start pos)
+        start)
     (when bounds
       ;; Check for leading "\" (for latex symbol completions), we need to add an extra "\\" to
       ;; make sure that the string which arrives to the completion provider on the server starts with "\\".
@@ -793,8 +792,7 @@ Julia include on the tmpfile, and then deleting the file."
       ;; we get path completion.
       (when (s-equals-p (buffer-substring-no-properties (- (car bounds) 1) (car bounds)) "\"")
         (setq identifier (s-concat "\\\"" identifier))
-        (setq split-on "/")
-        )
+        (setq split-on "/"))
       ;; we want the string starting point passed to `completion-at-point' to be after
       ;; the last "." in `identifier' so that completions of the form Module.f ->
       ;; Module.func work (since `julia-snail--repl-completions' will return only "func" in
