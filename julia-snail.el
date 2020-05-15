@@ -233,15 +233,25 @@ MODULE can be:
        (modify-syntax-entry ?= " ")
        ,@body)))
 
+(defun julia-snail--bslash-before-p (pos)
+  (char-equal (char-before pos) ?\\))
+
 (defun julia-snail--identifier-at-point ()
   "Return identifier at point using Snail-specific syntax table."
   (julia-snail--with-syntax-table
-    (thing-at-point 'symbol t)))
+    (let ((identifier (thing-at-point 'symbol t))
+          (start (car (bounds-of-thing-at-point 'symbol))))
+      (if (julia-snail--bslash-before-p start)
+          (concat "\\" identifier)
+        identifier))))
 
 (defun julia-snail--identifier-at-point-bounds ()
   "Return the bounds of the identifier at point using Snail-specific syntax table."
   (julia-snail--with-syntax-table
-    (bounds-of-thing-at-point 'symbol)))
+    (let ((bounds (bounds-of-thing-at-point 'symbol)))
+      (if (julia-snail--bslash-before-p (car bounds))
+          `(,(- (car bounds) 1) . ,(cdr bounds))
+        bounds))))
 
 (defmacro julia-snail--wait-while (condition increment maximum)
   "Synchronously wait for CONDITION to evaluate to true.
@@ -764,8 +774,44 @@ Julia include on the tmpfile, and then deleting the file."
             (cdr bounds)
             (completion-table-dynamic
              (lambda (_) (julia-snail--completions identifier)))
-            :exclusive 'yes))))
+            :exclusive 'no))))
 
+(defun julia-snail--repl-completions (identifier)
+  (let* ((module (julia-snail--module-at-point)))
+     (julia-snail--send-to-server
+       :Main
+       (format "try; JuliaSnail.replcompletion(\"%1$s\", %2$s); catch; JuliaSnail.replcompletion(\"%1$s\", Main); end"
+               identifier
+               (s-join "." module))
+       :async nil)))
+
+(defun julia-snail-repl-completion-at-point ()
+  "Implementation for Emacs `completion-at-point' system using REPL.REPLCompletions as the provider."
+  (let ((identifier (julia-snail--identifier-at-point))
+        (bounds (julia-snail--identifier-at-point-bounds))
+        (split-on "\\.")
+        (prefix "")
+        start)
+    (when bounds
+      ;; If identifier starts with a backslash we need to add an extra "\\" to
+      ;; make sure that the string which arrives to the completion provider on the server starts with "\\".
+      (when (s-equals-p (substring identifier 0 1) "\\")
+        (setq prefix "\\"))
+      ;; check if identifier at point is inside a string and attach the opening quotes so
+      ;; we get path completion.
+      (when (char-equal (char-before (car bounds)) ?\")
+        (setq identifier (concat "\\\"" identifier))
+        ;; TODO: add support for Windows paths (splitting on "\\" when appropriate)
+        (setq split-on "/"))
+      ;; If identifier is not a string, we split on "." so that completions of
+      ;; the form Module.f -> Module.func work (since
+      ;; `julia-snail--repl-completions' will return only "func" in this case)
+      (setq start (- (cdr bounds) (length (car (last (s-split split-on identifier))))))
+      (list start
+            (cdr bounds)
+            (completion-table-dynamic
+             (lambda (_) (julia-snail--repl-completions (concat prefix identifier))))
+            :exclusive 'no))))
 
 ;;; --- eldoc implementation
 
@@ -997,8 +1043,10 @@ autocompletion aware of the available modules."
           (julia-snail--enable)
           (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t)
           (add-function :before-until (local 'eldoc-documentation-function) #'julia-snail-eldoc)
+          (add-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point nil t)
           (add-hook 'completion-at-point-functions #'julia-snail-completion-at-point nil t))
       (remove-hook 'completion-at-point-functions #'julia-snail-completion-at-point t)
+      (remove-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point t)
       (remove-function (local 'eldoc-documentation-function) #'julia-snail-eldoc)
       (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
       (julia-snail--disable))))

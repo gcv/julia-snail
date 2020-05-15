@@ -21,6 +21,7 @@ import Markdown
 import Printf
 import REPL
 import Sockets
+import REPL.REPLCompletions
 
 
 export start, stop
@@ -296,6 +297,15 @@ function apropos(ns, pattern)
    return res
 end
 
+"""
+    replcompletion(identifier,mod)
+Code completion suggestions for completion string `identifier` in module `mod`.
+Completions are provided by the built-in REPL.REPLCompletions.
+"""
+function replcompletion(identifier,mod)
+    cs,_,_ = REPLCompletions.completions(identifier, length(identifier), mod)
+    return REPLCompletions.completion_text.(cs)
+end
 
 ### --- server code
 
