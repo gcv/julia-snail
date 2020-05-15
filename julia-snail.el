@@ -752,7 +752,7 @@ Julia include on the tmpfile, and then deleting the file."
      ;; the main list of names
      (julia-snail--send-to-server
        module
-       (format "Main.JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=true, recursive=true)" ns)
+       (format "Main.JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=true, recursive=true, pattern=\"%s\", fuzzysort=true)" ns identifier)
        :async nil))))
 
 (defun julia-snail-completion-at-point ()
