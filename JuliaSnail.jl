@@ -307,6 +307,7 @@ function replcompletion(identifier,mod)
     return REPLCompletions.completion_text.(cs)
 end
 
+
 ### --- server code
 
 running = false
