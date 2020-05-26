@@ -231,6 +231,7 @@ MODULE can be:
        (modify-syntax-entry ?. "_")
        (modify-syntax-entry ?@ "_")
        (modify-syntax-entry ?= " ")
+       (modify-syntax-entry ?$ " ")
        ,@body)))
 
 (defun julia-snail--bslash-before-p (pos)
