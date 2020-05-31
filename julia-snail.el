@@ -778,13 +778,16 @@ Julia include on the tmpfile, and then deleting the file."
             :exclusive 'no))))
 
 (defun julia-snail--repl-completions (identifier)
-  (let* ((module (julia-snail--module-at-point)))
-     (julia-snail--send-to-server
-       :Main
-       (format "try; JuliaSnail.replcompletion(\"%1$s\", %2$s); catch; JuliaSnail.replcompletion(\"%1$s\", Main); end"
-               identifier
-               (s-join "." module))
-       :async nil)))
+  (let* ((module (julia-snail--module-at-point))
+         (res (julia-snail--send-to-server
+                :Main
+                (format "try; JuliaSnail.replcompletion(\"%1$s\", %2$s); catch; JuliaSnail.replcompletion(\"%1$s\", Main); end"
+                        identifier
+                        (s-join "." module))
+                :async nil)))
+    (if (eq :nothing res)
+        (list)
+      res)))
 
 (defun julia-snail-repl-completion-at-point ()
   "Implementation for Emacs `completion-at-point' system using REPL.REPLCompletions as the provider."
