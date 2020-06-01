@@ -474,4 +474,4 @@ end
 
 end
 
-Pkg.activate(".")
+Pkg.activate()
