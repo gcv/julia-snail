@@ -615,16 +615,34 @@ Julia include on the tmpfile, and then deleting the file."
          (parent-modules (gethash filename proc-includes (list))))
     parent-modules))
 
+;; (defun julia-snail--module-at-point (&optional partial-module)
+;;   "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
+;;   (let ((partial-module (or partial-module
+;;                             (julia-snail-parser-query (current-buffer) (point) :module)))
+;;         (module-for-file (julia-snail--module-for-file (buffer-file-name))))
+;;     (or (if module-for-file
+;;             (append module-for-file partial-module)
+;;           partial-module)
+;;         '("Main"))))
+
+(defun julia-snail--module-at-point-cst (file point)
+       (let ((res (julia-snail--send-to-server
+                    :Main
+                    (format "JuliaSnail.module_atpoint(\"%s\", %d)" file point)
+                    :async nil)))
+         (if (eq res :nothing)
+             nil
+           res)))
+
 (defun julia-snail--module-at-point (&optional partial-module)
   "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
   (let ((partial-module (or partial-module
-                            (julia-snail-parser-query (current-buffer) (point) :module)))
+                            (julia-snail--module-at-point-cst (buffer-file-name) (point))))
         (module-for-file (julia-snail--module-for-file (buffer-file-name))))
     (or (if module-for-file
             (append module-for-file partial-module)
           partial-module)
         '("Main"))))
-
 
 ;;; --- xref implementation
 

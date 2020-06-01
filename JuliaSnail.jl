@@ -13,6 +13,9 @@
 
 import Pkg
 
+# a quick hack to allow using external dependencies
+# without making JuliaSnail a package (but we should probably make it a package)
+Pkg.activate(@__DIR__)
 
 module JuliaSnail
 
@@ -22,7 +25,7 @@ import Printf
 import REPL
 import Sockets
 import REPL.REPLCompletions
-
+import CSTParser
 
 export start, stop
 
@@ -307,6 +310,41 @@ function replcompletion(identifier,mod)
     return REPLCompletions.completion_text.(cs)
 end
 
+### playing around with CSTParser
+
+# I took this function from LangaugeServer.jl
+function get_expr(x, offset, pos = 0, ignorewhitespace = false)
+    if pos > offset
+        return nothing
+    end
+    if x.args !== nothing && CSTParser.typof(x) !== CSTParser.NONSTDIDENTIFIER
+        for a in x.args
+            if pos < offset <= (pos + a.fullspan)
+                return get_expr(a, offset, pos, ignorewhitespace)
+            end
+            pos += a.fullspan
+        end
+    elseif pos == 0
+        return x
+    elseif (pos < offset <= (pos + x.fullspan))
+        ignorewhitespace && pos + x.span < offset && return nothing
+        return x
+    end
+end
+
+function get_module(x,offset)
+    ms = []
+    a = CSTParser.parentof(get_expr(x,offset))
+    while !isnothing(a)
+        CSTParser.defines_module(a) && push!(ms,CSTParser.get_name(a).val)
+        a = CSTParser.parentof(a)
+    end
+    return reverse(ms)
+end
+
+function module_atpoint(file, point)
+    return get_module(CSTParser.parse(read(file,String)), point)
+end
 
 ### --- server code
 
@@ -435,3 +473,5 @@ end
 
 
 end
+
+Pkg.activate(".")
