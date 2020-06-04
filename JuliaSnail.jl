@@ -15,7 +15,9 @@ import Pkg
 
 # a quick hack to allow using external dependencies
 # without making JuliaSnail a package (but we should probably make it a package)
-Pkg.activate(@__DIR__)
+# Pkg.activate(@__DIR__)
+
+push!(LOAD_PATH, @__DIR__)
 
 module JuliaSnail
 
@@ -334,16 +336,23 @@ end
 
 function get_module(x,offset)
     ms = []
-    a = CSTParser.parentof(get_expr(x,offset))
+    a = get_expr(x,offset)
+    !isnothing(a) && (a = CSTParser.parentof(a))
     while !isnothing(a)
         CSTParser.defines_module(a) && push!(ms,CSTParser.get_name(a).val)
-        a = CSTParser.parentof(a)
+        !isnothing(a) && (a = CSTParser.parentof(a))
     end
     return reverse(ms)
 end
 
+function module_atpoint_fromstring(st, point)
+    return get_module(CSTParser.parse(st), point)
+end
+
+
 function module_atpoint(file, point)
-    return get_module(CSTParser.parse(read(file,String)), point)
+    !isfile(file) && return []
+    return get_module(CSTParser.parse(read(file,String), true), point)
 end
 
 ### --- server code
