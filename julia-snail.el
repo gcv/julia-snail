@@ -108,12 +108,6 @@
 (defvar julia-snail--cache-proc-implicit-file-module
   (make-hash-table :test #'equal))
 
-(defvar julia-snail--cache-proc-names-base
-  (make-hash-table :test #'equal))
-
-(defvar julia-snail--cache-proc-names-core
-  (make-hash-table :test #'equal))
-
 (defvar julia-snail--cache-proc-basedir
   (make-hash-table :test #'equal))
 
@@ -301,8 +295,6 @@ MAXIMUM: max timeout, ms."
   "Clear connection-specific internal Snail xref, completion, and module caches."
   (when process-buf
     (remhash process-buf julia-snail--cache-proc-implicit-file-module)
-    (remhash process-buf julia-snail--cache-proc-names-base)
-    (remhash process-buf julia-snail--cache-proc-names-core)
     (remhash process-buf julia-snail--cache-proc-basedir)))
 
 (defun julia-snail--repl-cleanup ()
@@ -706,77 +698,6 @@ Julia include on the tmpfile, and then deleting the file."
 
 ;;; --- completion implementation
 
-(defun julia-snail--completions-keywords ()
-  "Julia completion keywords."
-  (list "abstract type" "begin" "catch" "do" "else" "elseif" "end"
-        "false" "finally" "for" "function" "if" "let" "macro" "module"
-        "mutable struct" "nothing" "primitive type" "quote" "struct"
-        "true" "try" "undef" "while"))
-
-(defun julia-snail--completions-base ()
-  "Julia completion Base module names."
-  (let ((process-buf (get-buffer (julia-snail--process-buffer-name julia-snail-repl-buffer))))
-    ;; return (cached) list of Base names
-    (if-let ((cached-base (gethash process-buf julia-snail--cache-proc-names-base)))
-        cached-base
-      (puthash process-buf
-               (julia-snail--send-to-server
-                 :Main
-                 "Main.JuliaSnail.lsnames(Main.Base, all=false, imported=true, include_modules=true, recursive=true)"
-                 :async nil)
-               julia-snail--cache-proc-names-base))))
-
-(defun julia-snail--completions-core ()
-  "Julia completion Core module names."
-  (let ((process-buf (get-buffer (julia-snail--process-buffer-name julia-snail-repl-buffer))))
-    ;; return (cached) list of Core names
-    (if-let ((cached-core (gethash process-buf julia-snail--cache-proc-names-core)))
-        cached-core
-      (puthash process-buf
-               (julia-snail--send-to-server
-                 :Main
-                 "Main.JuliaSnail.lsnames(Main.Core, all=false, imported=true, include_modules=true, recursive=false)"
-                 :async nil)
-               julia-snail--cache-proc-names-core))))
-
-(defun julia-snail--completions (identifier)
-  "Completions helper for IDENTIFIER."
-  (let* ((module (julia-snail--module-at-point))
-         (ns (-last-item module)))
-    (append
-     (julia-snail--completions-keywords)
-     (julia-snail--completions-base)
-     (julia-snail--completions-core)
-     ;; handle a variable referencing a module
-     (when (and identifier (s-ends-with? "." identifier))
-       (let ((dotless (replace-regexp-in-string (rx "." string-end) "" identifier)))
-         (mapcar
-          (lambda (c) (s-prepend identifier c))
-          (let ((res (julia-snail--send-to-server
-                       module
-                       (format "Main.JuliaSnail.lsnames(%s, all=true, imported=false, include_modules=false, recursive=false)" dotless)
-                       :display-error-buffer-on-failure? nil
-                       :async nil)))
-            (if (eq :nothing res)
-                (list)
-              res)))))
-     ;; the main list of names
-     (julia-snail--send-to-server
-       module
-       (format "Main.JuliaSnail.lsnames(%s, all=true, imported=true, include_modules=true, recursive=true)" ns)
-       :async nil))))
-
-(defun julia-snail-completion-at-point ()
-  "Implementation for Emacs `completion-at-point' system."
-  (let ((identifier (julia-snail--identifier-at-point))
-        (bounds (julia-snail--identifier-at-point-bounds)))
-    (when bounds
-      (list (car bounds)
-            (cdr bounds)
-            (completion-table-dynamic
-             (lambda (_) (julia-snail--completions identifier)))
-            :exclusive 'no))))
-
 (defun julia-snail--repl-completions (identifier)
   (let* ((module (julia-snail--module-at-point))
          (res (julia-snail--send-to-server
@@ -1047,9 +968,7 @@ autocompletion aware of the available modules."
           (julia-snail--enable)
           (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t)
           (add-function :before-until (local 'eldoc-documentation-function) #'julia-snail-eldoc)
-          (add-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point nil t)
-          (add-hook 'completion-at-point-functions #'julia-snail-completion-at-point nil t))
-      (remove-hook 'completion-at-point-functions #'julia-snail-completion-at-point t)
+          (add-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point nil t))
       (remove-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point t)
       (remove-function (local 'eldoc-documentation-function) #'julia-snail-eldoc)
       (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
