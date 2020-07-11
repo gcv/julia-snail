@@ -328,9 +328,12 @@ MAXIMUM: max timeout, ms."
         ;; problem and supposedly fixes it, but it does not work for me with
         ;; Julia 1.0.4.
         ;; TODO: Follow-up on https://github.com/JuliaLang/julia/issues/33752
+        (message "Starting Julia process and loading Snail...")
         (julia-snail--send-to-repl
           (format "JuliaSnail.start(%d);" julia-snail-port)
           :repl-buf repl-buf
+          ;; wait a while in case dependencies need to be downloaded
+          :polling-timeout (* 5 60 1000)
           :async nil)
         ;; connect to the server
         (let ((netstream (let ((attempt 0)
@@ -378,7 +381,9 @@ MAXIMUM: max timeout, ms."
     (str
      &key
      (repl-buf (get-buffer julia-snail-repl-buffer))
-     (async t))
+     (async t)
+     (polling-interval 20)
+     (polling-timeout julia-snail-async-timeout))
   "Insert str directly into the REPL buffer. When :async is nil,
 wait for the REPL prompt to return, otherwise return immediately."
   (declare (indent defun))
@@ -389,7 +394,7 @@ wait for the REPL prompt to return, otherwise return immediately."
     (vterm-send-return)
     (unless async
       ;; wait for the inclusion to succeed (i.e., the prompt prints)
-      (julia-snail--wait-while (not (string-equal "julia>" (current-word))) 20 julia-snail-async-timeout))))
+      (julia-snail--wait-while (not (string-equal "julia>" (current-word))) polling-interval polling-timeout))))
 
 (cl-defun julia-snail--send-to-server
     (module
@@ -771,6 +776,7 @@ To create multiple REPLs, give these variables distinct values (e.g.:
       ;; run Julia in a vterm and load the Snail server file
       (let* ((vterm-shell (format "%s -L %s" julia-snail-executable julia-snail--server-file))
              (vterm-buf (generate-new-buffer julia-snail-repl-buffer)))
+        (pop-to-buffer vterm-buf)
         (with-current-buffer vterm-buf
           ;; XXX: Set the error color to red to work around breakage relating to
           ;; some color themes and terminal combinations, see
@@ -783,8 +789,7 @@ To create multiple REPLs, give these variables distinct values (e.g.:
             ;; variables in that initialization.
             (setq julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
             (setq julia-snail--repl-go-back-target source-buf))
-          (julia-snail-repl-mode))
-        (pop-to-buffer vterm-buf)))))
+          (julia-snail-repl-mode))))))
 
 (defun julia-snail-send-line ()
   "Copy the line at the current point into the REPL and run it.
