@@ -255,11 +255,12 @@ MAXIMUM: max timeout, ms."
   (let ((sleep-total (gensym))
         (incr (gensym))
         (max (gensym)))
-    `(let ((,sleep-total 0)
-           (,incr ,increment)
-           (,max ,maximum))
+    `(let ((,sleep-total 0.0)
+           ;; convert arguments from milliseconds to seconds for sit-for
+           (,incr (/ ,increment 1000.0))
+           (,max (/ ,maximum 1000.0)))
        (while (and (< ,sleep-total ,max) ,condition)
-         (sleep-for 0 ,incr)
+         (sit-for ,incr)
          (setf ,sleep-total (+ ,sleep-total ,incr))))))
 
 (defun julia-snail--capture-basedir (buf)
@@ -340,7 +341,7 @@ MAXIMUM: max timeout, ms."
                              (message "Snail connecting to Julia process, attempt %d/5..." attempt)
                              (condition-case nil
                                  (setq stream (open-network-stream "julia-process" process-buf "localhost" julia-snail-port))
-                               (error (when (< attempt max-attempts) (sleep-for 0 500)))))
+                               (error (when (< attempt max-attempts) (sit-for 0.75)))))
                            stream)))
           (if netstream
               (with-current-buffer repl-buf
