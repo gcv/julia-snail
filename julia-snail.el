@@ -84,14 +84,16 @@
   :group 'julia-snail
   :type 'integer)
 
-
-;;; --- constants
-
-(defconst julia-snail--server-file
+(defcustom julia-snail--server-file
   (concat (if load-file-name
               (file-name-directory load-file-name)
-            (file-name-as-directory default-directory))
-          "JuliaSnail.jl"))
+	    (file-name-as-directory default-directory))
+          "JuliaSnail.jl")
+  "Julia server file to load."
+  :tag "Julia server file"
+  :group 'julia-snail
+  :safe 'stringp
+  :type 'string)
 
 
 ;;; --- variables
