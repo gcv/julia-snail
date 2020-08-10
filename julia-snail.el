@@ -56,6 +56,16 @@
   :safe 'stringp
   :type 'string)
 
+(defcustom julia-snail-extra-args nil
+  "Extra arguments to pass to the Julia binary, e.g. '--sysimage /path/to/image'."
+  :tag "Extra arguments (string or list of strings)"
+  :group 'julia-snail
+  :safe (lambda (obj) (or (null obj) (stringp obj) (listp obj)))
+  :type '(choice (const :tag "None" nil)
+                 (string :tag "Single string")
+                 (repeat :tag "List of strings" string)))
+(make-variable-buffer-local 'julia-snail-extra-args)
+
 (defcustom julia-snail-port 10011
   "Default Snail server port."
   :tag "Snail server port"
@@ -774,7 +784,10 @@ To create multiple REPLs, give these variables distinct values (e.g.:
           (setf (buffer-local-value 'julia-snail--repl-go-back-target repl-buf) source-buf)
           (pop-to-buffer repl-buf))
       ;; run Julia in a vterm and load the Snail server file
-      (let* ((vterm-shell (format "%s -L %s" julia-snail-executable julia-snail--server-file))
+      (let* ((extra-args (if (listp julia-snail-extra-args)
+                             (mapconcat 'identity julia-snail-extra-args " ")
+                           julia-snail-extra-args))
+             (vterm-shell (format "%s %s -L %s" julia-snail-executable extra-args julia-snail--server-file))
              (vterm-buf (generate-new-buffer julia-snail-repl-buffer)))
         (pop-to-buffer vterm-buf)
         (with-current-buffer vterm-buf

@@ -148,6 +148,17 @@ The `julia-snail-executable` variable can be set at the file level or at the dir
 NB: On a Mac, the Julia binary is typically `Contents/Resources/julia/bin/julia` inside the distribution app bundle. You must either make sure `julia-snail-executable` is set to an absolute path, or configure your Emacs `exec-path` to correctly find the `julia` binary.
 
 
+### Extra Julia command-line arguments
+
+The `julia-snail-extra-args` variable can be set to include additional arguments to the Julia binary. It can be set to `nil` (the default), a string, or a list of strings.
+
+This variable is buffer-local, so it can be kept distinct per-project using `.dir-locals.el`:
+
+```elisp
+((julia-mode . ((julia-snail-extra-args . ("--sysimage" "/path/to/image")))))
+```
+
+
 ### Module-nested `include`s
 
 Consider the following file, call it `alpha.jl`:
