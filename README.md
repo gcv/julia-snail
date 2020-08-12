@@ -152,10 +152,11 @@ NB: On a Mac, the Julia binary is typically `Contents/Resources/julia/bin/julia`
 
 The `julia-snail-extra-args` variable can be set to include additional arguments to the Julia binary. It can be set to `nil` (the default), a string, or a list of strings.
 
-This variable is buffer-local, so it can be kept distinct per-project using `.dir-locals.el`:
+This variable is buffer-local, so it can be kept distinct per-project using `.dir-locals.el`. The following example starts Julia with a custom image and automatically activates a specific project:
 
 ```elisp
-((julia-mode . ((julia-snail-extra-args . ("--sysimage" "/path/to/image")))))
+((julia-mode . ((julia-snail-extra-args . ("--sysimage" "/path/to/image"
+                                           "--project=/path/to/project")))))
 ```
 
 
