@@ -982,6 +982,7 @@ autocompletion aware of the available modules."
     (define-key map (kbd "C-M-x") #'julia-snail-send-top-level-form)
     (define-key map (kbd "C-c C-r") #'julia-snail-send-region)
     (define-key map (kbd "C-c C-l") #'julia-snail-send-line)
+    (define-key map (kbd "C-x C-e") #'julia-snail-eval-region-or-block-or-line)
     (define-key map (kbd "C-c C-k") #'julia-snail-send-buffer-file)
     (define-key map (kbd "C-c C-m u") #'julia-snail-update-module-cache)
     map))
