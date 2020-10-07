@@ -824,9 +824,8 @@ This is not module-context aware."
                  (block-description (plist-get q :block))
                  (block-start (-second-item block-description))
                  (block-end (-third-item block-description)))
-            ;; block fails, so send line
             (setq str (buffer-substring-no-properties block-start block-end)))
-        (user-error    
+        (user-error ; block fails, so send line    
          (setq str (buffer-substring-no-properties (point-at-bol) (point-at-eol))))))
     (julia-snail--send-to-repl str)))
 
