@@ -811,6 +811,25 @@ This is not module-context aware."
   (let ((line (s-trim (thing-at-point 'line t))))
     (julia-snail--send-to-repl line)))
 
+(defun julia-snail-eval-region-or-block-or-line ()
+  " Send region, block, or, line--when it can't be block-- to julia repl"
+  (interactive)
+  (let ((str ""))
+    (if (use-region-p) ; region
+        (setq str (buffer-substring-no-properties
+                   (region-beginning)
+                   (region-end)))
+      (condition-case err ; block
+          (let* ((q (julia-snail-parser-query (current-buffer) (point) :top-level-block))
+                 (block-description (plist-get q :block))
+                 (block-start (-second-item block-description))
+                 (block-end (-third-item block-description)))
+            ;; block fails, so send line
+            (setq str (buffer-substring-no-properties block-start block-end)))
+        (user-error    
+         (setq str (buffer-substring-no-properties (point-at-bol) (point-at-eol))))))
+    (julia-snail--send-to-repl str)))
+
 (defun julia-snail-send-buffer-file ()
   "Send the current buffer's file into the Julia REPL, and include() it.
 This will occur in the context of the Main module, just as it would at the REPL."
