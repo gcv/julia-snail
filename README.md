@@ -106,7 +106,7 @@ The `julia-snail-mode` minor mode provides a key binding map (`julia-snail-mode-
 | C-M-x   | julia-snail-send-top-level-form | ditto                                                    |
 | C-c C-r | julia-snail-send-region         | evaluate active region in the current module (or in `Main` with prefix arg)   |
 | C-c C-l | julia-snail-send-line           | copy current line directly to REPL                       |
-| C-x C-e | julia-snail-eval-region-or-block-or-line | copy current region, block, or line to REPL     |
+| C-c C-e | julia-snail-eval-region-or-block-or-line | copy current region, block, or line to REPL     |
 | C-c C-k | julia-snail-send-buffer-file    | `include()` the current buffer’s file                    |
 | C-c C-R | julia-snail-update-module-cache | update module-nested `include` cache (mainly for Revise) |
 
