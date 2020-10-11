@@ -97,18 +97,20 @@ Once some Julia code has been loaded into the running image, Snail can begin int
 
 The `julia-snail-mode` minor mode provides a key binding map (`julia-snail-mode-map`) with the following commands:
 
-| key     | command                         | description                                              |
-|---------|---------------------------------|----------------------------------------------------------|
-| C-c C-z | julia-snail                     | start a REPL; flip between REPL and source               |
-| C-c C-a | julia-snail-package-activate    | activate the project using `Project.toml`                |
-| C-c C-d | julia-snail-doc-lookup          | display the docstring of the identifier at point         |
-| C-c C-c | julia-snail-send-top-level-form | evaluate `end`-terminated block around the point <br> in the current module |
-| C-M-x   | julia-snail-send-top-level-form | ditto                                                    |
-| C-c C-r | julia-snail-send-region         | evaluate active region in the current module <br> (or in `Main` with prefix arg) |
-| C-c C-l | julia-snail-send-line           | copy current line directly to REPL                       |
-| C-c C-e | julia-snail-send-dwim           | if region active, evaluate it in current module; <br> else if on top-level block, evaluate it in current module; <br> else copy line to REPL |
-| C-c C-k | julia-snail-send-buffer-file    | `include()` the current buffer’s file                    |
-| C-c C-R | julia-snail-update-module-cache | update module-nested `include` cache (mainly for Revise) |
+[//]: # (The table is formatted to look reasonable in GitHub, which limits text width and makes wide columns wrap horribly.)
+
+| key     | command and description                                                                                            |
+|---------|--------------------------------------------------------------------------------------------------------------------|
+| C-c C-z | julia-snail                     <br> _start a REPL; flip between REPL and source_                                  |
+| C-c C-a | julia-snail-package-activate    <br> _activate the project using `Project.toml`_                                   |
+| C-c C-d | julia-snail-doc-lookup          <br> _display the docstring of the identifier at point_                            |
+| C-c C-c | julia-snail-send-top-level-form <br> _evaluate `end`-terminated block around the point in the current module_      |
+| C-M-x   | julia-snail-send-top-level-form <br> _ditto_                                                                       |
+| C-c C-r | julia-snail-send-region         <br> _evaluate active region in the current module (or in `Main` with prefix arg)_ |
+| C-c C-l | julia-snail-send-line           <br> _copy current line directly to REPL_                                          |
+| C-c C-e | julia-snail-send-dwim           <br> _if region active, evaluate it in current module; <br> else if on top-level block, evaluate it in current module; <br> else copy line to REPL_ |
+| C-c C-k | julia-snail-send-buffer-file    <br> _`include()` the current buffer’s file_                                       |
+| C-c C-R | julia-snail-update-module-cache <br> _update module-nested `include` cache (mainly for Revise)_                    |
 
 Several commands include the note “in the current module”. This means the Snail parser will determine the enclosing `module...end` statements, and run the relevant code in that module. If the module has already been loaded, this means its global variables and functions will be available.
 
