@@ -13,11 +13,9 @@
 
 import Pkg
 
-# a quick hack to allow using external dependencies
-# without making JuliaSnail a package (but we should probably make it a package)
-# Pkg.activate(@__DIR__)
 
-push!(LOAD_PATH, @__DIR__)
+push!(LOAD_PATH, @__DIR__)      # a quick hack to allow using external dependencies
+
 
 module JuliaSnail
 
@@ -482,5 +480,3 @@ end
 
 
 end
-
-Pkg.activate()
