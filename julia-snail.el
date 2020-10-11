@@ -809,7 +809,18 @@ To create multiple REPLs, give these variables distinct values (e.g.:
 This is not module-context aware."
   (interactive)
   (let ((line (s-trim (thing-at-point 'line t))))
-    (julia-snail--send-to-repl line)))
+    (julia-snail--send-to-repl line)
+    (julia-snail--flash-region (point-at-bol) (point-at-eol) 0.5)))
+
+(defun julia-snail-send-dwim ()
+  "Send region, block, or line to Julia REPL."
+  (interactive)
+  (if (use-region-p)                    ; region
+      (julia-snail-send-region)
+    (condition-case err                 ; block
+        (julia-snail-send-top-level-form)
+      (user-error                       ; block fails, so send line
+       (julia-snail-send-line)))))
 
 (defun julia-snail-send-buffer-file ()
   "Send the current buffer's file into the Julia REPL, and include() it.
@@ -963,6 +974,7 @@ autocompletion aware of the available modules."
     (define-key map (kbd "C-M-x") #'julia-snail-send-top-level-form)
     (define-key map (kbd "C-c C-r") #'julia-snail-send-region)
     (define-key map (kbd "C-c C-l") #'julia-snail-send-line)
+    (define-key map (kbd "C-c C-e") #'julia-snail-send-dwim)
     (define-key map (kbd "C-c C-k") #'julia-snail-send-buffer-file)
     (define-key map (kbd "C-c C-m u") #'julia-snail-update-module-cache)
     map))
