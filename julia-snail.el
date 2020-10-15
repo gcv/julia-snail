@@ -565,6 +565,29 @@ Julia include on the tmpfile, and then deleting the file."
   (julia-snail--response-base reqid))
 
 
+;;; --- CST parser interface
+
+(defun julia-snail--cst-module-at (buf pt)
+  (let* ((byteloc (position-bytes pt))
+         (res (julia-snail--send-to-server
+                :Main
+                (format "JuliaSnail.CST.moduleat(\"%s\", %d)" buf byteloc)
+                :async nil)))
+    (if (eq res :nothing)
+        nil
+      res)))
+
+(defun julia-snail--cst-block-at (buf pt)
+  (let* ((byteloc (position-bytes pt))
+         (res (julia-snail--send-to-server
+                :Main
+                (format "JuliaSnail.CST.blockat(\"%s\", %d)" buf byteloc)
+                :async nil)))
+    (if (eq res :nothing)
+        nil
+      res)))
+
+
 ;;; --- Julia module tracking implementation
 
 (defun julia-snail--module-make-implicit-module-map (includes)
@@ -615,34 +638,16 @@ Julia include on the tmpfile, and then deleting the file."
          (parent-modules (gethash filename proc-includes (list))))
     parent-modules))
 
-;; (defun julia-snail--module-at-point (&optional partial-module)
-;;   "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
-;;   (let ((partial-module (or partial-module
-;;                             (julia-snail-parser-query (current-buffer) (point) :module)))
-;;         (module-for-file (julia-snail--module-for-file (buffer-file-name))))
-;;     (or (if module-for-file
-;;             (append module-for-file partial-module)
-;;           partial-module)
-;;         '("Main"))))
-
-(defun julia-snail--module-at-point-cst (file point)
-       (let ((res (julia-snail--send-to-server
-                    :Main
-                    (format "JuliaSnail.module_atpoint(\"%s\", %d)" file point)
-                    :async nil)))
-         (if (eq res :nothing)
-             nil
-           res)))
-
 (defun julia-snail--module-at-point (&optional partial-module)
   "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
   (let ((partial-module (or partial-module
-                            (julia-snail--module-at-point-cst (buffer-file-name) (point))))
+                            (julia-snail--cst-module-at (buffer-file-name) (point))))
         (module-for-file (julia-snail--module-for-file (buffer-file-name))))
     (or (if module-for-file
             (append module-for-file partial-module)
           partial-module)
         '("Main"))))
+
 
 ;;; --- xref implementation
 
@@ -903,21 +908,24 @@ If a prefix arg is used, this instead occurs in the context of Main."
 This occurs in the context of the current module.
 Currently only works on blocks terminated with `end'."
   (interactive)
-  (let* ((q (julia-snail-parser-query (current-buffer) (point) :top-level-block))
-         (module (julia-snail--module-at-point (plist-get q :module)))
-         (block-description (plist-get q :block))
-         (block-start (-second-item block-description))
-         (block-end (-third-item block-description))
-         (text (buffer-substring-no-properties block-start block-end)))
-    (julia-snail--flash-region block-start block-end 0.5)
-    (julia-snail--send-to-server-via-tmp-file
-      module text
-      :callback-success (lambda (&optional _data)
-                          (message "Top-level form evaluated: %s, module %s"
-                                   (if (-fourth-item block-description)
-                                       (-fourth-item block-description)
-                                     "unknown")
-                                   (julia-snail--construct-module-path module))))))
+  (let* ((q (julia-snail--cst-block-at buffer-file-name (point)))
+         (module (julia-snail--module-at-point (-first-item q)))
+         (block-start (byte-to-position (or (-second-item q) -1)))
+         (block-end (byte-to-position (or (-third-item q) -1)))
+         (text (condition-case nil
+                   (buffer-substring-no-properties block-start block-end)
+                 (error ""))))
+    (if (null q)
+        (user-error "No top-level form at point")
+      (julia-snail--flash-region block-start block-end 0.5)
+      (julia-snail--send-to-server-via-tmp-file
+        module text
+        :callback-success (lambda (&optional _data)
+                            (message "Top-level form evaluated: %s, module %s"
+                                     (if (-fourth-item q)
+                                         (-fourth-item q)
+                                       "unknown")
+                                     (julia-snail--construct-module-path module)))))))
 
 (defun julia-snail-package-activate (dir)
   "Activate a Pkg project located in DIR in the Julia REPL."

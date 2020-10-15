@@ -25,7 +25,6 @@ import Printf
 import REPL
 import Sockets
 import REPL.REPLCompletions
-import CSTParser
 
 export start, stop
 
@@ -49,7 +48,9 @@ function elexpr(arg::Tuple)
 end
 
 function elexpr(arg::Array)
-   Printf.@sprintf("'(%s)", join(map(elexpr, arg), " "))
+   isempty(arg) ?
+      "nil" :
+      Printf.@sprintf("(list %s)", join(map(elexpr, arg), " "))
 end
 
 function elexpr(arg::String)
@@ -310,48 +311,105 @@ function replcompletion(identifier,mod)
     return REPLCompletions.completion_text.(cs)
 end
 
-### playing around with CSTParser
 
-# I took this function from LangaugeServer.jl
-function get_expr(x, offset, pos = 0, ignorewhitespace = false)
-    if pos > offset
-        return nothing
-    end
-    if x.args !== nothing && CSTParser.typof(x) !== CSTParser.NONSTDIDENTIFIER
-        for a in x.args
-            if pos < offset <= (pos + a.fullspan)
-                return get_expr(a, offset, pos, ignorewhitespace)
-            end
-            pos += a.fullspan
-        end
-    elseif pos == 0
-        return x
-    elseif (pos < offset <= (pos + x.fullspan))
-        ignorewhitespace && pos + x.span < offset && return nothing
-        return x
-    end
+### --- CSTParser wrappers
+
+module CST
+
+import CSTParser
+
+"""
+Return the path of CSTParser.EXPR objects from the root of the CST to the
+expression at the offset, while retaining the EXPR objects' full locations.
+
+The path is represented as an array of named tuples. The first element
+represents the root node, and the last element is the expression at the offset.
+Each tuple has a start and stop value, showing locations in the original source
+where that node begins and ends.
+
+This is necessary because CSTParser does not include full location data, see
+https://github.com/julia-vscode/CSTParser.jl/pull/80.
+"""
+function pathat(cst, offset, pos = 0, path = [(expr=cst, start=1, stop=cst.span+1)])
+   if cst.args !== nothing && CSTParser.typof(cst) !== CSTParser.NONSTDIDENTIFIER
+      for a in cst.args
+         if pos < offset <= (pos + a.span)
+            return pathat(a, offset, pos, [path; [(expr=a, start=pos+1, stop=pos+a.span+1)]])
+         end
+         # jump forward by fullspan since we need to skip over a's trailing whitespace
+         pos += a.fullspan
+      end
+   elseif (pos < offset <= (pos + cst.fullspan))
+      return [path; [(expr=cst, start=pos+1, stop=offset+1)]]
+   end
+   return path
 end
 
-function get_module(x,offset)
-    ms = []
-    a = get_expr(x,offset)
-    !isnothing(a) && (a = CSTParser.parentof(a))
-    while !isnothing(a)
-        CSTParser.defines_module(a) && push!(ms,CSTParser.get_name(a).val)
-        !isnothing(a) && (a = CSTParser.parentof(a))
-    end
-    return reverse(ms)
+"""
+Return the module active at point as a list of their names.
+"""
+function moduleat(file, byteloc)
+   cst = nothing
+   try
+      cst = CSTParser.parse(read(file, String), true)
+   catch
+      # probably an IO problem
+      # TODO: Need better error reporting here.
+      return []
+   end
+   path = pathat(cst, byteloc)
+   modules = []
+   for node in path
+      if CSTParser.defines_module(node.expr)
+         push!(modules, CSTParser.get_name(node.expr).val)
+      end
+   end
+   return modules
 end
 
-function module_atpoint_fromstring(st, point)
-    return get_module(CSTParser.parse(st), point)
+"""
+Return information about the block at point.
+"""
+function blockat(file, byteloc)
+   cst = nothing
+   try
+      cst = CSTParser.parse(read(file, String), true)
+   catch
+      # probably an IO problem
+      # TODO: Need better error reporting here.
+      return []
+   end
+   path = pathat(cst, byteloc)
+   modules = []
+   description = nothing
+   start = nothing
+   stop = nothing
+   for node in path
+      if CSTParser.defines_module(node.expr)
+         description = nothing
+         push!(modules, CSTParser.get_name(node.expr).val)
+      elseif (isnothing(description) &&
+              (CSTParser.defines_abstract(node.expr) ||
+               CSTParser.defines_datatype(node.expr) ||
+               CSTParser.defines_function(node.expr) ||
+               CSTParser.defines_macro(node.expr) ||
+               CSTParser.defines_mutable(node.expr) ||
+               CSTParser.defines_primitive(node.expr) ||
+               CSTParser.defines_struct(node.expr)))
+         description = CSTParser.get_name(node.expr).val
+         start = node.start
+         stop = node.stop
+      end
+   end
+   # result format equivalent to what Elisp side expects
+   isnothing(description) ?
+      nothing :
+      [modules, start, stop, description]
+end
 end
 
-
-function module_atpoint(file, point)
-    !isfile(file) && return []
-    return get_module(CSTParser.parse(read(file,String), true), point)
 end
+
 
 ### --- server code
 
