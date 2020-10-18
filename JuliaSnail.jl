@@ -316,7 +316,25 @@ end
 
 module CST
 
+import Base64
 import CSTParser
+
+"""
+Helper function: wraps the parser interface.
+"""
+function parse(encodedbuf, byteloc)
+   cst = nothing
+   try
+      buf = String(Base64.base64decode(encodedbuf))
+      cst = CSTParser.parse(buf, true)
+   catch err
+      # probably an IO problem
+      # TODO: Need better error reporting here.
+      println(err)
+      return []
+   end
+   return cst
+end
 
 """
 Return the path of CSTParser.EXPR objects from the root of the CST to the
@@ -348,15 +366,8 @@ end
 """
 Return the module active at point as a list of their names.
 """
-function moduleat(file, byteloc)
-   cst = nothing
-   try
-      cst = CSTParser.parse(read(file, String), true)
-   catch
-      # probably an IO problem
-      # TODO: Need better error reporting here.
-      return []
-   end
+function moduleat(encodedbuf, byteloc)
+   cst = parse(encodedbuf, byteloc)
    path = pathat(cst, byteloc)
    modules = []
    for node in path
@@ -370,15 +381,8 @@ end
 """
 Return information about the block at point.
 """
-function blockat(file, byteloc)
-   cst = nothing
-   try
-      cst = CSTParser.parse(read(file, String), true)
-   catch
-      # probably an IO problem
-      # TODO: Need better error reporting here.
-      return []
-   end
+function blockat(encodedbuf, byteloc)
+   cst = parse(encodedbuf, byteloc)
    path = pathat(cst, byteloc)
    modules = []
    description = nothing
@@ -402,7 +406,7 @@ function blockat(file, byteloc)
       end
    end
    # result format equivalent to what Elisp side expects
-   isnothing(description) ?
+   return isnothing(description) ?
       nothing :
       [modules, start, stop, description]
 end

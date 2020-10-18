@@ -299,6 +299,12 @@ MAXIMUM: max timeout, ms."
     (julia-snail--wait-while
      (gethash reqid julia-snail--requests) 50 1500)))
 
+(defun julia-snail--encode-base64 (&optional buf)
+  (let ((s (with-current-buffer (or buf (current-buffer))
+             (encode-coding-string (buffer-string)
+                                   buffer-file-coding-system))))
+    (base64-encode-string s)))
+
 
 ;;; --- connection management functions
 
@@ -427,14 +433,20 @@ nil, wait for the result and return it."
   (let* ((process-buf (get-buffer (julia-snail--process-buffer-name repl-buf)))
          (module-ns (julia-snail--construct-module-path module))
          (reqid (format "%04x%04x" (random (expt 16 4)) (random (expt 16 4))))
+         (code-str (json-encode-string str))
+         (display-code-str (s-truncate 80 code-str))
          (msg (format "(ns = %s, reqid = \"%s\", code = %s)\n"
                       module-ns
                       reqid
-                      (json-encode-string str)))
+                      code-str))
+         (display-msg (format "(ns = %s, reqid = \"%s\", code = %s)\n"
+                              module-ns
+                              reqid
+                              display-code-str))
          (res nil))
     (with-current-buffer process-buf
       (goto-char (point-max))
-      (insert msg))
+      (insert display-msg))
     (process-send-string process-buf msg)
     (spinner-start 'progress-bar)
     (puthash reqid
@@ -569,9 +581,10 @@ Julia include on the tmpfile, and then deleting the file."
 
 (defun julia-snail--cst-module-at (buf pt)
   (let* ((byteloc (position-bytes pt))
+         (encoded (julia-snail--encode-base64 buf))
          (res (julia-snail--send-to-server
                 :Main
-                (format "JuliaSnail.CST.moduleat(\"%s\", %d)" buf byteloc)
+                (format "JuliaSnail.CST.moduleat(\"%s\", %d)" encoded byteloc)
                 :async nil)))
     (if (eq res :nothing)
         nil
@@ -579,9 +592,10 @@ Julia include on the tmpfile, and then deleting the file."
 
 (defun julia-snail--cst-block-at (buf pt)
   (let* ((byteloc (position-bytes pt))
+         (encoded (julia-snail--encode-base64 buf))
          (res (julia-snail--send-to-server
                 :Main
-                (format "JuliaSnail.CST.blockat(\"%s\", %d)" buf byteloc)
+                (format "JuliaSnail.CST.blockat(\"%s\", %d)" encoded byteloc)
                 :async nil)))
     (if (eq res :nothing)
         nil
@@ -641,7 +655,7 @@ Julia include on the tmpfile, and then deleting the file."
 (defun julia-snail--module-at-point (&optional partial-module)
   "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
   (let ((partial-module (or partial-module
-                            (julia-snail--cst-module-at (buffer-file-name) (point))))
+                            (julia-snail--cst-module-at (current-buffer) (point))))
         (module-for-file (julia-snail--module-for-file (buffer-file-name))))
     (or (if module-for-file
             (append module-for-file partial-module)
@@ -908,7 +922,7 @@ If a prefix arg is used, this instead occurs in the context of Main."
 This occurs in the context of the current module.
 Currently only works on blocks terminated with `end'."
   (interactive)
-  (let* ((q (julia-snail--cst-block-at buffer-file-name (point)))
+  (let* ((q (julia-snail--cst-block-at (current-buffer) (point)))
          (module (julia-snail--module-at-point (-first-item q)))
          (block-start (byte-to-position (or (-second-item q) -1)))
          (block-end (byte-to-position (or (-third-item q) -1)))
