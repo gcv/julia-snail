@@ -38,19 +38,22 @@ end
 """
 Construct Elisp expression.
 
-julia> elexpr((:mapcar, (:function, :exp), [1, 2, 3]))
-"(mapcar (function exp) '(1 2 3))"
+julia> JuliaSnail.elexpr([:mapcar, [:function :exp], (1, 2, 3, "hello")])
+"(mapcar (function exp) '(1 2 3 \"hello\"))"
 
-This result can be fed into (eval (read ...)) in Elisp.
+This result can be fed into (eval (read ...)) in Elisp. Note that input tuples
+turn into quoted lists, and arrays into ordinary lists. This means an Elisp-side
+eval will treat lists as it ordinarily does, where (car ...) is expected to be a
+function call.
 """
 function elexpr(arg::Tuple)
-   Printf.@sprintf("(%s)", join(map(elexpr, arg), " "))
+   Printf.@sprintf("'(%s)", join(map(elexpr, arg), " "))
 end
 
 function elexpr(arg::Array)
    isempty(arg) ?
       "nil" :
-      Printf.@sprintf("(list %s)", join(map(elexpr, arg), " "))
+      Printf.@sprintf("(%s)", join(map(elexpr, arg), " "))
 end
 
 function elexpr(arg::String)
@@ -249,12 +252,13 @@ function lsdefinitions(ns, identifier)
          # into one. This often happens with function default arguments.
          lines = map(m -> m.line, ms)
          files = map(m -> m.file, ms)
-         map(m -> (Printf.@sprintf("%s(%s)",
-                                   identifier,
-                                   format_method_signature(m.sig)),
-                   Base.find_source_file(string(m.file)),
-                   m.line),
-             ms)
+         [:list;
+          map(m -> (Printf.@sprintf("%s(%s)",
+                                    identifier,
+                                    format_method_signature(m.sig)),
+                    Base.find_source_file(string(m.file)),
+                    m.line),
+              ms)]
       end
    catch
       []
@@ -308,7 +312,7 @@ Completions are provided by the built-in REPL.REPLCompletions.
 """
 function replcompletion(identifier,mod)
     cs,_,_ = REPLCompletions.completions(identifier, length(identifier), mod)
-    return REPLCompletions.completion_text.(cs)
+    return [:list; REPLCompletions.completion_text.(cs)]
 end
 
 
@@ -322,7 +326,7 @@ import CSTParser
 """
 Helper function: wraps the parser interface.
 """
-function parse(encodedbuf, byteloc)
+function parse(encodedbuf)
    cst = nothing
    try
       buf = String(Base64.base64decode(encodedbuf))
@@ -367,7 +371,7 @@ end
 Return the module active at point as a list of their names.
 """
 function moduleat(encodedbuf, byteloc)
-   cst = parse(encodedbuf, byteloc)
+   cst = parse(encodedbuf)
    path = pathat(cst, byteloc)
    modules = []
    for node in path
@@ -375,14 +379,14 @@ function moduleat(encodedbuf, byteloc)
          push!(modules, CSTParser.get_name(node.expr).val)
       end
    end
-   return modules
+   return [:list; modules]
 end
 
 """
 Return information about the block at point.
 """
 function blockat(encodedbuf, byteloc)
-   cst = parse(encodedbuf, byteloc)
+   cst = parse(encodedbuf)
    path = pathat(cst, byteloc)
    modules = []
    description = nothing
@@ -408,7 +412,7 @@ function blockat(encodedbuf, byteloc)
    # result format equivalent to what Elisp side expects
    return isnothing(description) ?
       nothing :
-      [modules, start, stop, description]
+      [:list; tuple(modules...); start; stop; description]
 end
 end
 
@@ -462,16 +466,20 @@ function start(port=10011)
                expr = Meta.parse(input.code)
                result = eval_in_module(input.ns, expr)
                # report successful evaluation back to client
-               resp = elexpr((Symbol("julia-snail--response-success"),
-                              input.reqid,
-                              result))
+               resp = elexpr([
+                  Symbol("julia-snail--response-success"),
+                  input.reqid,
+                  result
+               ])
                send_to_client(resp, client)
             catch err
                try
-                  resp = elexpr((Symbol("julia-snail--response-failure"),
-                                 input.reqid,
-                                 sprint(showerror, err),
-                                 string.(stacktrace(catch_backtrace()))))
+                  resp = elexpr([
+                     Symbol("julia-snail--response-failure"),
+                     input.reqid,
+                     sprint(showerror, err),
+                     tuple(string.(stacktrace(catch_backtrace()))...)
+                  ])
                   send_to_client(resp, client)
                catch err2
                   if isa(err2, ArgumentError)
