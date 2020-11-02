@@ -1,4 +1,4 @@
-;;; julia-snail/tests/implicit-modules.el --- Julia Snail implicit modules test - full -*- lexical-binding: t -*-
+;;; tests/implicit-modules.el --- Julia Snail implicit modules test - full -*- lexical-binding: t -*-
 
 
 ;;; --- requirements
