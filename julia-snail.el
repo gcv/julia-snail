@@ -601,26 +601,22 @@ Julia include on the tmpfile, and then deleting the file."
         nil
       res)))
 
+(defun julia-snail--cst-includes (buf)
+  (let* ((encoded (julia-snail--encode-base64 buf))
+         (pwd (file-name-directory (buffer-file-name buf)))
+         (res (julia-snail--send-to-server
+                :Main
+                (format "JuliaSnail.CST.includesin(\"%s\", \"%s\")" encoded pwd)
+                :async nil))
+         (includes (make-hash-table :test #'equal)))
+    (unless (eq res :nothing)
+      (cl-loop for (file modules) in (-partition 2 res) do
+               (puthash file modules includes)))
+    ;; TODO: Maybe there's a situation in which returning :error is appropriate?
+    includes))
+
 
 ;;; --- Julia module tracking implementation
-
-(defun julia-snail--module-make-implicit-module-map (includes)
-  "Invert INCLUDES to map from filename to containing module."
-  ;; This takes the includes from the AST and treats each :include as a leaf,
-  ;; and associates it with the path to reach it.
-  (let ((mapping (make-hash-table :test #'equal)))
-    (cl-labels ((helper (tree path)
-                        (cond ((eq :include (-first-item tree))
-                               (puthash (-second-item tree) path mapping))
-                              ((eq :module (-first-item tree))
-                               (let ((new-path (-snoc path (-second-item tree))))
-                                 (cl-loop for node in (-third-item tree) do
-                                          (helper node new-path))))
-                              (t
-                               (cl-loop for node in tree do
-                                        (helper node path))))))
-      (helper includes (list))
-      mapping)))
 
 (defun julia-snail--module-merge-includes (current-filename includes)
   "Update file module cache using INCLUDES tree parsed from CURRENT-FILENAME."
@@ -629,17 +625,14 @@ Julia include on the tmpfile, and then deleting the file."
                                      julia-snail--cache-proc-implicit-file-module)
                             (puthash process-buf (make-hash-table :test #'equal)
                                      julia-snail--cache-proc-implicit-file-module)))
-         (current-file-module (gethash (expand-file-name current-filename) proc-includes))
-         (implicit-file-modules (julia-snail--module-make-implicit-module-map includes)))
-    ;; expand file names and prepend current file module
-    (cl-loop for k being the hash-keys of implicit-file-modules using (hash-values v) do
-             (remhash k implicit-file-modules)
-             (puthash (expand-file-name k)
-                      (if current-file-module (append current-file-module v) v)
-                      implicit-file-modules))
+         (current-file-module (gethash (expand-file-name current-filename) proc-includes)))
     ;; merge includes with the proc-includes table
-    (cl-loop for k being the hash-keys of implicit-file-modules using (hash-values v) do
-             (puthash k v proc-includes))
+    (cl-loop for included-file being the hash-keys of includes using (hash-values included-file-modules) do
+             (puthash included-file
+                      (if current-file-module
+                          (append current-file-module included-file-modules)
+                        included-file-modules)
+                      proc-includes))
     ;; done
     proc-includes))
 
@@ -791,6 +784,7 @@ Julia include on the tmpfile, and then deleting the file."
              (lambda (_) (julia-snail--repl-completions (concat prefix identifier))))
             :exclusive 'no))))
 
+
 ;;; --- eldoc implementation
 
 (defun julia-snail-eldoc ()
@@ -866,7 +860,7 @@ This will occur in the context of the Main module, just as it would at the REPL.
   (let* ((jsrb-save julia-snail-repl-buffer) ; save for callback context
          (filename (expand-file-name buffer-file-name))
          (module (or (julia-snail--module-for-file filename) '("Main")))
-         (includes (julia-snail-parser-includes (current-buffer))))
+         (includes (julia-snail--cst-includes (current-buffer))))
     (when (or (not (buffer-modified-p))
               (y-or-n-p (format "'%s' is not saved, send to Julia anyway? " filename)))
       (julia-snail--send-to-server
@@ -879,6 +873,9 @@ This will occur in the context of the Main module, just as it would at the REPL.
                             ;; julia-snail-repl-buffer will have disappeared
                             (let* ((julia-snail-repl-buffer jsrb-save)
                                    (repl-buf (get-buffer julia-snail-repl-buffer)))
+                              ;; NB: At the moment, julia-snail--cst-includes
+                              ;; does not return :error. However, it might in
+                              ;; the future, and this code will then be useful.
                               (if (eq :error includes)
                                   (let ((error-buffer
                                          (julia-snail--message-buffer
@@ -997,7 +994,7 @@ autocompletion aware of the available modules."
   (interactive)
   (let* ((filename (expand-file-name buffer-file-name))
          (module (or (julia-snail--module-for-file filename) '("Main")))
-         (includes (julia-snail-parser-includes (current-buffer))))
+         (includes (julia-snail--cst-includes (current-buffer))))
     (julia-snail--module-merge-includes filename includes)
     (message "Caches updated: parent module %s"
              (julia-snail--construct-module-path module))))

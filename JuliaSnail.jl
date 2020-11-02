@@ -414,6 +414,53 @@ function blockat(encodedbuf, byteloc)
       nothing :
       [:list; tuple(modules...); start; stop; description]
 end
+
+"""
+For a given buffer, return the files `include()`d in each nested module.
+
+Result structure: {
+  filename -> [module names]
+}
+
+This nasty code relies on internal CSTParser representations of things.
+Unfortunately, CSTParser doesn't provide a clean API for this sort of thing:
+https://github.com/julia-vscode/CSTParser.jl/issues/56
+"""
+function includesin(encodedbuf, path="")
+   cst = parse(encodedbuf)
+   results = Dict()
+   # walk across args, and track the current module
+   # when a node of type "call" is found, check its args[1]
+   helper = (node, modules = []) -> begin
+      for a in node.args
+         if (CSTParser.Call == a.typ &&
+             !isnothing(a.args) &&
+             4 == length(a.args) &&
+             "include" == a.args[1].val)
+            # a.args[3] is the file name being included
+            # if !haskey(results, modules)
+            #    results[modules] = Set()
+            # end
+            # push!(results[modules], a.args[3].val)
+            filename = joinpath(path, a.args[3].val)
+            results[filename] = modules
+         elseif CSTParser.defines_module(a)
+            helper(a, [modules; CSTParser.get_name(a).val])
+         elseif !isnothing(a.args)
+            helper(a, modules)
+         end
+      end
+   end
+   helper(cst)
+   # convert to a plist for returning back to Emacs
+   reslist = []
+   for (file, modules) in results
+      push!(reslist, file)
+      push!(reslist, [:list; modules])
+   end
+   return isempty(reslist) ?
+      nothing :
+      [:list; reslist]
 end
 
 end
