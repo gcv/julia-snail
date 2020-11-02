@@ -438,10 +438,6 @@ function includesin(encodedbuf, path="")
              4 == length(a.args) &&
              "include" == a.args[1].val)
             # a.args[3] is the file name being included
-            # if !haskey(results, modules)
-            #    results[modules] = Set()
-            # end
-            # push!(results[modules], a.args[3].val)
             filename = joinpath(path, a.args[3].val)
             results[filename] = modules
          elseif CSTParser.defines_module(a)
