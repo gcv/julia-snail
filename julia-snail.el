@@ -31,6 +31,7 @@
 ;;; --- requirements
 
 (require 'cl-lib)
+(require 'dash)
 (require 'json)
 (require 'rx)
 (require 's)
