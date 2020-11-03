@@ -847,7 +847,7 @@ This is not module-context aware."
   (interactive)
   (if (use-region-p)                    ; region
       (julia-snail-send-region)
-    (condition-case err                 ; block
+    (condition-case _err                ; block
         (julia-snail-send-top-level-form)
       (user-error                       ; block fails, so send line
        (julia-snail-send-line)))))
