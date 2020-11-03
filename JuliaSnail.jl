@@ -459,6 +459,15 @@ function includesin(encodedbuf, path="")
       [:list; reslist]
 end
 
+# XXX: Dirty hackery to improve perceived startup performance follows. Running
+# this function in a separate thread should, in theory, force a bunch of things
+# to JIT-compile in the background before the users notices.
+function forcecompile()
+   # call these functions before the user does
+   includesin(Base64.base64encode("module Alpha\ninclude(\"a.jl\")\nend"))
+   moduleat(Base64.base64encode("module Alpha\nend"), 1)
+end
+
 end
 
 
@@ -496,6 +505,9 @@ function start(port=10011)
          println(stderr, "ERROR: Something broke spectacularly.")
          println(stderr, "ERROR: Snail will not work correctly.")
       end
+   end
+   if VERSION >= v"1.3"
+      Threads.@spawn CST.forcecompile()
    end
    @async begin
       while running
