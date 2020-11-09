@@ -238,7 +238,8 @@ MODULE can be:
        ,@body)))
 
 (defun julia-snail--bslash-before-p (pos)
-  (char-equal (char-before pos) ?\\))
+  (when-let (c (char-before pos))
+    (char-equal c ?\\)))
 
 (defun julia-snail--identifier-at-point ()
   "Return identifier at point using Snail-specific syntax table."
@@ -769,10 +770,11 @@ Julia include on the tmpfile, and then deleting the file."
         (setq prefix "\\"))
       ;; check if identifier at point is inside a string and attach the opening quotes so
       ;; we get path completion.
-      (when (char-equal (char-before (car bounds)) ?\")
-        (setq identifier (concat "\\\"" identifier))
-        ;; TODO: add support for Windows paths (splitting on "\\" when appropriate)
-        (setq split-on "/"))
+      (when-let (prev (char-before (car bounds)))
+        (when (char-equal prev ?\")
+          (setq identifier (concat "\\\"" identifier))
+          ;; TODO: add support for Windows paths (splitting on "\\" when appropriate)
+          (setq split-on "/")))
       ;; If identifier is not a string, we split on "." so that completions of
       ;; the form Module.f -> Module.func work (since
       ;; `julia-snail--repl-completions' will return only "func" in this case)
