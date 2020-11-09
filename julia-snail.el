@@ -489,7 +489,7 @@ Julia include on the tmpfile, and then deleting the file."
         (insert text))
       (let ((reqid (julia-snail--send-to-server
                      module
-                     (format "include(\"%s\");" tmpfile)
+                     (format "include(\"%s\"); JuliaSnail.elexpr(true)" tmpfile)
                      :repl-buf repl-buf
                      ;; TODO: Only async via-tmp-file evaluation is currently
                      ;; supported because we rely on getting the reqid back from
@@ -864,7 +864,7 @@ This will occur in the context of the Main module, just as it would at the REPL.
               (y-or-n-p (format "'%s' is not saved, send to Julia anyway? " filename)))
       (julia-snail--send-to-server
         module
-        (format "include(\"%s\");" filename)
+        (format "include(\"%s\"); JuliaSnail.elexpr(true)" filename)
         :callback-success (lambda (&optional _data)
                             ;; julia-snail-repl-buffer must be rebound here from
                             ;; jsrb-save, because the callback will run in a

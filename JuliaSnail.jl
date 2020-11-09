@@ -87,6 +87,10 @@ function elexpr(arg::Symbol)
    string(arg)
 end
 
+function elexpr(arg::Bool)
+   arg ? "t" : "nil"
+end
+
 function elexpr(arg::Any)
    "nil"
 end
