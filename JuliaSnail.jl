@@ -330,8 +330,8 @@ Code completion suggestions for completion string `identifier` in module `mod`.
 Completions are provided by the built-in REPL.REPLCompletions.
 """
 function replcompletion(identifier,mod)
-    cs,_,_ = REPLCompletions.completions(identifier, length(identifier), mod)
-    return [:list; REPLCompletions.completion_text.(cs)]
+   cs, _, _ = REPLCompletions.completions(identifier, lastindex(identifier), mod)
+   return [:list; REPLCompletions.completion_text.(cs)]
 end
 
 
