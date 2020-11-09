@@ -14,10 +14,25 @@
 import Pkg
 
 
-push!(LOAD_PATH, @__DIR__)      # a quick hack to allow using external dependencies
+# a quick hack to allow using external dependencies
+push!(LOAD_PATH, @__DIR__)
 
 
 module JuliaSnail
+
+
+# external dependency hack continues
+try
+   import CSTParser
+catch err
+   if isa(err, ArgumentError)
+      # force dependency installation
+      Main.Pkg.activate(@__DIR__)
+      Main.Pkg.instantiate()
+      Main.Pkg.precompile()
+      Main.Pkg.activate()
+   end
+end
 
 
 import Markdown
