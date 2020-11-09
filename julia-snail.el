@@ -87,7 +87,7 @@
   :group 'julia-snail
   :type 'boolean)
 
-(defcustom julia-snail-async-timeout 10000
+(defcustom julia-snail-async-timeout 20000
   "When performing asynchronous Snail operations, wait this many milliseconds before timing out."
   :tag "Timeout for asynchronous Snail operations"
   :group 'julia-snail
@@ -297,7 +297,7 @@ MAXIMUM: max timeout, ms."
   "Test suite accessory: Same as julia-snail-send-buffer-file, but synchronous."
   (let ((reqid (julia-snail-send-buffer-file))) ; wait for async result to return
     (julia-snail--wait-while
-     (gethash reqid julia-snail--requests) 50 7500)))
+     (gethash reqid julia-snail--requests) 50 10000)))
 
 (defun julia-snail--encode-base64 (&optional buf)
   (let ((s (with-current-buffer (or buf (current-buffer))
