@@ -1,4 +1,4 @@
-;;; julia-snail/tests/implicit-modules-parser.el --- Julia Snail implicit module tests - parser level -*- lexical-binding: t -*-
+;;; tests/implicit-modules-parser.el --- Julia Snail implicit module tests - parser level -*- lexical-binding: t -*-
 
 
 ;;; --- requirements

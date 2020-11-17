@@ -2,8 +2,8 @@
 
 
 ;; URL: https://github.com/gcv/julia-snail
-;; Package-Requires: ((emacs "26.2") (cl-lib "0.5") (dash "2.16.0") (julia-mode "0.3") (s "1.12.0") (parsec "0.1.3") (spinner "1.7.3") (vterm "0.0.1"))
-;; Version: 1.0.0rc4
+;; Package-Requires: ((emacs "26.2") (dash "2.16.0") (julia-mode "0.3") (s "1.12.0") (spinner "1.7.3") (vterm "0.0.1"))
+;; Version: 1.0.0rc5
 ;; Created: 2019-10-27
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -31,6 +31,7 @@
 ;;; --- requirements
 
 (require 'cl-lib)
+(require 'dash)
 (require 'json)
 (require 'rx)
 (require 's)
@@ -39,8 +40,6 @@
 (require 'thingatpt)
 (require 'vterm)
 (require 'xref)
-
-(require 'julia-snail-parser)
 
 
 ;;; --- customization
@@ -88,7 +87,7 @@
   :group 'julia-snail
   :type 'boolean)
 
-(defcustom julia-snail-async-timeout 10000
+(defcustom julia-snail-async-timeout 20000
   "When performing asynchronous Snail operations, wait this many milliseconds before timing out."
   :tag "Timeout for asynchronous Snail operations"
   :group 'julia-snail
@@ -239,7 +238,8 @@ MODULE can be:
        ,@body)))
 
 (defun julia-snail--bslash-before-p (pos)
-  (char-equal (char-before pos) ?\\))
+  (when-let (c (char-before pos))
+    (char-equal c ?\\)))
 
 (defun julia-snail--identifier-at-point ()
   "Return identifier at point using Snail-specific syntax table."
@@ -297,7 +297,13 @@ MAXIMUM: max timeout, ms."
   "Test suite accessory: Same as julia-snail-send-buffer-file, but synchronous."
   (let ((reqid (julia-snail-send-buffer-file))) ; wait for async result to return
     (julia-snail--wait-while
-     (gethash reqid julia-snail--requests) 50 1500)))
+     (gethash reqid julia-snail--requests) 50 10000)))
+
+(defun julia-snail--encode-base64 (&optional buf)
+  (let ((s (with-current-buffer (or buf (current-buffer))
+             (encode-coding-string (buffer-string)
+                                   buffer-file-coding-system))))
+    (base64-encode-string s)))
 
 
 ;;; --- connection management functions
@@ -427,14 +433,20 @@ nil, wait for the result and return it."
   (let* ((process-buf (get-buffer (julia-snail--process-buffer-name repl-buf)))
          (module-ns (julia-snail--construct-module-path module))
          (reqid (format "%04x%04x" (random (expt 16 4)) (random (expt 16 4))))
+         (code-str (json-encode-string str))
+         (display-code-str (s-truncate 80 code-str))
          (msg (format "(ns = %s, reqid = \"%s\", code = %s)\n"
                       module-ns
                       reqid
-                      (json-encode-string str)))
+                      code-str))
+         (display-msg (format "(ns = %s, reqid = \"%s\", code = %s)\n"
+                              module-ns
+                              reqid
+                              display-code-str))
          (res nil))
     (with-current-buffer process-buf
       (goto-char (point-max))
-      (insert msg))
+      (insert display-msg))
     (process-send-string process-buf msg)
     (spinner-start 'progress-bar)
     (puthash reqid
@@ -478,7 +490,7 @@ Julia include on the tmpfile, and then deleting the file."
         (insert text))
       (let ((reqid (julia-snail--send-to-server
                      module
-                     (format "include(\"%s\");" tmpfile)
+                     (format "include(\"%s\"); JuliaSnail.elexpr(true)" tmpfile)
                      :repl-buf repl-buf
                      ;; TODO: Only async via-tmp-file evaluation is currently
                      ;; supported because we rely on getting the reqid back from
@@ -565,25 +577,46 @@ Julia include on the tmpfile, and then deleting the file."
   (julia-snail--response-base reqid))
 
 
-;;; --- Julia module tracking implementation
+;;; --- CST parser interface
 
-(defun julia-snail--module-make-implicit-module-map (includes)
-  "Invert INCLUDES to map from filename to containing module."
-  ;; This takes the includes from the AST and treats each :include as a leaf,
-  ;; and associates it with the path to reach it.
-  (let ((mapping (make-hash-table :test #'equal)))
-    (cl-labels ((helper (tree path)
-                        (cond ((eq :include (-first-item tree))
-                               (puthash (-second-item tree) path mapping))
-                              ((eq :module (-first-item tree))
-                               (let ((new-path (-snoc path (-second-item tree))))
-                                 (cl-loop for node in (-third-item tree) do
-                                          (helper node new-path))))
-                              (t
-                               (cl-loop for node in tree do
-                                        (helper node path))))))
-      (helper includes (list))
-      mapping)))
+(defun julia-snail--cst-module-at (buf pt)
+  (let* ((byteloc (position-bytes pt))
+         (encoded (julia-snail--encode-base64 buf))
+         (res (julia-snail--send-to-server
+                :Main
+                (format "JuliaSnail.CST.moduleat(\"%s\", %d)" encoded byteloc)
+                :async nil)))
+    (if (eq res :nothing)
+        nil
+      res)))
+
+(defun julia-snail--cst-block-at (buf pt)
+  (let* ((byteloc (position-bytes pt))
+         (encoded (julia-snail--encode-base64 buf))
+         (res (julia-snail--send-to-server
+                :Main
+                (format "JuliaSnail.CST.blockat(\"%s\", %d)" encoded byteloc)
+                :async nil)))
+    (if (eq res :nothing)
+        nil
+      res)))
+
+(defun julia-snail--cst-includes (buf)
+  (let* ((encoded (julia-snail--encode-base64 buf))
+         (pwd (file-name-directory (buffer-file-name buf)))
+         (res (julia-snail--send-to-server
+                :Main
+                (format "JuliaSnail.CST.includesin(\"%s\", \"%s\")" encoded pwd)
+                :async nil))
+         (includes (make-hash-table :test #'equal)))
+    (unless (eq res :nothing)
+      (cl-loop for (file modules) in (-partition 2 res) do
+               (puthash file modules includes)))
+    ;; TODO: Maybe there's a situation in which returning :error is appropriate?
+    includes))
+
+
+;;; --- Julia module tracking implementation
 
 (defun julia-snail--module-merge-includes (current-filename includes)
   "Update file module cache using INCLUDES tree parsed from CURRENT-FILENAME."
@@ -592,17 +625,14 @@ Julia include on the tmpfile, and then deleting the file."
                                      julia-snail--cache-proc-implicit-file-module)
                             (puthash process-buf (make-hash-table :test #'equal)
                                      julia-snail--cache-proc-implicit-file-module)))
-         (current-file-module (gethash (expand-file-name current-filename) proc-includes))
-         (implicit-file-modules (julia-snail--module-make-implicit-module-map includes)))
-    ;; expand file names and prepend current file module
-    (cl-loop for k being the hash-keys of implicit-file-modules using (hash-values v) do
-             (remhash k implicit-file-modules)
-             (puthash (expand-file-name k)
-                      (if current-file-module (append current-file-module v) v)
-                      implicit-file-modules))
+         (current-file-module (gethash (expand-file-name current-filename) proc-includes)))
     ;; merge includes with the proc-includes table
-    (cl-loop for k being the hash-keys of implicit-file-modules using (hash-values v) do
-             (puthash k v proc-includes))
+    (cl-loop for included-file being the hash-keys of includes using (hash-values included-file-modules) do
+             (puthash included-file
+                      (if current-file-module
+                          (append current-file-module included-file-modules)
+                        included-file-modules)
+                      proc-includes))
     ;; done
     proc-includes))
 
@@ -618,7 +648,7 @@ Julia include on the tmpfile, and then deleting the file."
 (defun julia-snail--module-at-point (&optional partial-module)
   "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
   (let ((partial-module (or partial-module
-                            (julia-snail-parser-query (current-buffer) (point) :module)))
+                            (julia-snail--cst-module-at (current-buffer) (point))))
         (module-for-file (julia-snail--module-for-file (buffer-file-name))))
     (or (if module-for-file
             (append module-for-file partial-module)
@@ -740,10 +770,11 @@ Julia include on the tmpfile, and then deleting the file."
         (setq prefix "\\"))
       ;; check if identifier at point is inside a string and attach the opening quotes so
       ;; we get path completion.
-      (when (char-equal (char-before (car bounds)) ?\")
-        (setq identifier (concat "\\\"" identifier))
-        ;; TODO: add support for Windows paths (splitting on "\\" when appropriate)
-        (setq split-on "/"))
+      (when-let (prev (char-before (car bounds)))
+        (when (char-equal prev ?\")
+          (setq identifier (concat "\\\"" identifier))
+          ;; TODO: add support for Windows paths (splitting on "\\" when appropriate)
+          (setq split-on "/")))
       ;; If identifier is not a string, we split on "." so that completions of
       ;; the form Module.f -> Module.func work (since
       ;; `julia-snail--repl-completions' will return only "func" in this case)
@@ -753,6 +784,7 @@ Julia include on the tmpfile, and then deleting the file."
             (completion-table-dynamic
              (lambda (_) (julia-snail--repl-completions (concat prefix identifier))))
             :exclusive 'no))))
+
 
 ;;; --- eldoc implementation
 
@@ -817,7 +849,7 @@ This is not module-context aware."
   (interactive)
   (if (use-region-p)                    ; region
       (julia-snail-send-region)
-    (condition-case err                 ; block
+    (condition-case _err                ; block
         (julia-snail-send-top-level-form)
       (user-error                       ; block fails, so send line
        (julia-snail-send-line)))))
@@ -829,12 +861,12 @@ This will occur in the context of the Main module, just as it would at the REPL.
   (let* ((jsrb-save julia-snail-repl-buffer) ; save for callback context
          (filename (expand-file-name buffer-file-name))
          (module (or (julia-snail--module-for-file filename) '("Main")))
-         (includes (julia-snail-parser-includes (current-buffer))))
+         (includes (julia-snail--cst-includes (current-buffer))))
     (when (or (not (buffer-modified-p))
               (y-or-n-p (format "'%s' is not saved, send to Julia anyway? " filename)))
       (julia-snail--send-to-server
         module
-        (format "include(\"%s\");" filename)
+        (format "include(\"%s\"); JuliaSnail.elexpr(true)" filename)
         :callback-success (lambda (&optional _data)
                             ;; julia-snail-repl-buffer must be rebound here from
                             ;; jsrb-save, because the callback will run in a
@@ -842,6 +874,9 @@ This will occur in the context of the Main module, just as it would at the REPL.
                             ;; julia-snail-repl-buffer will have disappeared
                             (let* ((julia-snail-repl-buffer jsrb-save)
                                    (repl-buf (get-buffer julia-snail-repl-buffer)))
+                              ;; NB: At the moment, julia-snail--cst-includes
+                              ;; does not return :error. However, it might in
+                              ;; the future, and this code will then be useful.
                               (if (eq :error includes)
                                   (let ((error-buffer
                                          (julia-snail--message-buffer
@@ -885,21 +920,24 @@ If a prefix arg is used, this instead occurs in the context of Main."
 This occurs in the context of the current module.
 Currently only works on blocks terminated with `end'."
   (interactive)
-  (let* ((q (julia-snail-parser-query (current-buffer) (point) :top-level-block))
-         (module (julia-snail--module-at-point (plist-get q :module)))
-         (block-description (plist-get q :block))
-         (block-start (-second-item block-description))
-         (block-end (-third-item block-description))
-         (text (buffer-substring-no-properties block-start block-end)))
-    (julia-snail--flash-region block-start block-end 0.5)
-    (julia-snail--send-to-server-via-tmp-file
-      module text
-      :callback-success (lambda (&optional _data)
-                          (message "Top-level form evaluated: %s, module %s"
-                                   (if (-fourth-item block-description)
-                                       (-fourth-item block-description)
-                                     "unknown")
-                                   (julia-snail--construct-module-path module))))))
+  (let* ((q (julia-snail--cst-block-at (current-buffer) (point)))
+         (module (julia-snail--module-at-point (-first-item q)))
+         (block-start (byte-to-position (or (-second-item q) -1)))
+         (block-end (byte-to-position (or (-third-item q) -1)))
+         (text (condition-case nil
+                   (buffer-substring-no-properties block-start block-end)
+                 (error ""))))
+    (if (null q)
+        (user-error "No top-level form at point")
+      (julia-snail--flash-region block-start block-end 0.5)
+      (julia-snail--send-to-server-via-tmp-file
+        module text
+        :callback-success (lambda (&optional _data)
+                            (message "Top-level form evaluated: %s, module %s"
+                                     (if (-fourth-item q)
+                                         (-fourth-item q)
+                                       "unknown")
+                                     (julia-snail--construct-module-path module)))))))
 
 (defun julia-snail-package-activate (dir)
   "Activate a Pkg project located in DIR in the Julia REPL."
@@ -957,7 +995,7 @@ autocompletion aware of the available modules."
   (interactive)
   (let* ((filename (expand-file-name buffer-file-name))
          (module (or (julia-snail--module-for-file filename) '("Main")))
-         (includes (julia-snail-parser-includes (current-buffer))))
+         (includes (julia-snail--cst-includes (current-buffer))))
     (julia-snail--module-merge-includes filename includes)
     (message "Caches updated: parent module %s"
              (julia-snail--construct-module-path module))))

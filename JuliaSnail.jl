@@ -14,7 +14,25 @@
 import Pkg
 
 
+# a quick hack to allow using external dependencies
+push!(LOAD_PATH, @__DIR__)
+
+
 module JuliaSnail
+
+
+# external dependency hack continues
+try
+   import CSTParser
+catch err
+   if isa(err, ArgumentError)
+      # force dependency installation
+      Main.Pkg.activate(@__DIR__)
+      Main.Pkg.instantiate()
+      Main.Pkg.precompile()
+      Main.Pkg.activate()
+   end
+end
 
 
 import Markdown
@@ -22,7 +40,6 @@ import Printf
 import REPL
 import Sockets
 import REPL.REPLCompletions
-
 
 export start, stop
 
@@ -36,17 +53,22 @@ end
 """
 Construct Elisp expression.
 
-julia> elexpr((:mapcar, (:function, :exp), [1, 2, 3]))
-"(mapcar (function exp) '(1 2 3))"
+julia> JuliaSnail.elexpr([:mapcar, [:function :exp], (1, 2, 3, "hello")])
+"(mapcar (function exp) '(1 2 3 \"hello\"))"
 
-This result can be fed into (eval (read ...)) in Elisp.
+This result can be fed into (eval (read ...)) in Elisp. Note that input tuples
+turn into quoted lists, and arrays into ordinary lists. This means an Elisp-side
+eval will treat lists as it ordinarily does, where (car ...) is expected to be a
+function call.
 """
 function elexpr(arg::Tuple)
-   Printf.@sprintf("(%s)", join(map(elexpr, arg), " "))
+   Printf.@sprintf("'(%s)", join(map(elexpr, arg), " "))
 end
 
 function elexpr(arg::Array)
-   Printf.@sprintf("'(%s)", join(map(elexpr, arg), " "))
+   isempty(arg) ?
+      "nil" :
+      Printf.@sprintf("(%s)", join(map(elexpr, arg), " "))
 end
 
 function elexpr(arg::String)
@@ -63,6 +85,10 @@ end
 
 function elexpr(arg::Symbol)
    string(arg)
+end
+
+function elexpr(arg::Bool)
+   arg ? "t" : "nil"
 end
 
 function elexpr(arg::Any)
@@ -245,12 +271,13 @@ function lsdefinitions(ns, identifier)
          # into one. This often happens with function default arguments.
          lines = map(m -> m.line, ms)
          files = map(m -> m.file, ms)
-         map(m -> (Printf.@sprintf("%s(%s)",
-                                   identifier,
-                                   format_method_signature(m.sig)),
-                   Base.find_source_file(string(m.file)),
-                   m.line),
-             ms)
+         [:list;
+          map(m -> (Printf.@sprintf("%s(%s)",
+                                    identifier,
+                                    format_method_signature(m.sig)),
+                    Base.find_source_file(string(m.file)),
+                    m.line),
+              ms)]
       end
    catch
       []
@@ -303,8 +330,163 @@ Code completion suggestions for completion string `identifier` in module `mod`.
 Completions are provided by the built-in REPL.REPLCompletions.
 """
 function replcompletion(identifier,mod)
-    cs,_,_ = REPLCompletions.completions(identifier, length(identifier), mod)
-    return REPLCompletions.completion_text.(cs)
+   cs, _, _ = REPLCompletions.completions(identifier, lastindex(identifier), mod)
+   return [:list; REPLCompletions.completion_text.(cs)]
+end
+
+
+### --- CSTParser wrappers
+
+module CST
+
+import Base64
+import CSTParser
+
+"""
+Helper function: wraps the parser interface.
+"""
+function parse(encodedbuf)
+   cst = nothing
+   try
+      buf = String(Base64.base64decode(encodedbuf))
+      cst = CSTParser.parse(buf, true)
+   catch err
+      # probably an IO problem
+      # TODO: Need better error reporting here.
+      println(err)
+      return []
+   end
+   return cst
+end
+
+"""
+Return the path of CSTParser.EXPR objects from the root of the CST to the
+expression at the offset, while retaining the EXPR objects' full locations.
+
+The path is represented as an array of named tuples. The first element
+represents the root node, and the last element is the expression at the offset.
+Each tuple has a start and stop value, showing locations in the original source
+where that node begins and ends.
+
+This is necessary because CSTParser does not include full location data, see
+https://github.com/julia-vscode/CSTParser.jl/pull/80.
+"""
+function pathat(cst, offset, pos = 0, path = [(expr=cst, start=1, stop=cst.span+1)])
+   if cst.args !== nothing && CSTParser.typof(cst) !== CSTParser.NONSTDIDENTIFIER
+      for a in cst.args
+         if pos < offset <= (pos + a.span)
+            return pathat(a, offset, pos, [path; [(expr=a, start=pos+1, stop=pos+a.span+1)]])
+         end
+         # jump forward by fullspan since we need to skip over a's trailing whitespace
+         pos += a.fullspan
+      end
+   elseif (pos < offset <= (pos + cst.fullspan))
+      return [path; [(expr=cst, start=pos+1, stop=offset+1)]]
+   end
+   return path
+end
+
+"""
+Return the module active at point as a list of their names.
+"""
+function moduleat(encodedbuf, byteloc)
+   cst = parse(encodedbuf)
+   path = pathat(cst, byteloc)
+   modules = []
+   for node in path
+      if CSTParser.defines_module(node.expr)
+         push!(modules, CSTParser.get_name(node.expr).val)
+      end
+   end
+   return [:list; modules]
+end
+
+"""
+Return information about the block at point.
+"""
+function blockat(encodedbuf, byteloc)
+   cst = parse(encodedbuf)
+   path = pathat(cst, byteloc)
+   modules = []
+   description = nothing
+   start = nothing
+   stop = nothing
+   for node in path
+      if CSTParser.defines_module(node.expr)
+         description = nothing
+         push!(modules, CSTParser.get_name(node.expr).val)
+      elseif (isnothing(description) &&
+              (CSTParser.defines_abstract(node.expr) ||
+               CSTParser.defines_datatype(node.expr) ||
+               CSTParser.defines_function(node.expr) ||
+               CSTParser.defines_macro(node.expr) ||
+               CSTParser.defines_mutable(node.expr) ||
+               CSTParser.defines_primitive(node.expr) ||
+               CSTParser.defines_struct(node.expr)))
+         description = CSTParser.get_name(node.expr).val
+         start = node.start
+         stop = node.stop
+      end
+   end
+   # result format equivalent to what Elisp side expects
+   return isnothing(description) ?
+      nothing :
+      [:list; tuple(modules...); start; stop; description]
+end
+
+"""
+For a given buffer, return the files `include()`d in each nested module.
+
+Result structure: {
+  filename -> [module names]
+}
+
+This nasty code relies on internal CSTParser representations of things.
+Unfortunately, CSTParser doesn't provide a clean API for this sort of thing:
+https://github.com/julia-vscode/CSTParser.jl/issues/56
+"""
+function includesin(encodedbuf, path="")
+   cst = parse(encodedbuf)
+   results = Dict()
+   # walk across args, and track the current module
+   # when a node of type "call" is found, check its args[1]
+   helper = (node, modules = []) -> begin
+      for a in node.args
+         if (CSTParser.Call == a.typ &&
+             !isnothing(a.args) &&
+             4 == length(a.args) &&
+             "include" == a.args[1].val)
+            # a.args[3] is the file name being included
+            filename = joinpath(path, a.args[3].val)
+            results[filename] = modules
+         elseif CSTParser.defines_module(a)
+            helper(a, [modules; CSTParser.get_name(a).val])
+         elseif !isnothing(a.args)
+            helper(a, modules)
+         end
+      end
+   end
+   helper(cst)
+   # convert to a plist for returning back to Emacs
+   reslist = []
+   for (file, modules) in results
+      push!(reslist, file)
+      push!(reslist, [:list; modules])
+   end
+   return isempty(reslist) ?
+      nothing :
+      [:list; reslist]
+end
+
+# XXX: Dirty hackery to improve perceived startup performance follows. Running
+# this function in a separate thread should, in theory, force a bunch of things
+# to JIT-compile in the background before the users notices.
+function forcecompile()
+   # call these functions before the user does
+   includesin(Base64.base64encode("module Alpha\ninclude(\"a.jl\")\nend"))
+   moduleat(Base64.base64encode("module Alpha\nend"), 1)
+end
+
 end
 
 
@@ -343,6 +525,9 @@ function start(port=10011)
          println(stderr, "ERROR: Snail will not work correctly.")
       end
    end
+   if VERSION >= v"1.3"
+      Threads.@spawn CST.forcecompile()
+   end
    @async begin
       while running
          client = Sockets.accept(server_socket)
@@ -355,16 +540,20 @@ function start(port=10011)
                expr = Meta.parse(input.code)
                result = eval_in_module(input.ns, expr)
                # report successful evaluation back to client
-               resp = elexpr((Symbol("julia-snail--response-success"),
-                              input.reqid,
-                              result))
+               resp = elexpr([
+                  Symbol("julia-snail--response-success"),
+                  input.reqid,
+                  result
+               ])
                send_to_client(resp, client)
             catch err
                try
-                  resp = elexpr((Symbol("julia-snail--response-failure"),
-                                 input.reqid,
-                                 sprint(showerror, err),
-                                 string.(stacktrace(catch_backtrace()))))
+                  resp = elexpr([
+                     Symbol("julia-snail--response-failure"),
+                     input.reqid,
+                     sprint(showerror, err),
+                     tuple(string.(stacktrace(catch_backtrace()))...)
+                  ])
                   send_to_client(resp, client)
                catch err2
                   if isa(err2, ArgumentError)

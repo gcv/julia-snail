@@ -1,4 +1,4 @@
-;;; julia-snail/tests/implicit-modules.el --- Julia Snail implicit modules test - full -*- lexical-binding: t -*-
+;;; tests/implicit-modules.el --- Julia Snail implicit modules test - full -*- lexical-binding: t -*-
 
 
 ;;; --- requirements
@@ -36,14 +36,21 @@
       (kill-buffer source-buf-1))))
 
 (ert-deftest js-test-export-parse ()
-  (let ((source-buf (find-file (julia-snail-test-file-path "implicit-export.jl"))))
+  (let ((repl-buf (format "*julia* %s" (symbol-name (gensym))))
+        (source-buf (find-file (julia-snail-test-file-path "implicit-export.jl"))))
     (unwind-protect
-        (with-current-buffer source-buf
-          (should
-           (equal
-            '((:module "MyModule" ((:include "file1.jl")
-                                   (:include "file2.jl"))))
-            (julia-snail-parser-includes (get-buffer (current-buffer))))))
+        (js-with-julia-session repl-buf
+          (julia-snail)
+          (with-current-buffer source-buf
+            (let ((includes (julia-snail--cst-includes (get-buffer (current-buffer)))))
+              (should
+               (equal
+                '("MyModule")
+                (gethash (julia-snail-test-file-path "file1.jl") includes)))
+              (should
+               (equal
+                '("MyModule")
+                (gethash (julia-snail-test-file-path "file2.jl") includes))))))
       (kill-buffer source-buf))))
 
 (ert-deftest js-test-multiple ()

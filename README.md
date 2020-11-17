@@ -11,7 +11,7 @@ Snail is a development environment and REPL interaction package for Julia in the
 - **REPL interaction:** Snail provides a bridge between Julia code and a Julia process running in a REPL. The bridge allows Emacs to interact with and introspect the Julia image. Among other things, this allows loading entire files and individual functions into running Julia processes.
 - **Cross-referencing:** Snail is integrated with the built-in Emacs [xref](https://www.gnu.org/software/emacs/manual/html_node/emacs/Xref.html) system. When a Snail session is active, it supports jumping to definitions of functions and macros loaded in the session.
 - **Completion:** Snail is also integrated with the built-in Emacs [completion-at-point](https://www.gnu.org/software/emacs/manual/html_node/elisp/Completion-in-Buffers.html) facility. Provided it is configured with the `company-capf` backend, [company-mode](http://company-mode.github.io/) completion will also work (this should be the case by default).
-- **Parser:** Snail contains a limited but serviceable Julia parser, used to infer the structure of source files and to enable features which require an understanding of code context, especially the module in which a particular piece of code lives. This enables awareness of the current module for completion and cross-referencing purposes.
+- **Parser:** Snail uses [CSTParser](https://github.com/julia-vscode/CSTParser.jl), a full-featured Julia parser, to infer the structure of source files and to enable features which require an understanding of code context, especially the module in which a particular piece of code lives. This enables awareness of the current module for completion and cross-referencing purposes.
 
 
 ## Demo
@@ -112,7 +112,7 @@ The `julia-snail-mode` minor mode provides a key binding map (`julia-snail-mode-
 | C-c C-k | julia-snail-send-buffer-file    <br> _`include()` the current buffer’s file_                                       |
 | C-c C-R | julia-snail-update-module-cache <br> _update module-nested `include` cache (mainly for Revise)_                    |
 
-Several commands include the note “in the current module”. This means the Snail parser will determine the enclosing `module...end` statements, and run the relevant code in that module. If the module has already been loaded, this means its global variables and functions will be available.
+Several commands include the note “in the current module”. This means the Julia parser will determine the enclosing `module...end` statements, and run the relevant code in that module. If the module has already been loaded, this means its global variables and functions will be available.
 
 In addition, most `xref` commands are available (except `xref-find-references`). `xref-find-definitions`, by default bound to `M-.`, does a decent job of jumping to function and macro definitions. Cross-reference commands are current-module aware.
 
@@ -176,7 +176,7 @@ include("alpha-2.jl")
 end
 ```
 
-Everything in the files `alpha-1.jl` and `alpha-2.jl` is inside the `Alpha` module, but neither of these files will mention that module explicitly. Snail supports this by using its parser to track `include(...)` calls and their module context. This feature works with nested modules.
+Everything in the files `alpha-1.jl` and `alpha-2.jl` is inside the `Alpha` module, but neither of these files will mention that module explicitly. Snail supports this by using the Julia parser to track `include(...)` calls and their module context. This feature works with nested modules.
 
 Using this feature requires some care. The root file which contains the module declaration (`alpha.jl` in this example) must be loaded using `julia-snail-send-buffer-file` first (or, for [Revise](https://github.com/timholy/Revise.jl) users, `julia-snail-update-module-cache`). If this does not happen, the parser will not have the opportunity to learn where `alpha-1.jl` and `alpha-2.jl` fit in the module hierarchy, and will assume their parent module is `Main`. The same applies to any deeper nesting of files (i.e., if `alpha-1.jl` then does `include("alpha-1.1.jl")`, then `julia-snail-send-buffer-file` or `julia-snail-update-module-cache` must be executed from `alpha-1.jl`).
 
@@ -198,11 +198,10 @@ Furthermore, if `alpha-1.jl` is refactored to sit outside the `Alpha` module, or
 ### Structural
 
 -  The `libvterm` dependency forces the use of very recent Emacs releases, forces Emacs to be build with module support, complicates support for Windows, and is generally quite gnarly. It would be much better to re-implement the REPL in Elisp.
-- The current parser leaves much to be desired. It is woefully incomplete: among many other things, it cannot detect one-line top-level definitions (such as `f(x) = 10x`). In addition: it is slow, and not particularly straightforward in implementation. A rewrite would work better and enable more features. Unfortunately, parsers are hard. :)
 
 
 ### Functional
 
-- Completion does not pick up local variables. This is yet another weakness of the parser.
-- A real eldoc implementation would be great, but difficult to do with Julia’s generic functions. The parser would also have to improve (notice a theme here?).
+- Completion does not pick up local variables.
+- A real eldoc implementation would be great, but difficult to do with Julia’s generic functions.
 - A debugger would be great.

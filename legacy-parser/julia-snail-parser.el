@@ -1,5 +1,9 @@
 ;;; julia-snail-parser.el --- Julia Snail parser -*- lexical-binding: t -*-
 
+;; URL: https://github.com/gcv/julia-snail
+;; Package-Requires: ((emacs "26.2") (cl-lib "0.5") (dash "2.16.0") (julia-mode "0.3") (parsec "0.1.3"))
+;; Version: 1.0.0rc4
+;; Created: 2019-10-27
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -17,6 +21,7 @@
 ;;; Commentary:
 
 ;; This is the Julia Snail parser.
+;; It has been deprecated in favor of CSTParser.
 
 
 ;;; Code:
