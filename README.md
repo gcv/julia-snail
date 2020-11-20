@@ -41,7 +41,10 @@ Optionally, install [markdown-mode](https://github.com/jrblevin/markdown-mode) t
 **Make sure to install vterm first!** (See the [Installation](#installation) section.)
 
 ```elisp
+(use-package vterm)
+
 (use-package julia-snail
+  :requires vterm
   :hook (julia-mode . julia-snail-mode))
 ```
 
