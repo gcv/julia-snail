@@ -21,7 +21,7 @@ Snail is a development environment and REPL interaction package for Julia in the
 
 ## Installation
 
-Julia versions 1.0–1.4 work. No packages need to be installed on the Julia side (other than Julia itself).
+Julia versions 1.0–1.5 work. Snail’s Julia-side dependencies will automatically be installed when it starts, and will stay out of your way using Julia’s [`LOAD_PATH` mechanism](https://docs.julialang.org/en/v1/base/constants/#Base.LOAD_PATH).
 
 On the Emacs side:
 
