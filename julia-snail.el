@@ -279,7 +279,7 @@ MAXIMUM: max timeout, ms."
 (defun julia-snail--capture-basedir (buf)
   (julia-snail--send-to-server
     :Main
-    "normpath(joinpath(VERSION ≤ v\"0.7-\" ? JULIA_HOME : Sys.BINDIR, Base.DATAROOTDIR, \"julia\", \"base\"))"
+    "normpath(joinpath(VERSION <= v\"0.7-\" ? JULIA_HOME : Sys.BINDIR, Base.DATAROOTDIR, \"julia\", \"base\"))"
     :repl-buf buf
     :async nil))
 
