@@ -33,6 +33,8 @@ On the Emacs side:
 
 Optionally, install [markdown-mode](https://github.com/jrblevin/markdown-mode) to improve documentation buffer display.
 
+Because Julia supports Unicode identifiers and uses them for mathematical symbols, it is also a good idea to double-check that your Emacs is cleanly set up to handle Unicode. The article [Working with Coding Systems and Unicode in Emacs](https://masteringemacs.org/article/working-coding-systems-unicode-emacs) explains the settings (though Emacs 27 seems to do the right thing by default).
+
 
 ## Configuration
 
