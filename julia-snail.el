@@ -96,11 +96,21 @@
 
 ;;; --- constants
 
+(defconst julia-snail--julia-files
+  (list "JuliaSnail.jl" "Manifest.toml" "Project.toml"))
+
+(defconst julia-snail--julia-files-local
+  (mapcar (lambda (f)
+            (concat (if load-file-name
+                        (file-name-directory load-file-name)
+                      (file-name-as-directory default-directory))
+                    f))
+          julia-snail--julia-files))
+
 (defconst julia-snail--server-file
-  (concat (if load-file-name
-              (file-name-directory load-file-name)
-            (file-name-as-directory default-directory))
-          "JuliaSnail.jl"))
+  (-find (lambda (f)
+           (string-equal "JuliaSnail.jl" (file-name-nondirectory f)))
+         julia-snail--julia-files-local))
 
 
 ;;; --- variables
@@ -307,6 +317,42 @@ MAXIMUM: max timeout, ms."
              (encode-coding-string (buffer-string)
                                    buffer-file-coding-system))))
     (base64-encode-string s)))
+
+(defun julia-snail--copy-snail-to-remote-host ()
+  (let* (;; checksum all relevant files as one, copy into a directory
+         ;; keyed off the checksum if it doesn't already exist (basically cache
+         ;; the current version of the Julia code (.jl and .toml files)
+         (checksum (with-temp-buffer
+                     (cl-loop for f in julia-snail--julia-files-local do
+                              (insert-file-contents-literally f))
+                     (secure-hash 'sha256 (current-buffer))))
+         (snail-remote-dir (concat (file-name-as-directory (temporary-file-directory))
+                                   (concat "julia-snail-" checksum "/"))))
+    (unless (file-exists-p snail-remote-dir)
+      (make-directory snail-remote-dir)
+      (cl-loop for f in julia-snail--julia-files-local do
+               (copy-file f snail-remote-dir t)))
+    snail-remote-dir))
+
+(defun julia-snail--launch-command ()
+  (let ((extra-args (if (listp julia-snail-extra-args)
+                        (mapconcat 'identity julia-snail-extra-args " ")
+                      julia-snail-extra-args))
+        (remote-host (file-remote-p default-directory 'host)))
+    (if (or (null remote-host) (string-equal "localhost" remote-host))
+        ;; local REPL
+        (format "%s %s -L %s" julia-snail-executable extra-args julia-snail--server-file)
+      ;; remote REPL
+      (let* ((remote-dir (julia-snail--copy-snail-to-remote-host))
+             (remote-dir-localname (file-remote-p remote-dir 'localname))
+             (remote-dir-server-file (concat remote-dir-localname "JuliaSnail.jl")))
+        ;; FIXME: Add tmux support.
+        (format "ssh -t -L %1$s:localhost:%1$s %2$s %3$s %4$s -L %5$s"
+                julia-snail-port ;; FIXME?
+                remote-host
+                "julia" ;; FIXME: remote-julia-executable
+                extra-args
+                remote-dir-server-file)))))
 
 
 ;;; --- connection management functions
@@ -821,11 +867,8 @@ To create multiple REPLs, give these variables distinct values (e.g.:
           (setf (buffer-local-value 'julia-snail--repl-go-back-target repl-buf) source-buf)
           (pop-to-buffer repl-buf))
       ;; run Julia in a vterm and load the Snail server file
-      (let* ((extra-args (if (listp julia-snail-extra-args)
-                             (mapconcat 'identity julia-snail-extra-args " ")
-                           julia-snail-extra-args))
-             (vterm-shell (format "%s %s -L %s" julia-snail-executable extra-args julia-snail--server-file))
-             (vterm-buf (generate-new-buffer julia-snail-repl-buffer)))
+      (let ((vterm-shell (julia-snail--launch-command))
+            (vterm-buf (generate-new-buffer julia-snail-repl-buffer)))
         (pop-to-buffer vterm-buf)
         (with-current-buffer vterm-buf
           ;; XXX: Set the error color to red to work around breakage relating to
