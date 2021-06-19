@@ -354,6 +354,18 @@ MAXIMUM: max timeout, ms."
                 extra-args
                 remote-dir-server-file)))))
 
+(defun julia-snail--efn (path &optional default-directory)
+  "A variant of expand-file-name that (1) just does
+expand-file-name on local files, and (2) returns the expanded
+form of the remote path without any host connection string
+components. Example: (julia-snail--efn \"/ssh:host:~/file.jl\")
+returns \"/home/username/file.jl\"."
+  (let* ((expanded (expand-file-name path default-directory))
+         (remote-local-path (file-remote-p expanded 'localname)))
+    (if remote-local-path
+        remote-local-path
+      expanded)))
+
 
 ;;; --- connection management functions
 
@@ -531,17 +543,18 @@ nil, wait for the result and return it."
   "Send str to server by first writing it to a tmpfile, calling
 Julia include on the tmpfile, and then deleting the file."
   (declare (indent defun))
-  (let ((text (s-trim str))
-        (tmpfile (make-temp-file
-                  (expand-file-name "julia-tmp"
-                                    (or small-temporary-file-directory
-                                        temporary-file-directory)))))
+  (let* ((text (s-trim str))
+         (tmpfile (make-temp-file
+                   (expand-file-name "julia-tmp" ; NOT julia-snail--efn
+                                     (or small-temporary-file-directory
+                                         (temporary-file-directory)))))
+         (tmpfile-local-remote (file-remote-p tmpfile 'localname)))
     (progn
       (with-temp-file tmpfile
         (insert text))
       (let ((reqid (julia-snail--send-to-server
                      module
-                     (format "include(\"%s\"); Main.JuliaSnail.elexpr(true)" tmpfile)
+                     (format "include(\"%s\"); Main.JuliaSnail.elexpr(true)" tmpfile-local-remote)
                      :repl-buf repl-buf
                      ;; TODO: Only async via-tmp-file evaluation is currently
                      ;; supported because we rely on getting the reqid back from
@@ -676,7 +689,7 @@ Julia include on the tmpfile, and then deleting the file."
                                      julia-snail--cache-proc-implicit-file-module)
                             (puthash process-buf (make-hash-table :test #'equal)
                                      julia-snail--cache-proc-implicit-file-module)))
-         (current-file-module (gethash (expand-file-name current-filename) proc-includes)))
+         (current-file-module (gethash (julia-snail--efn current-filename) proc-includes)))
     ;; merge includes with the proc-includes table
     (cl-loop for included-file being the hash-keys of includes using (hash-values included-file-modules) do
              (puthash included-file
@@ -689,7 +702,7 @@ Julia include on the tmpfile, and then deleting the file."
 
 (defun julia-snail--module-for-file (file)
   "Retrieve the module for FILE from `julia-snail--cache-proc-implicit-file-module' table."
-  (let* ((filename (expand-file-name file))
+  (let* ((filename (julia-snail--efn file))
          (process-buf (get-buffer (julia-snail--process-buffer-name julia-snail-repl-buffer)))
          (proc-includes (gethash process-buf julia-snail--cache-proc-implicit-file-module
                                  (make-hash-table :test #'equal)))
@@ -731,12 +744,17 @@ Julia include on the tmpfile, and then deleting the file."
   (if (or (null response) (eq :nothing response))
       nil
     (mapcar (lambda (candidate)
-              (let ((descr (-first-item candidate))
-                    (path (-second-item candidate))
-                    (line (-third-item candidate)))
+              (let* ((descr (-first-item candidate))
+                     (path (-second-item candidate))
+                     (line (-third-item candidate))
+                     ;; convert to Tramp path when working with a remote REPL
+                     (tramp-prefix (file-remote-p default-directory))
+                     (real-path (if tramp-prefix
+                                    (concat tramp-prefix path)
+                                  path)))
                 (xref-make descr
-                           (if (file-exists-p path)
-                               (xref-make-file-location path line 0)
+                           (if (file-exists-p real-path)
+                               (xref-make-file-location real-path line 0)
                              (xref-make-bogus-location
                               "xref not supported for definitions evaluated with julia-snail-send-top-level-form")))))
             response)))
@@ -907,7 +925,7 @@ This is not module-context aware."
 This will occur in the context of the Main module, just as it would at the REPL."
   (interactive)
   (let* ((jsrb-save julia-snail-repl-buffer) ; save for callback context
-         (filename (expand-file-name buffer-file-name))
+         (filename (julia-snail--efn buffer-file-name))
          (module (or (julia-snail--module-for-file filename) '("Main")))
          (includes (julia-snail--cst-includes (current-buffer))))
     (when (or (not (buffer-modified-p))
@@ -990,7 +1008,7 @@ Currently only works on blocks terminated with `end'."
 (defun julia-snail-package-activate (dir)
   "Activate a Pkg project located in DIR in the Julia REPL."
   (interactive "DProject directory: ")
-  (let ((expanded-dir (expand-file-name dir)))
+  (let ((expanded-dir (julia-snail--efn dir)))
     (julia-snail--send-to-server
       :Main
       (format "Pkg.activate(\"%s\")" expanded-dir)
@@ -1041,7 +1059,7 @@ environment using `julia-snail-send-buffer-file', but it is
 useful for a workflow using Revise.jl. It makes xref and
 autocompletion aware of the available modules."
   (interactive)
-  (let* ((filename (expand-file-name buffer-file-name))
+  (let* ((filename (julia-snail--efn buffer-file-name))
          (module (or (julia-snail--module-for-file filename) '("Main")))
          (includes (julia-snail--cst-includes (current-buffer))))
     (julia-snail--module-merge-includes filename includes)
