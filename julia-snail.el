@@ -419,8 +419,17 @@ returns \"/home/username/file.jl\"."
         ;; Julia 1.0.4.
         ;; TODO: Follow-up on https://github.com/JuliaLang/julia/issues/33752
         (message "Starting Julia process and loading Snail...")
+        ;; XXX: Wait briefly in case the Julia executable failed to launch.
+        (with-current-buffer repl-buf
+          (julia-snail--wait-while
+           (not (string-equal "julia>" (current-word)))
+           100
+           (* 0.750 1000)))
+        (unless (buffer-live-p repl-buf)
+          (user-error "The vterm buffer is inactive; double-check julia-snail-executable path"))
+        ;; now try to send the Snail startup command
         (julia-snail--send-to-repl
-          (format "JuliaSnail.start(%d);" (or julia-snail-remote-port julia-snail-port))
+          (format "JuliaSnail.start(%d); # please wait, time-to-first-plot..." (or julia-snail-remote-port julia-snail-port))
           :repl-buf repl-buf
           ;; wait a while in case dependencies need to be downloaded
           :polling-timeout (* 5 60 1000)
