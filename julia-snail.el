@@ -54,6 +54,7 @@
   :group 'julia-snail
   :safe 'stringp
   :type 'string)
+(make-variable-buffer-local 'julia-snail-executable)
 
 (defcustom julia-snail-extra-args nil
   "Extra arguments to pass to the Julia binary, e.g. '--sysimage /path/to/image'."
@@ -66,12 +67,21 @@
 (make-variable-buffer-local 'julia-snail-extra-args)
 
 (defcustom julia-snail-port 10011
-  "Default Snail server port."
-  :tag "Snail server port"
+  "Default Snail server port for Emacs to connect to."
+  :tag "Snail server port (local)"
   :group 'julia-snail
   :safe 'integerp
   :type 'integer)
 (make-variable-buffer-local 'julia-snail-port)
+
+(defcustom julia-snail-remote-port nil
+  "Default Snail server port when using a remote REPL. Do not set UNLESS using a remote REPL!"
+  :tag "Snail server port (remote); do not set unless using remote REPL"
+  :group 'julia-snail
+  :safe (lambda (obj) (or (null obj) (integerp obj)))
+  :type '(choice (const :tag "Same as local" nil)
+                 (integer)))
+(make-variable-buffer-local 'julia-snail-remote-port)
 
 (defcustom julia-snail-repl-buffer "*julia*"
   "Default buffer to use for Julia REPL interaction."
@@ -79,7 +89,7 @@
   :group 'julia-snail
   :safe 'stringp
   :type 'string)
-(make-variable-buffer-local 'julia-snail-buffer)
+(make-variable-buffer-local 'julia-snail-repl-buffer)
 
 (defcustom julia-snail-show-error-window t
   "When t: show compilation errors in separate window. When nil: display errors in the minibuffer."
@@ -346,11 +356,11 @@ MAXIMUM: max timeout, ms."
       (let* ((remote-dir (julia-snail--copy-snail-to-remote-host))
              (remote-dir-localname (file-remote-p remote-dir 'localname))
              (remote-dir-server-file (concat remote-dir-localname "JuliaSnail.jl")))
-        ;; FIXME: Add tmux support.
-        (format "ssh -t -L %1$s:localhost:%1$s %2$s %3$s %4$s -L %5$s"
-                julia-snail-port ;; FIXME?
+        (format "ssh -t -L %1$s:localhost:%2$s %3$s %4$s %5$s -L %6$s"
+                julia-snail-port
+                (or julia-snail-remote-port julia-snail-port)
                 remote-host
-                "julia" ;; FIXME: remote-julia-executable
+                julia-snail-executable
                 extra-args
                 remote-dir-server-file)))))
 
@@ -397,7 +407,10 @@ returns \"/home/username/file.jl\"."
       (persp-add-buffer process-buf (get-current-persp) nil))
     (with-current-buffer process-buf
       (unless julia-snail--process
+        ;; XXX: Manually bring in essential variables. This must match the "XXX:
+        ;; SETTING BUFFER-LOCAL VARIABLES" section in the julia-snail function!
         (setq julia-snail-port (buffer-local-value 'julia-snail-port repl-buf))
+        (setq julia-snail-remote-port (buffer-local-value 'julia-snail-remote-port repl-buf))
         ;; XXX: This is currently necessary because there does not appear to be
         ;; a way to pass arguments to an interactive Julia session. This does
         ;; not work: `julia -L JuliaSnail.jl -- $PORT`.
@@ -407,7 +420,7 @@ returns \"/home/username/file.jl\"."
         ;; TODO: Follow-up on https://github.com/JuliaLang/julia/issues/33752
         (message "Starting Julia process and loading Snail...")
         (julia-snail--send-to-repl
-          (format "JuliaSnail.start(%d);" julia-snail-port)
+          (format "JuliaSnail.start(%d);" (or julia-snail-remote-port julia-snail-port))
           :repl-buf repl-buf
           ;; wait a while in case dependencies need to be downloaded
           :polling-timeout (* 5 60 1000)
@@ -899,6 +912,7 @@ To create multiple REPLs, give these variables distinct values (e.g.:
             ;; INITIALIZING vterm-mode!!! Something resets buffer-local
             ;; variables in that initialization.
             (setq julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
+            (setq julia-snail-remote-port (buffer-local-value 'julia-snail-remote-port source-buf))
             (setq julia-snail--repl-go-back-target source-buf))
           (julia-snail-repl-mode))))))
 
