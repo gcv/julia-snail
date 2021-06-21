@@ -481,6 +481,7 @@ end
 # XXX: Dirty hackery to improve perceived startup performance follows. Running
 # this function in a separate thread should, in theory, force a bunch of things
 # to JIT-compile in the background before the users notices.
+# Thank you very much, time-to-first-plot problem!
 function forcecompile()
    # call these functions before the user does
    includesin(Base64.base64encode("module Alpha\ninclude(\"a.jl\")\nend"))
@@ -525,9 +526,18 @@ function start(port=10011)
          println(stderr, "ERROR: Snail will not work correctly.")
       end
    end
-   if VERSION >= v"1.3"
-      Threads.@spawn CST.forcecompile()
-   end
+   # XXX: It would be great to do this forcecompile trick in a Thread.@spawn
+   # block. Unfortunately, as of Julia 1.6.1 this does not work. First, it's
+   # meaningless unless Julia is started with JULIA_NUM_THREADS or --threads set
+   # to some number >1 (not the default). Second, and worse, for some reason,
+   # the spawned thread _still_ blocks the main thread. Non-working code below:
+   # if VERSION >= v"1.3" && Threads.nthreads() > 1
+   #    Threads.@spawn begin
+   #       CST.forcecompile()
+   #    end
+   # end
+   CST.forcecompile()
+   # main loop:
    @async begin
       while running
          client = Sockets.accept(server_socket)
