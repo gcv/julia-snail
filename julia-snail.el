@@ -293,7 +293,11 @@ MAXIMUM: max timeout, ms."
            (,incr (/ ,increment 1000.0))
            (,max (/ ,maximum 1000.0)))
        (while (and (< ,sleep-total ,max) ,condition)
-         (sit-for ,incr)
+         ;; XXX: This MUST be sleep-for, not sit-for. sit-for is interrupted by
+         ;; input, which breaks the loop on input, which will inadvertently kill
+         ;; the wait.
+         (redisplay)
+         (sleep-for ,incr)
          (setf ,sleep-total (+ ,sleep-total ,incr))))))
 
 (defun julia-snail--capture-basedir (buf)
@@ -443,7 +447,8 @@ returns \"/home/username/file.jl\"."
                              (message "Snail connecting to Julia process, attempt %d/5..." attempt)
                              (condition-case nil
                                  (setq stream (open-network-stream "julia-process" process-buf "localhost" julia-snail-port))
-                               (error (when (< attempt max-attempts) (sit-for 0.75)))))
+                               (error (when (< attempt max-attempts)
+                                        (sleep-for 0.75)))))
                            stream)))
           (if netstream
               (with-current-buffer repl-buf
@@ -490,10 +495,14 @@ wait for the REPL prompt to return, otherwise return immediately."
     (user-error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
   (with-current-buffer repl-buf
     (vterm-send-string str)
-    (vterm-send-return)
-    (unless async
-      ;; wait for the inclusion to succeed (i.e., the prompt prints)
-      (julia-snail--wait-while (not (string-equal "julia>" (current-word))) polling-interval polling-timeout))))
+    (vterm-send-return))
+  (unless async
+    ;; wait for the inclusion to succeed (i.e., the prompt prints)
+    (julia-snail--wait-while
+     (with-current-buffer repl-buf
+       (not (string-equal "julia>" (current-word))))
+     polling-interval
+     polling-timeout)))
 
 (cl-defun julia-snail--send-to-server
     (module
