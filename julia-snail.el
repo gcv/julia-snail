@@ -964,7 +964,7 @@ This will occur in the context of the Main module, just as it would at the REPL.
               (y-or-n-p (format "'%s' is not saved, send to Julia anyway? " filename)))
       (julia-snail--send-to-server
         module
-        (format "include(\"%s\"); JuliaSnail.elexpr(true)" filename)
+        (format "include(\"%s\"); Main.JuliaSnail.elexpr(true)" filename)
         :callback-success (lambda (&optional _data)
                             ;; julia-snail-repl-buffer must be rebound here from
                             ;; jsrb-save, because the callback will run in a
