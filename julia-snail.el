@@ -585,7 +585,7 @@ Julia include on the tmpfile, and then deleting the file."
         (insert text))
       (let ((reqid (julia-snail--send-to-server
                      module
-                     (format "include(\"%s\"); Main.JuliaSnail.elexpr(true)" tmpfile-local-remote)
+                     (format "include(\"%s\"); Main.JuliaSnail.elexpr(true)" (or tmpfile-local-remote tmpfile))
                      :repl-buf repl-buf
                      ;; TODO: Only async via-tmp-file evaluation is currently
                      ;; supported because we rely on getting the reqid back from
