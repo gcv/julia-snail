@@ -698,7 +698,7 @@ Julia include on the tmpfile, and then deleting the file."
 
 (defun julia-snail--cst-includes (buf)
   (let* ((encoded (julia-snail--encode-base64 buf))
-         (pwd (file-name-directory (buffer-file-name buf)))
+         (pwd (file-name-directory (julia-snail--efn (buffer-file-name buf))))
          (res (julia-snail--send-to-server
                 :Main
                 (format "JuliaSnail.CST.includesin(\"%s\", \"%s\")" encoded pwd)
