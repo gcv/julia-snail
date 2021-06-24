@@ -54,6 +54,7 @@
   :group 'julia-snail
   :safe 'stringp
   :type 'string)
+(make-variable-buffer-local 'julia-snail-executable)
 
 (defcustom julia-snail-extra-args nil
   "Extra arguments to pass to the Julia binary, e.g. '--sysimage /path/to/image'."
@@ -66,12 +67,21 @@
 (make-variable-buffer-local 'julia-snail-extra-args)
 
 (defcustom julia-snail-port 10011
-  "Default Snail server port."
-  :tag "Snail server port"
+  "Default Snail server port for Emacs to connect to."
+  :tag "Snail server port (local)"
   :group 'julia-snail
   :safe 'integerp
   :type 'integer)
 (make-variable-buffer-local 'julia-snail-port)
+
+(defcustom julia-snail-remote-port nil
+  "Default Snail server port when using a remote REPL. Do not set UNLESS using a remote REPL!"
+  :tag "Snail server port (remote); do not set unless using remote REPL"
+  :group 'julia-snail
+  :safe (lambda (obj) (or (null obj) (integerp obj)))
+  :type '(choice (const :tag "Same as local" nil)
+                 (integer)))
+(make-variable-buffer-local 'julia-snail-remote-port)
 
 (defcustom julia-snail-repl-buffer "*julia*"
   "Default buffer to use for Julia REPL interaction."
@@ -79,7 +89,7 @@
   :group 'julia-snail
   :safe 'stringp
   :type 'string)
-(make-variable-buffer-local 'julia-snail-buffer)
+(make-variable-buffer-local 'julia-snail-repl-buffer)
 
 (defcustom julia-snail-show-error-window t
   "When t: show compilation errors in separate window. When nil: display errors in the minibuffer."
@@ -96,11 +106,21 @@
 
 ;;; --- constants
 
+(defconst julia-snail--julia-files
+  (list "JuliaSnail.jl" "Manifest.toml" "Project.toml"))
+
+(defconst julia-snail--julia-files-local
+  (mapcar (lambda (f)
+            (concat (if load-file-name
+                        (file-name-directory load-file-name)
+                      (file-name-as-directory default-directory))
+                    f))
+          julia-snail--julia-files))
+
 (defconst julia-snail--server-file
-  (concat (if load-file-name
-              (file-name-directory load-file-name)
-            (file-name-as-directory default-directory))
-          "JuliaSnail.jl"))
+  (-find (lambda (f)
+           (string-equal "JuliaSnail.jl" (file-name-nondirectory f)))
+         julia-snail--julia-files-local))
 
 
 ;;; --- variables
@@ -273,7 +293,11 @@ MAXIMUM: max timeout, ms."
            (,incr (/ ,increment 1000.0))
            (,max (/ ,maximum 1000.0)))
        (while (and (< ,sleep-total ,max) ,condition)
-         (sit-for ,incr)
+         ;; XXX: This MUST be sleep-for, not sit-for. sit-for is interrupted by
+         ;; input, which breaks the loop on input, which will inadvertently kill
+         ;; the wait.
+         (redisplay)
+         (sleep-for ,incr)
          (setf ,sleep-total (+ ,sleep-total ,incr))))))
 
 (defun julia-snail--capture-basedir (buf)
@@ -308,6 +332,54 @@ MAXIMUM: max timeout, ms."
                                    buffer-file-coding-system))))
     (base64-encode-string s)))
 
+(defun julia-snail--copy-snail-to-remote-host ()
+  (let* (;; checksum all relevant files as one, copy into a directory
+         ;; keyed off the checksum if it doesn't already exist (basically cache
+         ;; the current version of the Julia code (.jl and .toml files)
+         (checksum (with-temp-buffer
+                     (cl-loop for f in julia-snail--julia-files-local do
+                              (insert-file-contents-literally f))
+                     (secure-hash 'sha256 (current-buffer))))
+         (snail-remote-dir (concat (file-name-as-directory (temporary-file-directory))
+                                   (concat "julia-snail-" checksum "/"))))
+    (unless (file-exists-p snail-remote-dir)
+      (make-directory snail-remote-dir)
+      (cl-loop for f in julia-snail--julia-files-local do
+               (copy-file f snail-remote-dir t)))
+    snail-remote-dir))
+
+(defun julia-snail--launch-command ()
+  (let ((extra-args (if (listp julia-snail-extra-args)
+                        (mapconcat 'identity julia-snail-extra-args " ")
+                      julia-snail-extra-args))
+        (remote-host (file-remote-p default-directory 'host)))
+    (if (or (null remote-host) (string-equal "localhost" remote-host))
+        ;; local REPL
+        (format "%s %s -L %s" julia-snail-executable extra-args julia-snail--server-file)
+      ;; remote REPL
+      (let* ((remote-dir (julia-snail--copy-snail-to-remote-host))
+             (remote-dir-localname (file-remote-p remote-dir 'localname))
+             (remote-dir-server-file (concat remote-dir-localname "JuliaSnail.jl")))
+        (format "ssh -t -L %1$s:localhost:%2$s %3$s %4$s %5$s -L %6$s"
+                julia-snail-port
+                (or julia-snail-remote-port julia-snail-port)
+                remote-host
+                julia-snail-executable
+                extra-args
+                remote-dir-server-file)))))
+
+(defun julia-snail--efn (path &optional default-directory)
+  "A variant of expand-file-name that (1) just does
+expand-file-name on local files, and (2) returns the expanded
+form of the remote path without any host connection string
+components. Example: (julia-snail--efn \"/ssh:host:~/file.jl\")
+returns \"/home/username/file.jl\"."
+  (let* ((expanded (expand-file-name path default-directory))
+         (remote-local-path (file-remote-p expanded 'localname)))
+    (if remote-local-path
+        remote-local-path
+      expanded)))
+
 
 ;;; --- connection management functions
 
@@ -339,7 +411,10 @@ MAXIMUM: max timeout, ms."
       (persp-add-buffer process-buf (get-current-persp) nil))
     (with-current-buffer process-buf
       (unless julia-snail--process
+        ;; XXX: Manually bring in essential variables. This must match the "XXX:
+        ;; SETTING BUFFER-LOCAL VARIABLES" section in the julia-snail function!
         (setq julia-snail-port (buffer-local-value 'julia-snail-port repl-buf))
+        (setq julia-snail-remote-port (buffer-local-value 'julia-snail-remote-port repl-buf))
         ;; XXX: This is currently necessary because there does not appear to be
         ;; a way to pass arguments to an interactive Julia session. This does
         ;; not work: `julia -L JuliaSnail.jl -- $PORT`.
@@ -348,8 +423,17 @@ MAXIMUM: max timeout, ms."
         ;; Julia 1.0.4.
         ;; TODO: Follow-up on https://github.com/JuliaLang/julia/issues/33752
         (message "Starting Julia process and loading Snail...")
+        ;; XXX: Wait briefly in case the Julia executable failed to launch.
+        (with-current-buffer repl-buf
+          (julia-snail--wait-while
+           (not (string-equal "julia>" (current-word)))
+           100
+           (* 0.750 1000)))
+        (unless (buffer-live-p repl-buf)
+          (user-error "The vterm buffer is inactive; double-check julia-snail-executable path"))
+        ;; now try to send the Snail startup command
         (julia-snail--send-to-repl
-          (format "JuliaSnail.start(%d);" julia-snail-port)
+          (format "JuliaSnail.start(%d); # please wait, time-to-first-plot..." (or julia-snail-remote-port julia-snail-port))
           :repl-buf repl-buf
           ;; wait a while in case dependencies need to be downloaded
           :polling-timeout (* 5 60 1000)
@@ -363,7 +447,8 @@ MAXIMUM: max timeout, ms."
                              (message "Snail connecting to Julia process, attempt %d/5..." attempt)
                              (condition-case nil
                                  (setq stream (open-network-stream "julia-process" process-buf "localhost" julia-snail-port))
-                               (error (when (< attempt max-attempts) (sit-for 0.75)))))
+                               (error (when (< attempt max-attempts)
+                                        (sleep-for 0.75)))))
                            stream)))
           (if netstream
               (with-current-buffer repl-buf
@@ -410,10 +495,14 @@ wait for the REPL prompt to return, otherwise return immediately."
     (user-error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
   (with-current-buffer repl-buf
     (vterm-send-string str)
-    (vterm-send-return)
-    (unless async
-      ;; wait for the inclusion to succeed (i.e., the prompt prints)
-      (julia-snail--wait-while (not (string-equal "julia>" (current-word))) polling-interval polling-timeout))))
+    (vterm-send-return))
+  (unless async
+    ;; wait for the inclusion to succeed (i.e., the prompt prints)
+    (julia-snail--wait-while
+     (with-current-buffer repl-buf
+       (not (string-equal "julia>" (current-word))))
+     polling-interval
+     polling-timeout)))
 
 (cl-defun julia-snail--send-to-server
     (module
@@ -485,17 +574,18 @@ nil, wait for the result and return it."
   "Send str to server by first writing it to a tmpfile, calling
 Julia include on the tmpfile, and then deleting the file."
   (declare (indent defun))
-  (let ((text (s-trim str))
-        (tmpfile (make-temp-file
-                  (expand-file-name "julia-tmp"
-                                    (or small-temporary-file-directory
-                                        temporary-file-directory)))))
+  (let* ((text (s-trim str))
+         (tmpfile (make-temp-file
+                   (expand-file-name "julia-tmp" ; NOT julia-snail--efn
+                                     (or small-temporary-file-directory
+                                         (temporary-file-directory)))))
+         (tmpfile-local-remote (file-remote-p tmpfile 'localname)))
     (progn
       (with-temp-file tmpfile
         (insert text))
       (let ((reqid (julia-snail--send-to-server
                      module
-                     (format "include(\"%s\"); Main.JuliaSnail.elexpr(true)" tmpfile)
+                     (format "include(\"%s\"); Main.JuliaSnail.elexpr(true)" (or tmpfile-local-remote tmpfile))
                      :repl-buf repl-buf
                      ;; TODO: Only async via-tmp-file evaluation is currently
                      ;; supported because we rely on getting the reqid back from
@@ -608,7 +698,7 @@ Julia include on the tmpfile, and then deleting the file."
 
 (defun julia-snail--cst-includes (buf)
   (let* ((encoded (julia-snail--encode-base64 buf))
-         (pwd (file-name-directory (buffer-file-name buf)))
+         (pwd (file-name-directory (julia-snail--efn (buffer-file-name buf))))
          (res (julia-snail--send-to-server
                 :Main
                 (format "JuliaSnail.CST.includesin(\"%s\", \"%s\")" encoded pwd)
@@ -630,7 +720,7 @@ Julia include on the tmpfile, and then deleting the file."
                                      julia-snail--cache-proc-implicit-file-module)
                             (puthash process-buf (make-hash-table :test #'equal)
                                      julia-snail--cache-proc-implicit-file-module)))
-         (current-file-module (gethash (expand-file-name current-filename) proc-includes)))
+         (current-file-module (gethash (julia-snail--efn current-filename) proc-includes)))
     ;; merge includes with the proc-includes table
     (cl-loop for included-file being the hash-keys of includes using (hash-values included-file-modules) do
              (puthash included-file
@@ -643,7 +733,7 @@ Julia include on the tmpfile, and then deleting the file."
 
 (defun julia-snail--module-for-file (file)
   "Retrieve the module for FILE from `julia-snail--cache-proc-implicit-file-module' table."
-  (let* ((filename (expand-file-name file))
+  (let* ((filename (julia-snail--efn file))
          (process-buf (get-buffer (julia-snail--process-buffer-name julia-snail-repl-buffer)))
          (proc-includes (gethash process-buf julia-snail--cache-proc-implicit-file-module
                                  (make-hash-table :test #'equal)))
@@ -685,12 +775,17 @@ Julia include on the tmpfile, and then deleting the file."
   (if (or (null response) (eq :nothing response))
       nil
     (mapcar (lambda (candidate)
-              (let ((descr (-first-item candidate))
-                    (path (-second-item candidate))
-                    (line (-third-item candidate)))
+              (let* ((descr (-first-item candidate))
+                     (path (-second-item candidate))
+                     (line (-third-item candidate))
+                     ;; convert to Tramp path when working with a remote REPL
+                     (tramp-prefix (file-remote-p default-directory))
+                     (real-path (if tramp-prefix
+                                    (concat tramp-prefix path)
+                                  path)))
                 (xref-make descr
-                           (if (file-exists-p path)
-                               (xref-make-file-location path line 0)
+                           (if (file-exists-p real-path)
+                               (xref-make-file-location real-path line 0)
                              (xref-make-bogus-location
                               "xref not supported for definitions evaluated with julia-snail-send-top-level-form")))))
             response)))
@@ -821,11 +916,8 @@ To create multiple REPLs, give these variables distinct values (e.g.:
           (setf (buffer-local-value 'julia-snail--repl-go-back-target repl-buf) source-buf)
           (pop-to-buffer repl-buf))
       ;; run Julia in a vterm and load the Snail server file
-      (let* ((extra-args (if (listp julia-snail-extra-args)
-                             (mapconcat 'identity julia-snail-extra-args " ")
-                           julia-snail-extra-args))
-             (vterm-shell (format "%s %s -L %s" julia-snail-executable extra-args julia-snail--server-file))
-             (vterm-buf (generate-new-buffer julia-snail-repl-buffer)))
+      (let ((vterm-shell (julia-snail--launch-command))
+            (vterm-buf (generate-new-buffer julia-snail-repl-buffer)))
         (pop-to-buffer vterm-buf)
         (with-current-buffer vterm-buf
           ;; XXX: Set the error color to red to work around breakage relating to
@@ -838,6 +930,7 @@ To create multiple REPLs, give these variables distinct values (e.g.:
             ;; INITIALIZING vterm-mode!!! Something resets buffer-local
             ;; variables in that initialization.
             (setq julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
+            (setq julia-snail-remote-port (buffer-local-value 'julia-snail-remote-port source-buf))
             (setq julia-snail--repl-go-back-target source-buf))
           (julia-snail-repl-mode))))))
 
@@ -864,14 +957,14 @@ This is not module-context aware."
 This will occur in the context of the Main module, just as it would at the REPL."
   (interactive)
   (let* ((jsrb-save julia-snail-repl-buffer) ; save for callback context
-         (filename (expand-file-name buffer-file-name))
+         (filename (julia-snail--efn buffer-file-name))
          (module (or (julia-snail--module-for-file filename) '("Main")))
          (includes (julia-snail--cst-includes (current-buffer))))
     (when (or (not (buffer-modified-p))
               (y-or-n-p (format "'%s' is not saved, send to Julia anyway? " filename)))
       (julia-snail--send-to-server
         module
-        (format "include(\"%s\"); JuliaSnail.elexpr(true)" filename)
+        (format "include(\"%s\"); Main.JuliaSnail.elexpr(true)" filename)
         :callback-success (lambda (&optional _data)
                             ;; julia-snail-repl-buffer must be rebound here from
                             ;; jsrb-save, because the callback will run in a
@@ -947,7 +1040,7 @@ Currently only works on blocks terminated with `end'."
 (defun julia-snail-package-activate (dir)
   "Activate a Pkg project located in DIR in the Julia REPL."
   (interactive "DProject directory: ")
-  (let ((expanded-dir (expand-file-name dir)))
+  (let ((expanded-dir (julia-snail--efn dir)))
     (julia-snail--send-to-server
       :Main
       (format "Pkg.activate(\"%s\")" expanded-dir)
@@ -998,7 +1091,7 @@ environment using `julia-snail-send-buffer-file', but it is
 useful for a workflow using Revise.jl. It makes xref and
 autocompletion aware of the available modules."
   (interactive)
-  (let* ((filename (expand-file-name buffer-file-name))
+  (let* ((filename (julia-snail--efn buffer-file-name))
          (module (or (julia-snail--module-for-file filename) '("Main")))
          (includes (julia-snail--cst-includes (current-buffer))))
     (julia-snail--module-merge-includes filename includes)

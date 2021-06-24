@@ -126,6 +126,13 @@ In addition, most `xref` commands are available (except `xref-find-references`).
 Completion also works. Emacs built-in completion features, as well as `company-complete`, will do a reasonable job of finding the right completions in the context of the current module (though will not pick up local variables). Completion is current-module aware.
 
 
+### Multiple Julia versions
+
+The `julia-snail-executable` variable can be set at the file level or at the directory level and point to different versions of Julia for different projects. It should be a string referencing the executable binary path.
+
+NB: On a Mac, the Julia binary is typically `Contents/Resources/julia/bin/julia` inside the distribution app bundle. You must either make sure `julia-snail-executable` is set to an absolute path, or configure your Emacs `exec-path` to correctly find the `julia` binary.
+
+
 ### Multiple REPLs
 
 To use multiple REPLs, set the local variables `julia-snail-repl-buffer` and `julia-snail-port`. They must be distinct per-project. They can be set at the [file level](https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html), or at the [directory level](https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html). The latter approach is recommended, using a `.dir-locals.el` file at the root of a project directory.
@@ -151,11 +158,21 @@ The `Venus` project directory contains the following `.dir-locals.el` file:
 Now, source files in `Mars` will interact with the REPL running in the `*julia Mars*` buffer, and source files in `Venus` will interact with the REPL running in the `*julia Venus*` buffer.
 
 
-### Multiple Julia versions
+### Remote REPLs
 
-The `julia-snail-executable` variable can be set at the file level or at the directory level and point to different versions of Julia for different projects. It should be a string referencing the executable binary path.
+Snail can use a REPL located on a remote host using SSH tunneling and Emacs [Tramp](https://www.gnu.org/software/tramp/), subject to the following conditions:
 
-NB: On a Mac, the Julia binary is typically `Contents/Resources/julia/bin/julia` inside the distribution app bundle. You must either make sure `julia-snail-executable` is set to an absolute path, or configure your Emacs `exec-path` to correctly find the `julia` binary.
+1. A full Julia environment must be installed on the remote host.
+2. The code under development is likewise on the remote host. Emacs must open source files using Tramp.
+3. SSH access to the remote host must be configured with no-password access. Several ways exist to configure SSH to do this, all beyond the scope of the Snail README (hints: either use an agent or the ControlMaster setting; do _not_ just copy a no-passphrase key to the remote host!).
+
+If all these things are true, visit a remote Julia source file using Tramp, and start `julia-snail`. It should transparently start a fully-functional remote REPL.
+
+Just as with local Julia sessions, Snail can be configured using a remote `.dir-locals.el` file or another method for setting variables. In particular, `julia-snail-executable` may need to be changed.
+
+The SSH tunnel will, by default, open from `julia-snail-port` on the remote host to the same port on localhost. The remote host's port can be changed by setting `julia-snail-remote-port`.
+
+NB: To use `.dir-locals.el` over Tramp, you must set `enable-remote-dir-locals` to `t`!
 
 
 ### Extra Julia command-line arguments
