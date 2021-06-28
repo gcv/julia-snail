@@ -21,7 +21,7 @@ Snail is a development environment and REPL interaction package for Julia in the
 
 ## Installation
 
-Julia versions 1.0–1.5 work. Snail’s Julia-side dependencies will automatically be installed when it starts, and will stay out of your way using Julia’s [`LOAD_PATH` mechanism](https://docs.julialang.org/en/v1/base/constants/#Base.LOAD_PATH).
+Julia versions 1.0–1.6 work. Snail’s Julia-side dependencies will automatically be installed when it starts, and will stay out of your way using Julia’s [`LOAD_PATH` mechanism](https://docs.julialang.org/en/v1/base/constants/#Base.LOAD_PATH).
 
 On the Emacs side:
 
@@ -214,18 +214,7 @@ Furthermore, if `alpha-1.jl` is refactored to sit outside the `Alpha` module, or
 
 ## Future improvements
 
-### Foundational
-
-- The Julia interaction side of the Snail server is single-threaded (using `@async`). This means the interaction locks up while the REPL is working or running code. Unfortunately, Julia as of version 1.2 does not have user-accessible low-level multithreading primitives necessary to implement a truly multi-threaded Snail server. The newer `Threads.@spawn` macro needs to be investigated.
-
-
-### Structural
-
--  The `libvterm` dependency forces the use of very recent Emacs releases, forces Emacs to be build with module support, complicates support for Windows, and is generally quite gnarly. It would be much better to re-implement the REPL in Elisp.
-
-
-### Functional
-
+-  The `libvterm` dependency forces the use of recent Emacs releases, forces Emacs to be build with module support, complicates support for Windows, and is generally quite gnarly. It would be much better to re-implement the REPL in Elisp.
 - Completion does not pick up local variables.
 - A real eldoc implementation would be great, but difficult to do with Julia’s generic functions.
 - A debugger would be great.
