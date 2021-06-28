@@ -491,6 +491,63 @@ end
 end
 
 
+### --- multimedia support
+### Adapted from a PR by https://github.com/dahtah (https://github.com/gcv/julia-snail/pull/21).
+
+module Multimedia
+
+import Base64
+
+struct EmacsDisplay <: Base.AbstractDisplay
+end
+
+function send(img_encoded)
+   el = Main.JuliaSnail.elexpr([
+      Symbol("julia-snail-multimedia-display"),
+      img_encoded
+   ])
+   Main.JuliaSnail.send_to_client(el)
+end
+
+function Base.display(d::EmacsDisplay, ::MIME{Symbol("image/svg+xml")}, img_raw)
+   send(Base64.base64encode(repr("image/svg+xml", img_raw)))
+end
+
+function Base.display(d::EmacsDisplay, ::MIME{Symbol("image/png")}, img_raw)
+   send(Base64.stringmime("image/png", img_raw))
+end
+
+function Base.display(d::EmacsDisplay, x)
+   # FIXME: Use a supported list to call display instead of an explicit if-then chunk.
+   if showable("image/png", x)
+      display(d, "image/png", x)
+   elseif showable("image/svg+xml", x)
+      display(d, "image/svg+xml", x)
+   else
+      throw(MethodError(Base.display, (d, x)))
+   end
+end
+
+"""
+    toggle_display()
+
+Turn the Emacs display on/off. If on, any object that can be displayed as png or svg will be displayed inside of Emacs.
+"""
+function toggle_display()
+   # FIXME: This doesn't look right. The Qt display system pops anyway.
+   dd = Base.Multimedia.displays[end]
+   if isa(dd, Main.JuliaSnail.Multimedia.EmacsDisplay)
+      popdisplay()
+      return "Emacs plotting turned off"
+   else
+      pushdisplay(Main.JuliaSnail.Multimedia.EmacsDisplay())
+      return "Emacs plotting turned on"
+   end
+end
+
+end
+
+
 ### --- server code
 
 running = false

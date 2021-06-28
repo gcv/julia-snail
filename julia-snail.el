@@ -898,6 +898,117 @@ Julia include on the tmpfile, and then deleting the file."
 )
 
 
+;;; --- multimedia support
+;;; Adapted from a PR by https://github.com/dahtah (https://github.com/gcv/julia-snail/pull/21).
+
+(define-minor-mode julia-snail-multimedia-buffer-mode
+  ;; FIXME: location
+  "A minor mode for displaying Julia multimedia output an Emacs buffer."
+  :init-value nil
+  :lighter " Snail MM"
+  :keymap '(((kbd "q") . quit-window)))
+
+(defcustom julia-snail-multimedia-buffer-autoswitch nil
+  ;; FIXME: location, docstring
+  "If true, when a plot is displayed inside Emacs, the plot
+buffer gets the focus (e.g., for zooming and panning). Hit q to
+return to REPL. If nil, the plot window is displayed but focus
+remains on the REPL buffer."
+  :tag "Automatically switch to multimedia content buffer"
+  :group 'julia-snail
+  :type 'boolean)
+
+(defcustom julia-snail-multimedia-buffer-style 'reuse-same
+  "FIXME"
+  :tag "FIXME"
+  :group 'julia-snail
+  :type 'boolean)
+
+(defun julia-snail-multimedia-display (img)
+  (let* ((repl-buf (get-buffer julia-snail-repl-buffer))
+         ;; FIXME: support different buffer styles here:
+         (mm-buf-name (format "%s %s" (buffer-name repl-buf) "multimedia"))
+         (mm-buf (get-buffer-create mm-buf-name))
+         (decoded-img (base64-decode-string img))
+         (real-img (create-image decoded-img nil t)))
+    ;; FIXME: The right thing here is:
+    ;; - use image-mode for individual images
+    ;; - use something else for multiples, and insert a separator
+    ;; - 
+    (with-current-buffer mm-buf
+      (read-only-mode -1)
+      (erase-buffer)
+      (insert-image real-img)
+      (goto-char (point-min))
+      (read-only-mode 1)
+      (julia-snail-multimedia-buffer-mode 1))
+    (pop-to-buffer mm-buf)))
+
+(defun julia-snail-multimedia-toggle-display-in-emacs ()
+  "Turn on/off plotting in emacs. This calls 'JuliaSnail.toggle_display()', which pushes/pops an Emacs display onto Julia's display stack"
+  (interactive)
+  (unless (display-images-p)
+    (user-error "This Emacs display does not support images"))
+  ;; FIXME: Allow setting this in a project-load-time variable.
+  (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
+    (message
+     (julia-snail--send-to-server
+       '("JuliaSnail" "Multimedia")
+       "toggle_display()"
+       :repl-buf repl-buf
+       :async nil))))
+
+;; Insert "im" (a string) into the buffer, decode if necessary, and call image-mode
+;; (defun julia-snail--show-im (im decode)
+;;   (interactive)
+;;   (let ((buf (get-buffer-create "*julia plots*")))
+;;     (with-current-buffer buf
+;;       (fundamental-mode)
+;;       (setq buffer-read-only nil)
+;;       (erase-buffer)
+;;       (insert im)
+;;       (if decode (base64-decode-region (point-min) (point-max)))
+;;       (if julia-snail-multimedia-buffer-autoswitch (pop-to-buffer buf)
+;;         (display-buffer buf))
+;;       (image-mode)
+;;       (julia-snail-plot-mode)
+;;       (goto-char (point-min))
+;;       )))
+
+;; (defun julia-snail--quit-plot-window ()
+;;   (interactive)
+;;   (progn
+;;     (with-current-buffer julia-snail-repl-buffer
+;;       (goto-char (point-max))) ; required, point is sometimes a few lines back
+;;     (pop-to-buffer julia-snail-repl-buffer)
+;;     ))
+
+;; (defcustom julia-snail-single-plot t
+;;   "If true, plots are showed one-by-one. If false, plots are inserted successively in the plotting buffer"
+;;   :tag "Julia plotting"
+;;   :group 'julia-snail
+;;   :type 'boolean)
+
+;; (defun julia-snail--insert-im (im decode)
+;;   (interactive)
+;;   (progn
+;;     (if decode (setq im (base64-decode-string im)))
+;;     (let ((buf (get-buffer-create "*julia plots*")) (img (create-image im nil t)))
+;;     (with-current-buffer buf
+;;       (goto-char (point-max))
+;;       (unless  (= (point-max) (point-min))
+;;         (progn
+;;           (insert (propertize "      \n" 'face 'underline))
+;;           (insert "\n")
+;;           ))
+;;       (insert-image img "julia plot")
+;;       (insert-char ?\n 2)
+;;       (pop-to-buffer buf)
+;;       )
+;;     ))
+;;   )
+
+
 ;;; --- commands
 
 ;;;###autoload
@@ -1118,6 +1229,11 @@ autocompletion aware of the available modules."
 (defvar julia-snail-repl-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c C-z") #'julia-snail-repl-go-back)
+    map))
+
+(defvar julia-snail-multimedia-mode-map
+  (let ((map (make-sparse-keymap)))
+    ;; ...
     map))
 
 
