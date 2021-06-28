@@ -744,7 +744,7 @@ Julia include on the tmpfile, and then deleting the file."
   "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
   (let ((partial-module (or partial-module
                             (julia-snail--cst-module-at (current-buffer) (point))))
-        (module-for-file (julia-snail--module-for-file (buffer-file-name))))
+        (module-for-file (julia-snail--module-for-file (buffer-file-name (buffer-base-buffer)))))
     (or (if module-for-file
             (append module-for-file partial-module)
           partial-module)
@@ -957,7 +957,7 @@ This is not module-context aware."
 This will occur in the context of the Main module, just as it would at the REPL."
   (interactive)
   (let* ((jsrb-save julia-snail-repl-buffer) ; save for callback context
-         (filename (julia-snail--efn buffer-file-name))
+         (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
          (module (or (julia-snail--module-for-file filename) '("Main")))
          (includes (julia-snail--cst-includes (current-buffer))))
     (when (or (not (buffer-modified-p))
@@ -1091,7 +1091,7 @@ environment using `julia-snail-send-buffer-file', but it is
 useful for a workflow using Revise.jl. It makes xref and
 autocompletion aware of the available modules."
   (interactive)
-  (let* ((filename (julia-snail--efn buffer-file-name))
+  (let* ((filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
          (module (or (julia-snail--module-for-file filename) '("Main")))
          (includes (julia-snail--cst-includes (current-buffer))))
     (julia-snail--module-merge-includes filename includes)
