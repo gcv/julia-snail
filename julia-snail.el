@@ -918,31 +918,46 @@ remains on the REPL buffer."
   :group 'julia-snail
   :type 'boolean)
 
-(defcustom julia-snail-multimedia-buffer-style 'reuse-same
+(defcustom julia-snail-multimedia-buffer-style 'single-reuse
   "FIXME"
   :tag "FIXME"
   :group 'julia-snail
-  :type 'boolean)
+  :safe (lambda (sym) (memq sym '(single-reuse single-new multi)))
+  :type 'symbol)
+(make-variable-buffer-local 'julia-snail-multimedia-buffer-style)
 
 (defun julia-snail-multimedia-display (img)
   (let* ((repl-buf (get-buffer julia-snail-repl-buffer))
-         ;; FIXME: support different buffer styles here:
-         (mm-buf-name (format "%s %s" (buffer-name repl-buf) "multimedia"))
+         (mm-buf-name-base (format "%s multimedia" (buffer-name repl-buf)))
+         (mm-buf-name (if (memq julia-snail-multimedia-buffer-style '(single-reuse multi))
+                          mm-buf-name-base
+                        (generate-new-buffer-name mm-buf-name-base)))
          (mm-buf (get-buffer-create mm-buf-name))
-         (decoded-img (base64-decode-string img))
-         (real-img (create-image decoded-img nil t)))
-    ;; FIXME: The right thing here is:
-    ;; - use image-mode for individual images
-    ;; - use something else for multiples, and insert a separator
-    ;; - 
+         (decoded-img (base64-decode-string img)))
     (with-current-buffer mm-buf
+      (fundamental-mode)                ; necessary to allow directly-inserted images to be erased
       (read-only-mode -1)
-      (erase-buffer)
-      (insert-image real-img)
-      (goto-char (point-min))
+      (when (eq 'single-reuse julia-snail-multimedia-buffer-style)
+        (erase-buffer))
+      (when (memq julia-snail-multimedia-buffer-style '(single-reuse single-new))
+        ;; use image-mode
+        (insert decoded-img)
+        (image-mode))
+      (when (eq 'multi julia-snail-multimedia-buffer-style)
+        ;; insert images as objects
+        ;; switching from previously-used 'single-reuse requires special cleanup
+        (when (eq 'image-mode major-mode)
+          (erase-buffer)
+          (fundamental-mode))
+        (insert-image (create-image decoded-img nil t))
+        ;; FIXME: Check buffer size and insert separator as needed.
+        )
+      (goto-char (point-max))
       (read-only-mode 1)
       (julia-snail-multimedia-buffer-mode 1))
-    (pop-to-buffer mm-buf)))
+    (display-buffer mm-buf)
+    (when julia-snail-multimedia-buffer-autoswitch
+      (pop-to-buffer mm-buf))))
 
 (defun julia-snail-multimedia-toggle-display-in-emacs ()
   "Turn on/off plotting in emacs. This calls 'JuliaSnail.toggle_display()', which pushes/pops an Emacs display onto Julia's display stack"
