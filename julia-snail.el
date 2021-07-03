@@ -924,31 +924,47 @@ remains on the REPL buffer."
 
 (defun julia-snail-multimedia-display (img)
   (let* ((repl-buf (get-buffer julia-snail-repl-buffer))
-         (mm-buf-name-base (format "%s multimedia" (buffer-name repl-buf)))
-         (mm-buf-name (if (memq julia-snail-multimedia-buffer-style '(single-reuse multi))
+         (style (buffer-local-value 'julia-snail-multimedia-buffer-style repl-buf))
+         (mm-buf-name-base (format "%s mm" (buffer-name repl-buf)))
+         (mm-buf-name (if (memq style '(single-reuse multi))
                           mm-buf-name-base
                         (generate-new-buffer-name mm-buf-name-base)))
          (mm-buf (get-buffer-create mm-buf-name))
          (decoded-img (base64-decode-string img)))
     (with-current-buffer mm-buf
-      (fundamental-mode)                ; necessary to allow directly-inserted images to be erased
+      ;; allow directly-inserted images to be erased
+      (fundamental-mode)
       (read-only-mode -1)
-      (when (eq 'single-reuse julia-snail-multimedia-buffer-style)
+      (when (eq 'single-reuse style)
         (erase-buffer))
-      (when (memq julia-snail-multimedia-buffer-style '(single-reuse single-new))
+      (when (memq style '(single-reuse single-new))
         ;; use image-mode
         (insert decoded-img)
         (image-mode))
-      (when (eq 'multi julia-snail-multimedia-buffer-style)
+      (when (eq 'multi style)
         ;; insert images as objects
         ;; switching from previously-used 'single-reuse requires special cleanup
         (when (eq 'image-mode major-mode)
           (erase-buffer)
           (fundamental-mode))
-        (insert-image (create-image decoded-img nil t))
-        ;; FIXME: Check buffer size and insert separator as needed.
-        )
-      (goto-char (point-max))
+        ;; check buffer size and insert separator as needed
+        (when (> (buffer-size) 0)
+          (goto-char (point-max))
+          (insert "\n"))
+        (if (image-type-available-p 'imagemagick)
+            (let ((shortest (car
+                             (-sort
+                              (lambda (a b)
+                                (< (window-height a)
+                                   (window-height b)))
+                              (get-buffer-window-list mm-buf)))))
+              (if shortest
+                  (insert-image (create-image decoded-img 'imagemagick t :height (round (* 0.80 (window-pixel-height shortest)))))
+                (insert-image (create-image decoded-img 'imagemagick t))))
+          (insert-image (create-image decoded-img nil t)))
+        (insert "\n"))
+      (dolist (win (get-buffer-window-list mm-buf))
+        (set-window-point win (point-max)))
       (read-only-mode 1)
       (julia-snail-multimedia-buffer-mode 1))
     (display-buffer mm-buf)
@@ -968,56 +984,6 @@ remains on the REPL buffer."
        "toggle_display()"
        :repl-buf repl-buf
        :async nil))))
-
-;; Insert "im" (a string) into the buffer, decode if necessary, and call image-mode
-;; (defun julia-snail--show-im (im decode)
-;;   (interactive)
-;;   (let ((buf (get-buffer-create "*julia plots*")))
-;;     (with-current-buffer buf
-;;       (fundamental-mode)
-;;       (setq buffer-read-only nil)
-;;       (erase-buffer)
-;;       (insert im)
-;;       (if decode (base64-decode-region (point-min) (point-max)))
-;;       (if julia-snail-multimedia-buffer-autoswitch (pop-to-buffer buf)
-;;         (display-buffer buf))
-;;       (image-mode)
-;;       (julia-snail-plot-mode)
-;;       (goto-char (point-min))
-;;       )))
-
-;; (defun julia-snail--quit-plot-window ()
-;;   (interactive)
-;;   (progn
-;;     (with-current-buffer julia-snail-repl-buffer
-;;       (goto-char (point-max))) ; required, point is sometimes a few lines back
-;;     (pop-to-buffer julia-snail-repl-buffer)
-;;     ))
-
-;; (defcustom julia-snail-single-plot t
-;;   "If true, plots are showed one-by-one. If false, plots are inserted successively in the plotting buffer"
-;;   :tag "Julia plotting"
-;;   :group 'julia-snail
-;;   :type 'boolean)
-
-;; (defun julia-snail--insert-im (im decode)
-;;   (interactive)
-;;   (progn
-;;     (if decode (setq im (base64-decode-string im)))
-;;     (let ((buf (get-buffer-create "*julia plots*")) (img (create-image im nil t)))
-;;     (with-current-buffer buf
-;;       (goto-char (point-max))
-;;       (unless  (= (point-max) (point-min))
-;;         (progn
-;;           (insert (propertize "      \n" 'face 'underline))
-;;           (insert "\n")
-;;           ))
-;;       (insert-image img "julia plot")
-;;       (insert-char ?\n 2)
-;;       (pop-to-buffer buf)
-;;       )
-;;     ))
-;;   )
 
 
 ;;; --- commands
@@ -1054,6 +1020,7 @@ To create multiple REPLs, give these variables distinct values (e.g.:
             ;; the buffer previously.
             (setq julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
             (setq julia-snail-remote-port (buffer-local-value 'julia-snail-remote-port source-buf))
+            (setq julia-snail-multimedia-buffer-style (buffer-local-value 'julia-snail-multimedia-buffer-style source-buf))
             (setq julia-snail--repl-go-back-target source-buf))
           (julia-snail-repl-mode))))))
 
