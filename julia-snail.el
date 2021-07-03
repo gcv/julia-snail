@@ -411,10 +411,6 @@ returns \"/home/username/file.jl\"."
       (persp-add-buffer process-buf (get-current-persp) nil))
     (with-current-buffer process-buf
       (unless julia-snail--process
-        ;; XXX: Manually bring in essential variables. This must match the "XXX:
-        ;; SETTING BUFFER-LOCAL VARIABLES" section in the julia-snail function!
-        (setq julia-snail-port (buffer-local-value 'julia-snail-port repl-buf))
-        (setq julia-snail-remote-port (buffer-local-value 'julia-snail-remote-port repl-buf))
         ;; XXX: This is currently necessary because there does not appear to be
         ;; a way to pass arguments to an interactive Julia session. This does
         ;; not work: `julia -L JuliaSnail.jl -- $PORT`.
@@ -1052,9 +1048,10 @@ To create multiple REPLs, give these variables distinct values (e.g.:
           (let ((process-environment (append '("JULIA_ERROR_COLOR=red") process-environment)))
             (vterm-mode))
           (when source-buf
-            ;; XXX: SETTING BUFFER-LOCAL VARIABLES MUST HAPPEN AFTER
-            ;; INITIALIZING vterm-mode!!! Something resets buffer-local
-            ;; variables in that initialization.
+            ;; XXX: Set buffer-local variables explicitly here; this must happen
+            ;; after initializing vterm-mode. Something happens to buffer-local
+            ;; variables in that initialization, even if they had been set in
+            ;; the buffer previously.
             (setq julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
             (setq julia-snail-remote-port (buffer-local-value 'julia-snail-remote-port source-buf))
             (setq julia-snail--repl-go-back-target source-buf))
