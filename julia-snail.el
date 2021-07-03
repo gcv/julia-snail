@@ -103,6 +103,24 @@
   :group 'julia-snail
   :type 'integer)
 
+(defcustom julia-snail-multimedia-buffer-autoswitch nil
+  "If true, when a plot is displayed inside Emacs, the plot
+buffer gets the focus (e.g., for zooming and panning). If nil,
+the plot window is displayed but focus remains on the REPL
+buffer."
+  :tag "Automatically switch to multimedia (plot) content buffer"
+  :group 'julia-snail
+  :type 'boolean)
+
+(defcustom julia-snail-multimedia-buffer-style 'single-reuse
+  "Controls multimedia buffer behavior. When 'single-reuse (default), reuse the same buffer to show every image; this erases previous images. When 'single-new, open a new buffer for every image. When 'multi, insert images one after another."
+  :tag "Control multimedia buffer behavior"
+  :group 'julia-snail
+  :options '(single-reuse single-new multi)
+  :safe (lambda (sym) (memq sym '(single-reuse single-new multi)))
+  :type 'symbol)
+(make-variable-buffer-local 'julia-snail-multimedia-buffer-style)
+
 
 ;;; --- constants
 
@@ -897,31 +915,6 @@ Julia include on the tmpfile, and then deleting the file."
 ;;; --- multimedia support
 ;;; Adapted from a PR by https://github.com/dahtah (https://github.com/gcv/julia-snail/pull/21).
 
-(define-minor-mode julia-snail-multimedia-buffer-mode
-  ;; FIXME: location
-  "A minor mode for displaying Julia multimedia output an Emacs buffer."
-  :init-value nil
-  :lighter " Snail MM"
-  :keymap '(((kbd "q") . quit-window)))
-
-(defcustom julia-snail-multimedia-buffer-autoswitch nil
-  ;; FIXME: location, docstring
-  "If true, when a plot is displayed inside Emacs, the plot
-buffer gets the focus (e.g., for zooming and panning). Hit q to
-return to REPL. If nil, the plot window is displayed but focus
-remains on the REPL buffer."
-  :tag "Automatically switch to multimedia content buffer"
-  :group 'julia-snail
-  :type 'boolean)
-
-(defcustom julia-snail-multimedia-buffer-style 'single-reuse
-  "FIXME"
-  :tag "FIXME"
-  :group 'julia-snail
-  :safe (lambda (sym) (memq sym '(single-reuse single-new multi)))
-  :type 'symbol)
-(make-variable-buffer-local 'julia-snail-multimedia-buffer-style)
-
 (defun julia-snail-multimedia-display (img)
   (let* ((repl-buf (get-buffer julia-snail-repl-buffer))
          (style (buffer-local-value 'julia-snail-multimedia-buffer-style repl-buf))
@@ -1252,6 +1245,12 @@ turned on in REPL buffers."
   "A minor mode for displaying messages returned from the Julia REPL."
   :init-value nil
   :lighter " Snail Message"
+  :keymap '(((kbd "q") . quit-window)))
+
+(define-minor-mode julia-snail-multimedia-buffer-mode
+  "A minor mode for displaying Julia multimedia output an Emacs buffer."
+  :init-value nil
+  :lighter " Snail MM"
   :keymap '(((kbd "q") . quit-window)))
 
 
