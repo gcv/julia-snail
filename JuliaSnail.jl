@@ -501,6 +501,8 @@ import Base64
 struct EmacsDisplay <: Base.AbstractDisplay
 end
 
+const EMACS = EmacsDisplay()
+
 function send(img_encoded)
    el = Main.JuliaSnail.elexpr([
       Symbol("julia-snail-multimedia-display"),
@@ -509,40 +511,50 @@ function send(img_encoded)
    Main.JuliaSnail.send_to_client(el)
 end
 
-function Base.display(d::EmacsDisplay, ::MIME{Symbol("image/svg+xml")}, img_raw)
-   send(Base64.base64encode(repr("image/svg+xml", img_raw)))
-end
-
 function Base.display(d::EmacsDisplay, ::MIME{Symbol("image/png")}, img_raw)
    send(Base64.stringmime("image/png", img_raw))
 end
 
-function Base.display(d::EmacsDisplay, x)
-   # FIXME: Use a supported list to call display instead of an explicit if-then chunk.
-   if showable("image/png", x)
-      display(d, "image/png", x)
-   elseif showable("image/svg+xml", x)
-      display(d, "image/svg+xml", x)
-   else
-      throw(MethodError(Base.display, (d, x)))
+function Base.display(d::EmacsDisplay, ::MIME{Symbol("image/svg+xml")}, img_raw)
+   send(Base64.base64encode(repr("image/svg+xml", img_raw)))
+end
+
+function Base.display(d::EmacsDisplay, img)
+   supported = ["image/png", "image/svg+xml"]
+   for imgtype in supported
+      if showable(imgtype, img)
+         display(d, imgtype, img)
+         return
+      end
    end
+   # no dice
+   throw(MethodError(Base.display, (d, img)))
 end
 
 """
-    toggle_display()
-
-Turn the Emacs display on/off. If on, any object that can be displayed as png or svg will be displayed inside of Emacs.
+Turn the Emacs multimedia display support on or off. If on, any supported image
+type will be displayed in an Emacs buffer.
 """
-function toggle_display()
-   # FIXME: This doesn't look right. The Qt display system pops anyway.
-   dd = Base.Multimedia.displays[end]
-   if isa(dd, Main.JuliaSnail.Multimedia.EmacsDisplay)
-      popdisplay()
+function display_toggle()
+   if EMACS in Base.Multimedia.displays
+      popdisplay(EMACS)
       return "Emacs plotting turned off"
    else
-      pushdisplay(Main.JuliaSnail.Multimedia.EmacsDisplay())
+      pushdisplay(EMACS)
       return "Emacs plotting turned on"
    end
+end
+
+function display_on()
+   if EMACS ∉ Base.Multimedia.displays
+      pushdisplay(EMACS)
+   end
+   return true
+end
+
+function display_off()
+   popdisplay(EMACS)
+   return true
 end
 
 end

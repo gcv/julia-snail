@@ -101,24 +101,37 @@
   "When performing asynchronous Snail operations, wait this many milliseconds before timing out."
   :tag "Timeout for asynchronous Snail operations"
   :group 'julia-snail
+  :safe 'integerp
   :type 'integer)
 
+(defcustom julia-snail-multimedia-enable nil
+  "When t: enable Emacs integration with the Julia multimedia system."
+  :tag "Enable Julia multimedia integration"
+  :group 'julia-snail
+  :safe 'booleanp
+  :type 'boolean)
+(make-variable-buffer-local 'julia-snail-multimedia-enable)
+
 (defcustom julia-snail-multimedia-buffer-autoswitch nil
-  "If true, when a plot is displayed inside Emacs, the plot
-buffer gets the focus (e.g., for zooming and panning). If nil,
-the plot window is displayed but focus remains on the REPL
-buffer."
+  "If true, when an image is displayed inside Emacs, the
+multimedia buffer gets the focus (e.g., for zooming and panning).
+If nil, the image window is displayed but focus remains on the
+REPL buffer."
   :tag "Automatically switch to multimedia (plot) content buffer"
   :group 'julia-snail
   :type 'boolean)
 
-(defcustom julia-snail-multimedia-buffer-style 'single-reuse
-  "Controls multimedia buffer behavior. When 'single-reuse (default), reuse the same buffer to show every image; this erases previous images. When 'single-new, open a new buffer for every image. When 'multi, insert images one after another."
+(defcustom julia-snail-multimedia-buffer-style :single-reuse
+  "Controls multimedia buffer behavior. When
+:single-reuse (default), reuse the same buffer to show every
+image; this erases previous images. When :single-new, open a new
+buffer for every image. When :multi, insert images one after
+another."
   :tag "Control multimedia buffer behavior"
   :group 'julia-snail
-  :options '(single-reuse single-new multi)
-  :safe (lambda (sym) (memq sym '(single-reuse single-new multi)))
-  :type 'symbol)
+  :options '(:single-reuse :single-new :multi)
+  :safe (lambda (v) (memq v '(:single-reuse :single-new :multi)))
+  :type 'keyword)
 (make-variable-buffer-local 'julia-snail-multimedia-buffer-style)
 
 
@@ -474,7 +487,17 @@ returns \"/home/username/file.jl\"."
                 (puthash process-buf (julia-snail--capture-basedir repl-buf)
                          julia-snail--cache-proc-basedir))
             ;; something went wrong
-            (error "Failed to connect to Snail server")))))))
+            (error "Failed to connect to Snail server"))
+          ;; post-connection initialization:
+          (when netstream
+            (when (buffer-local-value 'julia-snail-multimedia-enable repl-buf)
+              (julia-snail--send-to-server
+                '("JuliaSnail" "Multimedia")
+                "display_on()"
+                :repl-buf repl-buf
+                :async nil))
+            ;; other initializations can go here
+            ))))))
 
 (defun julia-snail--repl-disable ()
   "REPL buffer minor mode cleanup."
@@ -919,7 +942,7 @@ Julia include on the tmpfile, and then deleting the file."
   (let* ((repl-buf (get-buffer julia-snail-repl-buffer))
          (style (buffer-local-value 'julia-snail-multimedia-buffer-style repl-buf))
          (mm-buf-name-base (format "%s mm" (buffer-name repl-buf)))
-         (mm-buf-name (if (memq style '(single-reuse multi))
+         (mm-buf-name (if (memq style '(:single-reuse :multi))
                           mm-buf-name-base
                         (generate-new-buffer-name mm-buf-name-base)))
          (mm-buf (get-buffer-create mm-buf-name))
@@ -928,15 +951,15 @@ Julia include on the tmpfile, and then deleting the file."
       ;; allow directly-inserted images to be erased
       (fundamental-mode)
       (read-only-mode -1)
-      (when (eq 'single-reuse style)
+      (when (eq :single-reuse style)
         (erase-buffer))
-      (when (memq style '(single-reuse single-new))
+      (when (memq style '(:single-reuse :single-new))
         ;; use image-mode
         (insert decoded-img)
         (image-mode))
-      (when (eq 'multi style)
+      (when (eq :multi style)
         ;; insert images as objects
-        ;; switching from previously-used 'single-reuse requires special cleanup
+        ;; switching from previously-used :single-reuse requires special cleanup
         (when (eq 'image-mode major-mode)
           (erase-buffer)
           (fundamental-mode))
@@ -965,16 +988,15 @@ Julia include on the tmpfile, and then deleting the file."
       (pop-to-buffer mm-buf))))
 
 (defun julia-snail-multimedia-toggle-display-in-emacs ()
-  "Turn on/off plotting in emacs. This calls 'JuliaSnail.toggle_display()', which pushes/pops an Emacs display onto Julia's display stack"
+  "Turn Julia multimedia display in Emacs off or on."
   (interactive)
   (unless (display-images-p)
     (user-error "This Emacs display does not support images"))
-  ;; FIXME: Allow setting this in a project-load-time variable.
   (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
     (message
      (julia-snail--send-to-server
        '("JuliaSnail" "Multimedia")
-       "toggle_display()"
+       "display_toggle()"
        :repl-buf repl-buf
        :async nil))))
 
@@ -1013,6 +1035,7 @@ To create multiple REPLs, give these variables distinct values (e.g.:
             ;; the buffer previously.
             (setq julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
             (setq julia-snail-remote-port (buffer-local-value 'julia-snail-remote-port source-buf))
+            (setq julia-snail-multimedia-enable (buffer-local-value 'julia-snail-multimedia-enable source-buf))
             (setq julia-snail-multimedia-buffer-style (buffer-local-value 'julia-snail-multimedia-buffer-style source-buf))
             (setq julia-snail--repl-go-back-target source-buf))
           (julia-snail-repl-mode))))))
