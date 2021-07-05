@@ -442,6 +442,11 @@ returns \"/home/username/file.jl\"."
       (persp-add-buffer process-buf (get-current-persp) nil))
     (with-current-buffer process-buf
       (unless julia-snail--process
+        ;; XXX: Manually bring essential variables from the REPL buffer into the
+        ;; process buffer. Note they are explicitly set in the julia-snail
+        ;; function.
+        (setq julia-snail-port (buffer-local-value 'julia-snail-port repl-buf))
+        (setq julia-snail-remote-port (buffer-local-value 'julia-snail-remote-port repl-buf))
         ;; XXX: This is currently necessary because there does not appear to be
         ;; a way to pass arguments to an interactive Julia session. This does
         ;; not work: `julia -L JuliaSnail.jl -- $PORT`.
