@@ -135,7 +135,7 @@ NB: On a Mac, the Julia binary is typically `Contents/Resources/julia/bin/julia`
 
 ### Multiple REPLs
 
-To use multiple REPLs, set the local variables `julia-snail-repl-buffer` and `julia-snail-port`. They must be distinct per-project. They can be set at the [file level](https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html), or at the [directory level](https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html). The latter approach is recommended, using a `.dir-locals.el` file at the root of a project directory.
+To use multiple REPLs, set the local variables `julia-snail-repl-buffer` and `julia-snail-port`. They must be distinct per-project. They can be set at the [file level](https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html), or at the [directory level](https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html). The latter approach is recommended, using a `.dir-locals.el` file at the root of a project directory. (Emacs provides numerous interactive helper functions to help deal with file and directory variable scope: `add-dir-local-variable`, `delete-dir-local-variable`, `copy-dir-locals-to-file-locals`, `copy-dir-locals-to-file-locals-prop-line`, and `copy-file-locals-to-dir-locals`. Users of Projectile have additional tools at their disposal: `projectile-edit-dir-locals` and `projectile-skel-dir-locals`.)
 
 For example, consider two projects: `Mars` and `Venus`, both of which you wish to work on at the same time. They live in different directories.
 
@@ -210,6 +210,21 @@ Furthermore, if `alpha-1.jl` is refactored to sit outside the `Alpha` module, or
 ### Documentation lookup
 
 `julia-snail-doc-lookup` shows the documentation string of the identifier at point. If the current Emacs session has [markdown-mode](https://github.com/jrblevin/markdown-mode) installed, it will be turned on with markup hiding enabled.
+
+
+### Multimedia and plotting
+
+Snail supports making diagrams by plugging into Julia's [multimedia I/O](https://docs.julialang.org/en/v1/base/io-network/#Multimedia-I/O) system. Any plot back-end which generates SVG or PNG output can display in an Emacs buffer, provided the Emacs instance itself supports images.
+
+To enable Emacs-Julia multimedia integration, either (1) set local variable `julia-snail-multimedia-enable` to `t`, preferably in `.dir-locals.el`, or (2) after the Julia REPL connects to Emacs, call the function `julia-snail-multimedia-toggle-display-in-emacs`.
+
+With Emacs multimedia display turned on, plotting commands in packages like Plots and Gadfly will display an Emacs buffer.
+
+The following variables control multimedia integration. It is best to set these in the project’s `.dir-locals.el`.
+
+- `julia-snail-multimedia-enable`: When set before starting a REPL, this turns on Emacs multimedia integration.
+- `julia-snail-multimedia-buffer-autoswitch`: Controls whether Emacs should automatically switch to the image buffer after a plotting command, or if it should only display it. Defaults to `nil` (off).
+- `julia-snail-multimedia-buffer-style`: Controls how the multimedia display buffer works. When `:single-reuse` (default), it uses one buffer, and overwrites it with new images as they come in from Julia. When set to `:single-new`, Snail will open a new buffer for each plot. When set to `:multi`, Snail uses a single buffer but appends new images to it rather than overwriting them. Note that `:multi` inserts image objects, but does not enable `image-mode` in the buffer, thus limiting zoom capabilities.
 
 
 ## Future improvements
