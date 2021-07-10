@@ -226,6 +226,14 @@ The following variables control multimedia integration. It is best to set these 
 - `julia-snail-multimedia-buffer-autoswitch`: Controls whether Emacs should automatically switch to the image buffer after a plotting command, or if it should only display it. Defaults to `nil` (off).
 - `julia-snail-multimedia-buffer-style`: Controls how the multimedia display buffer works. When `:single-reuse` (default), it uses one buffer, and overwrites it with new images as they come in from Julia. When set to `:single-new`, Snail will open a new buffer for each plot. When set to `:multi`, Snail uses a single buffer but appends new images to it rather than overwriting them. Note that `:multi` inserts image objects, but does not enable `image-mode` in the buffer, thus limiting zoom capabilities.
 
+As a simple example, activate Emacs plotting and try this code:
+
+```julia
+Pkg.add("Gadfly")
+import Gadfly
+Gadfly.plot(sin, 0, 2π)
+```
+
 
 ## Future improvements
 
