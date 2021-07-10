@@ -77,12 +77,10 @@ However, `display-buffer` will (by default) split windows if the target buffer i
              '("\\*julia" (display-buffer-reuse-window display-buffer-same-window)))
 ```
 
-(If you like this setting, and find other Emacs packages’ splitting irritating, consider replacing the `"\\*julia"` regexp with `".*"`: this will suppress pretty much all window splits.)
-
 It is likely that most users will want the default REPL pop-up behavior to split the window vertically, but the default `split-window-sensibly` implementation only splits that way if `split-height-threshold` is smaller than the current window height. `split-height-threshold` defaults to 80 (lines), and relatively few windows will be that tall. Therefore, consider adding something like the following to your configuration:
 
 ```elisp
-(setq split-height-threshold 15)
+(customize-set-variable 'split-height-threshold 15)
 ```
 
 
