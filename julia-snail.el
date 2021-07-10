@@ -101,7 +101,38 @@
   "When performing asynchronous Snail operations, wait this many milliseconds before timing out."
   :tag "Timeout for asynchronous Snail operations"
   :group 'julia-snail
+  :safe 'integerp
   :type 'integer)
+
+(defcustom julia-snail-multimedia-enable nil
+  "When t: enable Emacs integration with the Julia multimedia system."
+  :tag "Enable Julia multimedia integration"
+  :group 'julia-snail
+  :safe 'booleanp
+  :type 'boolean)
+(make-variable-buffer-local 'julia-snail-multimedia-enable)
+
+(defcustom julia-snail-multimedia-buffer-autoswitch nil
+  "If true, when an image is displayed inside Emacs, the
+multimedia buffer gets the focus (e.g., for zooming and panning).
+If nil, the image window is displayed but focus remains on the
+REPL buffer."
+  :tag "Automatically switch to multimedia (plot) content buffer"
+  :group 'julia-snail
+  :type 'boolean)
+
+(defcustom julia-snail-multimedia-buffer-style :single-reuse
+  "Controls multimedia buffer behavior. When
+:single-reuse (default), reuse the same buffer to show every
+image; this erases previous images. When :single-new, open a new
+buffer for every image. When :multi, insert images one after
+another."
+  :tag "Control multimedia buffer behavior"
+  :group 'julia-snail
+  :options '(:single-reuse :single-new :multi)
+  :safe (lambda (v) (memq v '(:single-reuse :single-new :multi)))
+  :type 'keyword)
+(make-variable-buffer-local 'julia-snail-multimedia-buffer-style)
 
 
 ;;; --- constants
@@ -175,6 +206,16 @@ Uses function `compilation-shell-minor-mode'.")
 
 
 ;;; --- supporting functions
+
+(defun julia-snail--copy-buffer-local-vars (from-buf)
+  "Copy Snail-related buffer-local variables from FROM-BUF to the current buffer."
+  (dolist (blv (buffer-local-variables from-buf))
+    (let* ((var (car blv))
+           (var-name (symbol-name var))
+           (val (cdr blv)))
+      (when (and (string-prefix-p "julia-snail-" var-name)
+                 (not (string-suffix-p "-mode" var-name)))
+        (set var val)))))
 
 (defun julia-snail--process-buffer-name (repl-buf)
   "Return the process buffer name for REPL-BUF."
@@ -368,13 +409,13 @@ MAXIMUM: max timeout, ms."
                 extra-args
                 remote-dir-server-file)))))
 
-(defun julia-snail--efn (path &optional default-directory)
+(defun julia-snail--efn (path &optional starting-dir)
   "A variant of expand-file-name that (1) just does
 expand-file-name on local files, and (2) returns the expanded
 form of the remote path without any host connection string
 components. Example: (julia-snail--efn \"/ssh:host:~/file.jl\")
 returns \"/home/username/file.jl\"."
-  (let* ((expanded (expand-file-name path default-directory))
+  (let* ((expanded (expand-file-name path starting-dir))
          (remote-local-path (file-remote-p expanded 'localname)))
     (if remote-local-path
         remote-local-path
@@ -411,10 +452,7 @@ returns \"/home/username/file.jl\"."
       (persp-add-buffer process-buf (get-current-persp) nil))
     (with-current-buffer process-buf
       (unless julia-snail--process
-        ;; XXX: Manually bring in essential variables. This must match the "XXX:
-        ;; SETTING BUFFER-LOCAL VARIABLES" section in the julia-snail function!
-        (setq julia-snail-port (buffer-local-value 'julia-snail-port repl-buf))
-        (setq julia-snail-remote-port (buffer-local-value 'julia-snail-remote-port repl-buf))
+        (julia-snail--copy-buffer-local-vars repl-buf)
         ;; XXX: This is currently necessary because there does not appear to be
         ;; a way to pass arguments to an interactive Julia session. This does
         ;; not work: `julia -L JuliaSnail.jl -- $PORT`.
@@ -460,7 +498,17 @@ returns \"/home/username/file.jl\"."
                 (puthash process-buf (julia-snail--capture-basedir repl-buf)
                          julia-snail--cache-proc-basedir))
             ;; something went wrong
-            (error "Failed to connect to Snail server")))))))
+            (error "Failed to connect to Snail server"))
+          ;; post-connection initialization:
+          (when netstream
+            (when (buffer-local-value 'julia-snail-multimedia-enable repl-buf)
+              (julia-snail--send-to-server
+                '("JuliaSnail" "Multimedia")
+                "display_on()"
+                :repl-buf repl-buf
+                :async nil))
+            ;; other initializations can go here
+            ))))))
 
 (defun julia-snail--repl-disable ()
   "REPL buffer minor mode cleanup."
@@ -744,7 +792,7 @@ Julia include on the tmpfile, and then deleting the file."
   "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
   (let ((partial-module (or partial-module
                             (julia-snail--cst-module-at (current-buffer) (point))))
-        (module-for-file (julia-snail--module-for-file (buffer-file-name))))
+        (module-for-file (julia-snail--module-for-file (buffer-file-name (buffer-base-buffer)))))
     (or (if module-for-file
             (append module-for-file partial-module)
           partial-module)
@@ -898,6 +946,72 @@ Julia include on the tmpfile, and then deleting the file."
 )
 
 
+;;; --- multimedia support
+;;; Adapted from a PR by https://github.com/dahtah (https://github.com/gcv/julia-snail/pull/21).
+
+(defun julia-snail-multimedia-display (img)
+  (let* ((repl-buf (get-buffer julia-snail-repl-buffer))
+         (style (buffer-local-value 'julia-snail-multimedia-buffer-style repl-buf))
+         (mm-buf-name-base (format "%s mm" (buffer-name repl-buf)))
+         (mm-buf-name (if (memq style '(:single-reuse :multi))
+                          mm-buf-name-base
+                        (generate-new-buffer-name mm-buf-name-base)))
+         (mm-buf (get-buffer-create mm-buf-name))
+         (decoded-img (base64-decode-string img)))
+    (with-current-buffer mm-buf
+      ;; allow directly-inserted images to be erased
+      (fundamental-mode)
+      (read-only-mode -1)
+      (when (eq :single-reuse style)
+        (erase-buffer))
+      (when (memq style '(:single-reuse :single-new))
+        ;; use image-mode
+        (insert decoded-img)
+        (image-mode))
+      (when (eq :multi style)
+        ;; insert images as objects
+        ;; switching from previously-used :single-reuse requires special cleanup
+        (when (eq 'image-mode major-mode)
+          (erase-buffer)
+          (fundamental-mode))
+        ;; check buffer size and insert separator as needed
+        (when (> (buffer-size) 0)
+          (goto-char (point-max))
+          (insert "\n"))
+        (if (image-type-available-p 'imagemagick)
+            (let ((shortest (car
+                             (-sort
+                              (lambda (a b)
+                                (< (window-height a)
+                                   (window-height b)))
+                              (get-buffer-window-list mm-buf)))))
+              (if shortest
+                  (insert-image (create-image decoded-img 'imagemagick t :height (round (* 0.80 (window-pixel-height shortest)))))
+                (insert-image (create-image decoded-img 'imagemagick t))))
+          (insert-image (create-image decoded-img nil t)))
+        (insert "\n"))
+      (dolist (win (get-buffer-window-list mm-buf))
+        (set-window-point win (point-max)))
+      (read-only-mode 1)
+      (julia-snail-multimedia-buffer-mode 1))
+    (display-buffer mm-buf)
+    (when julia-snail-multimedia-buffer-autoswitch
+      (pop-to-buffer mm-buf))))
+
+(defun julia-snail-multimedia-toggle-display-in-emacs ()
+  "Turn Julia multimedia display in Emacs off or on."
+  (interactive)
+  (unless (display-images-p)
+    (user-error "This Emacs display does not support images"))
+  (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
+    (message
+     (julia-snail--send-to-server
+       '("JuliaSnail" "Multimedia")
+       "display_toggle()"
+       :repl-buf repl-buf
+       :async nil))))
+
+
 ;;; --- commands
 
 ;;;###autoload
@@ -926,11 +1040,7 @@ To create multiple REPLs, give these variables distinct values (e.g.:
           (let ((process-environment (append '("JULIA_ERROR_COLOR=red") process-environment)))
             (vterm-mode))
           (when source-buf
-            ;; XXX: SETTING BUFFER-LOCAL VARIABLES MUST HAPPEN AFTER
-            ;; INITIALIZING vterm-mode!!! Something resets buffer-local
-            ;; variables in that initialization.
-            (setq julia-snail-port (buffer-local-value 'julia-snail-port source-buf))
-            (setq julia-snail-remote-port (buffer-local-value 'julia-snail-remote-port source-buf))
+            (julia-snail--copy-buffer-local-vars source-buf)
             (setq julia-snail--repl-go-back-target source-buf))
           (julia-snail-repl-mode))))))
 
@@ -957,7 +1067,7 @@ This is not module-context aware."
 This will occur in the context of the Main module, just as it would at the REPL."
   (interactive)
   (let* ((jsrb-save julia-snail-repl-buffer) ; save for callback context
-         (filename (julia-snail--efn buffer-file-name))
+         (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
          (module (or (julia-snail--module-for-file filename) '("Main")))
          (includes (julia-snail--cst-includes (current-buffer))))
     (when (or (not (buffer-modified-p))
@@ -1091,7 +1201,7 @@ environment using `julia-snail-send-buffer-file', but it is
 useful for a workflow using Revise.jl. It makes xref and
 autocompletion aware of the available modules."
   (interactive)
-  (let* ((filename (julia-snail--efn buffer-file-name))
+  (let* ((filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
          (module (or (julia-snail--module-for-file filename) '("Main")))
          (includes (julia-snail--cst-includes (current-buffer))))
     (julia-snail--module-merge-includes filename includes)
@@ -1118,6 +1228,11 @@ autocompletion aware of the available modules."
 (defvar julia-snail-repl-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c C-z") #'julia-snail-repl-go-back)
+    map))
+
+(defvar julia-snail-multimedia-mode-map
+  (let ((map (make-sparse-keymap)))
+    ;; ...
     map))
 
 
@@ -1157,6 +1272,12 @@ turned on in REPL buffers."
   "A minor mode for displaying messages returned from the Julia REPL."
   :init-value nil
   :lighter " Snail Message"
+  :keymap '(((kbd "q") . quit-window)))
+
+(define-minor-mode julia-snail-multimedia-buffer-mode
+  "A minor mode for displaying Julia multimedia output an Emacs buffer."
+  :init-value nil
+  :lighter " Snail MM"
   :keymap '(((kbd "q") . quit-window)))
 
 

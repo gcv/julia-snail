@@ -491,6 +491,75 @@ end
 end
 
 
+### --- multimedia support
+### Adapted from a PR by https://github.com/dahtah (https://github.com/gcv/julia-snail/pull/21).
+
+module Multimedia
+
+import Base64
+
+struct EmacsDisplay <: Base.AbstractDisplay
+end
+
+const EMACS = EmacsDisplay()
+
+function send(img_encoded)
+   el = Main.JuliaSnail.elexpr([
+      Symbol("julia-snail-multimedia-display"),
+      img_encoded
+   ])
+   Main.JuliaSnail.send_to_client(el)
+end
+
+function Base.display(d::EmacsDisplay, ::MIME{Symbol("image/png")}, img_raw)
+   send(Base64.stringmime("image/png", img_raw))
+end
+
+function Base.display(d::EmacsDisplay, ::MIME{Symbol("image/svg+xml")}, img_raw)
+   send(Base64.base64encode(repr("image/svg+xml", img_raw)))
+end
+
+function Base.display(d::EmacsDisplay, img)
+   supported = ["image/png", "image/svg+xml"]
+   for imgtype in supported
+      if showable(imgtype, img)
+         display(d, imgtype, img)
+         return
+      end
+   end
+   # no dice
+   throw(MethodError(Base.display, (d, img)))
+end
+
+"""
+Turn the Emacs multimedia display support on or off. If on, any supported image
+type will be displayed in an Emacs buffer.
+"""
+function display_toggle()
+   if EMACS in Base.Multimedia.displays
+      popdisplay(EMACS)
+      return "Emacs plotting turned off"
+   else
+      pushdisplay(EMACS)
+      return "Emacs plotting turned on"
+   end
+end
+
+function display_on()
+   if EMACS ∉ Base.Multimedia.displays
+      pushdisplay(EMACS)
+   end
+   return true
+end
+
+function display_off()
+   popdisplay(EMACS)
+   return true
+end
+
+end
+
+
 ### --- server code
 
 running = false
