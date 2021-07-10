@@ -409,13 +409,13 @@ MAXIMUM: max timeout, ms."
                 extra-args
                 remote-dir-server-file)))))
 
-(defun julia-snail--efn (path &optional default-directory)
+(defun julia-snail--efn (path &optional starting-dir)
   "A variant of expand-file-name that (1) just does
 expand-file-name on local files, and (2) returns the expanded
 form of the remote path without any host connection string
 components. Example: (julia-snail--efn \"/ssh:host:~/file.jl\")
 returns \"/home/username/file.jl\"."
-  (let* ((expanded (expand-file-name path default-directory))
+  (let* ((expanded (expand-file-name path starting-dir))
          (remote-local-path (file-remote-p expanded 'localname)))
     (if remote-local-path
         remote-local-path
