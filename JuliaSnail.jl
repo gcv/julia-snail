@@ -368,12 +368,14 @@ represents the root node, and the last element is the expression at the offset.
 Each tuple has a start and stop value, showing locations in the original source
 where that node begins and ends.
 
+NB: The locations represent bytes, not characters!
+
 This is necessary because CSTParser does not include full location data, see
 https://github.com/julia-vscode/CSTParser.jl/pull/80.
 """
 function pathat(cst, offset, pos = 0, path = [(expr=cst, start=1, stop=cst.span+1)])
-   if cst.args !== nothing && CSTParser.typof(cst) !== CSTParser.NONSTDIDENTIFIER
-      for a in cst.args
+   if cst !== nothing && !CSTParser.isnonstdid(cst)
+      for a in cst
          if pos < offset <= (pos + a.span)
             return pathat(a, offset, pos, [path; [(expr=a, start=pos+1, stop=pos+a.span+1)]])
          end
@@ -387,6 +389,28 @@ function pathat(cst, offset, pos = 0, path = [(expr=cst, start=1, stop=cst.span+
 end
 
 """
+Debugging helper: example code for traversing the CST.
+"""
+function print_cst(cst, offset = 0)
+   for a in cst
+      if a.args === nothing
+         val = CSTParser.valof(a)
+         # Unicode byte fix
+         if String == typeof(val)
+            diff = sizeof(val) - length(val)
+            a.span -= diff
+            a.fullspan -= diff
+         end
+         println(offset, ":", offset+a.span, "\t", val)
+         offset += a.fullspan
+      else
+         offset = print_cst(a, offset)
+      end
+   end
+   return offset
+end
+
+"""
 Return the module active at point as a list of their names.
 """
 function moduleat(encodedbuf, byteloc)
@@ -395,7 +419,7 @@ function moduleat(encodedbuf, byteloc)
    modules = []
    for node in path
       if CSTParser.defines_module(node.expr)
-         push!(modules, CSTParser.get_name(node.expr).val)
+         push!(modules, CSTParser.valof(CSTParser.get_name(node.expr)))
       end
    end
    return [:list; modules]
@@ -414,7 +438,7 @@ function blockat(encodedbuf, byteloc)
    for node in path
       if CSTParser.defines_module(node.expr)
          description = nothing
-         push!(modules, CSTParser.get_name(node.expr).val)
+         push!(modules, CSTParser.valof(CSTParser.get_name(node.expr)))
       elseif (isnothing(description) &&
               (CSTParser.defines_abstract(node.expr) ||
                CSTParser.defines_datatype(node.expr) ||
@@ -423,7 +447,7 @@ function blockat(encodedbuf, byteloc)
                CSTParser.defines_mutable(node.expr) ||
                CSTParser.defines_primitive(node.expr) ||
                CSTParser.defines_struct(node.expr)))
-         description = CSTParser.get_name(node.expr).val
+         description = CSTParser.valof(CSTParser.get_name(node.expr))
          start = node.start
          stop = node.stop
       end
@@ -451,16 +475,14 @@ function includesin(encodedbuf, path="")
    # walk across args, and track the current module
    # when a node of type "call" is found, check its args[1]
    helper = (node, modules = []) -> begin
-      for a in node.args
-         if (CSTParser.Call == a.typ &&
-             !isnothing(a.args) &&
-             4 == length(a.args) &&
-             "include" == a.args[1].val)
-            # a.args[3] is the file name being included
-            filename = joinpath(path, a.args[3].val)
+      for a in node
+         if (CSTParser.iscall(a) &&
+             "include" == CSTParser.valof(a.args[1]))
+            # a.args[2] is the file name being included
+            filename = joinpath(path, CSTParser.valof(a.args[2]))
             results[filename] = modules
          elseif CSTParser.defines_module(a)
-            helper(a, [modules; CSTParser.get_name(a).val])
+            helper(a, [modules; CSTParser.valof(CSTParser.get_name(a))])
          elseif !isnothing(a.args)
             helper(a, modules)
          end

@@ -21,7 +21,7 @@
 
 ;;; --- tests
 
-(ert-deftest js-test-bare ()
+(ert-deftest js-test-implicit-modules-bare ()
   (let ((repl-buf (format "*julia* %s" (symbol-name (gensym))))
         (source-buf-1 (find-file (julia-snail-test-file-path "implicit-none.jl"))))
     (unwind-protect
@@ -35,7 +35,7 @@
               (should (hash-table-empty-p file-includes)))))
       (kill-buffer source-buf-1))))
 
-(ert-deftest js-test-export-parse ()
+(ert-deftest js-test-implicit-modules-export-parse ()
   (let ((repl-buf (format "*julia* %s" (symbol-name (gensym))))
         (source-buf (find-file (julia-snail-test-file-path "implicit-export.jl"))))
     (unwind-protect
@@ -53,7 +53,7 @@
                 (gethash (julia-snail-test-file-path "file2.jl") includes))))))
       (kill-buffer source-buf))))
 
-(ert-deftest js-test-multiple ()
+(ert-deftest js-test-implicit-modules-multiple ()
   (let ((repl-buf (format "*julia* %s" (symbol-name (gensym))))
         (source-buf-1 (find-file (julia-snail-test-file-path "implicit-multiple.jl")))
         (source-buf-2 (find-file (expand-file-name "b2.jl"))))
