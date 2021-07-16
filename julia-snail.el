@@ -880,13 +880,12 @@ Julia include on the tmpfile, and then deleting the file."
   nil)
 
 (cl-defmethod xref-backend-apropos ((_backend (eql xref-julia-snail)) pattern)
-  (let* ((module (julia-snail--module-at-point))
-         (res (julia-snail--send-to-server
-                module
-                (format "Main.JuliaSnail.apropos(%s, \"%s\")"
-                        (s-join "." module)
-                        pattern)
-                :async nil)))
+  (let ((res (julia-snail--send-to-server
+               :Main
+               (format "Main.JuliaSnail.apropos(%s, \"%s\")"
+                       "Main"
+                       pattern)
+               :async nil)))
     (julia-snail--make-xrefs-helper res)))
 
 

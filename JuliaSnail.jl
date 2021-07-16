@@ -319,9 +319,12 @@ function apropos(ns, pattern)
    res::Array{Tuple{String,String,Int32}} = []
    for name in names
       name_ns, name_n = split_name(name, ns)
-      append!(res, lsdefinitions(name_ns, name_n))
+      defs = lsdefinitions(name_ns, name_n) # this returns [:list, tuple(...)] for Emacs
+      if length(defs) >= 2
+         append!(res, defs[2:end])
+      end
    end
-   return res
+   return [:list; res]
 end
 
 """
