@@ -323,9 +323,10 @@ MODULE can be:
         bounds))))
 
 (defmacro julia-snail--wait-while (condition increment maximum)
-  "Synchronously wait for CONDITION to evaluate to true.
+  "Synchronously wait as long as CONDITION evaluates to true.
 INCREMENT: polling frequency, ms.
-MAXIMUM: max timeout, ms."
+MAXIMUM: max timeout, ms.
+Returns nil if the poll timed out, t otherwise."
   (let ((sleep-total (gensym))
         (incr (gensym))
         (max (gensym)))
@@ -339,7 +340,9 @@ MAXIMUM: max timeout, ms."
          ;; the wait.
          (redisplay)
          (sleep-for ,incr)
-         (setf ,sleep-total (+ ,sleep-total ,incr))))))
+         (setf ,sleep-total (+ ,sleep-total ,incr)))
+       ;; return value: t if wait returned early, nil if it timed out
+       (< ,sleep-total ,max))))
 
 (defun julia-snail--capture-basedir (buf)
   (julia-snail--send-to-server
@@ -571,6 +574,7 @@ nil, wait for the result and return it."
   (unless repl-buf
     (user-error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
   (let* ((process-buf (get-buffer (julia-snail--process-buffer-name repl-buf)))
+         (originating-buf (current-buffer))
          (module-ns (julia-snail--construct-module-path module))
          (reqid (format "%04x%04x" (random (expt 16 4)) (random (expt 16 4))))
          (code-str (json-encode-string str))
@@ -585,7 +589,8 @@ nil, wait for the result and return it."
                               module-ns
                               reqid
                               display-code-str))
-         (res nil))
+         (res-sentinel (gensym))
+         (res res-sentinel))
     (with-current-buffer process-buf
       (goto-char (point-max))
       (insert display-msg))
@@ -594,7 +599,7 @@ nil, wait for the result and return it."
     (puthash reqid
              (make-julia-snail--request-tracker
               :repl-buf repl-buf
-              :originating-buf (current-buffer)
+              :originating-buf originating-buf
               :display-error-buffer-on-failure? display-error-buffer-on-failure?
               :callback-success (lambda (&optional data)
                                   (unless async
@@ -607,10 +612,31 @@ nil, wait for the result and return it."
                                   (when callback-failure
                                     (funcall callback-failure))))
              julia-snail--requests)
+    ;; return value logic:
     (if async
         reqid
-      (julia-snail--wait-while (null res) async-poll-interval async-poll-maximum)
-      res)))
+      ;; XXX: Non-async (i.e. synchronous) server requests need to poll the
+      ;; response. This means they can either (1) succeed, (2) timeout, or (3)
+      ;; error out. Because errors occur in the process filter function and
+      ;; therefore outside the scope of a potential condition-case, they must be
+      ;; processed with a non-local transfer of control (throw and catch).
+      (let ((wait-result
+             (catch 'julia-snail--server-filter-error
+               (julia-snail--wait-while (eq res-sentinel res) async-poll-interval async-poll-maximum))))
+        ;; wait-result can be t if poll succeeded, nil if it timed out, and an
+        ;; error if something blew up. Note that an explicit check for t is
+        ;; necessary here because wait-result can be truthy but nevertheless an
+        ;; error. This happens if an error value is caught in the `catch'.
+        (if (eq t wait-result)
+            res
+          (let ((error-msg (if (null wait-result)
+                               "Snail command timed out"
+                             (format "Snail error: %s" wait-result))))
+            (when callback-failure
+              (funcall callback-failure))
+            (with-current-buffer originating-buf
+              (spinner-stop))
+            (error error-msg)))))))
 
 (cl-defun julia-snail--send-to-server-via-tmp-file
     (module
@@ -666,15 +692,21 @@ Julia include on the tmpfile, and then deleting the file."
       ;; input, but a failed read needs to be concatenated to other upcoming
       ;; reads. Track them in a table hashed by the proc.
       (let ((candidate (s-concat (gethash proc julia-snail--proc-responses) str)))
-        (condition-case nil
+        (condition-case err
             (let ((read-str (read candidate)))
               ;; read succeeds, so clean up and return its eval value
               (remhash proc julia-snail--proc-responses)
               ;; scary
               (eval read-str))
-          ;; read failed: this means more data is incoming
+          ;; read failed due to end-of-file: this means more data is incoming; continue
           (end-of-file
-           (puthash proc candidate julia-snail--proc-responses)))))))
+           (puthash proc candidate julia-snail--proc-responses))
+          ;; If an unexpected error occurs at this point, it will have no normal
+          ;; condition-case context. Unfortunately, this leaves non-local
+          ;; transfer of control as the only way to notify the rest of the
+          ;; program that something went haywire.
+          (error
+           (throw 'julia-snail--server-filter-error err)))))))
 
 
  ;;; --- Snail server response handling functions
