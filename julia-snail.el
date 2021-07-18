@@ -1261,11 +1261,6 @@ autocompletion aware of the available modules."
     (define-key map (kbd "C-c C-z") #'julia-snail-repl-go-back)
     map))
 
-(defvar julia-snail-multimedia-mode-map
-  (let ((map (make-sparse-keymap)))
-    ;; ...
-    map))
-
 
 ;;; --- mode definitions
 
