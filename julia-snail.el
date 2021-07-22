@@ -33,6 +33,7 @@
 (require 'cl-lib)
 (require 'dash)
 (require 'json)
+(require 'pulse)
 (require 'rx)
 (require 's)
 (require 'spinner)
@@ -265,10 +266,7 @@ BASEDIR is used for resolving relative paths."
 
 (defun julia-snail--flash-region (start end &optional timeout)
   "Highlight the region outlined by START and END for TIMEOUT period."
-  ;; borrowed from SLIME
-  (let ((overlay (make-overlay start end)))
-    (overlay-put overlay 'face 'highlight)
-    (run-with-timer (or timeout 0.2) nil 'delete-overlay overlay)))
+  (pulse-momentary-highlight-region start end 'highlight))
 
 (defun julia-snail--construct-module-path (module)
   "Return a Julia array representing the module path of MODULE as Julia symbols.
