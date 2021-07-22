@@ -264,7 +264,7 @@ BASEDIR is used for resolving relative paths."
     (when basedir
       (setq-local compilation-search-path (list basedir)))))
 
-(defun julia-snail--flash-region (start end &optional timeout)
+(defun julia-snail--flash-region (start end)
   "Highlight the region outlined by START and END for TIMEOUT period."
   (pulse-momentary-highlight-region start end 'highlight))
 
@@ -1079,7 +1079,7 @@ This is not module-context aware."
   (interactive)
   (let ((line (s-trim (thing-at-point 'line t))))
     (julia-snail--send-to-repl line)
-    (julia-snail--flash-region (point-at-bol) (point-at-eol) 0.5)))
+    (julia-snail--flash-region (point-at-bol) (point-at-eol))))
 
 (defun julia-snail-send-dwim ()
   "Send region, block, or line to Julia REPL."
@@ -1166,7 +1166,7 @@ Currently only works on blocks terminated with `end'."
                  (error ""))))
     (if (null q)
         (user-error "No top-level form at point")
-      (julia-snail--flash-region block-start block-end 0.5)
+      (julia-snail--flash-region block-start block-end)
       (julia-snail--send-to-server-via-tmp-file
         module text
         :callback-success (lambda (&optional _data)
