@@ -336,6 +336,26 @@ function replcompletion(identifier, mod)
    return [:list; REPLCompletions.completion_text.(cs)]
 end
 
+"""
+When a top-level-form is evaluated using julia-snail-send-top-level-form from
+Emacs, it is internally sent through a tempfile. When the form is then evaluated
+in its module context, the resulting definitions are internally associated with
+the tempfile, not the actual location of the source code. This messes up xref,
+and needs to be set to the correct location data when possible.
+"""
+function update_method_location(full_identifier, line, tmpfile, filename)
+   tmpfile_sym = Symbol(tmpfile)
+   filename_sym = Symbol(filename)
+   # TODO: This works for xref purposes, but not for stack traces.
+   for method in methods(full_identifier)
+      if method.file == tmpfile_sym
+         method.file = filename_sym
+         method.line = line
+         return
+      end
+   end
+end
+
 
 ### --- CSTParser wrappers
 

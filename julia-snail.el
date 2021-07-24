@@ -203,7 +203,8 @@ Uses function `compilation-shell-minor-mode'.")
   (callback-success (lambda (&optional _data) (message "Snail command succeeded")))
   (callback-failure (lambda () (message "Snail command failed")))
   (display-error-buffer-on-failure? t)
-  tmpfile)
+  tmpfile
+  tmpfile-local-remote)
 
 
 ;;; --- supporting functions
@@ -599,16 +600,16 @@ nil, wait for the result and return it."
               :repl-buf repl-buf
               :originating-buf originating-buf
               :display-error-buffer-on-failure? display-error-buffer-on-failure?
-              :callback-success (lambda (&optional data)
+              :callback-success (lambda (request-info &optional data)
                                   (unless async
                                     (setq res (or data :nothing)))
                                   (when callback-success
-                                    (funcall callback-success data)))
-              :callback-failure (lambda ()
+                                    (funcall callback-success request-info data)))
+              :callback-failure (lambda (request-info)
                                   (unless async
                                     (setq res :nothing))
                                   (when callback-failure
-                                    (funcall callback-failure))))
+                                    (funcall callback-failure request-info))))
              julia-snail--requests)
     ;; return value logic:
     (if async
@@ -673,7 +674,8 @@ Julia include on the tmpfile, and then deleting the file."
                   :originating-buf (current-buffer)
                   :callback-success callback-success
                   :callback-failure callback-failure
-                  :tmpfile tmpfile)
+                  :tmpfile tmpfile
+                  :tmpfile-local-remote tmpfile-local-remote)
                  julia-snail--requests)
         reqid))))
 
@@ -727,7 +729,7 @@ Julia include on the tmpfile, and then deleting the file."
   (let* ((request-info (gethash reqid julia-snail--requests))
          (callback-success (julia-snail--request-tracker-callback-success request-info)))
     (when callback-success
-      (funcall callback-success result-data)))
+      (funcall callback-success request-info result-data)))
   (julia-snail--response-base reqid))
 
 (defun julia-snail--response-failure (reqid error-message error-stack)
@@ -746,7 +748,7 @@ Julia include on the tmpfile, and then deleting the file."
         (julia-snail--setup-compilation-mode error-buffer (gethash process-buf julia-snail--cache-proc-basedir))
         (pop-to-buffer error-buffer))
       (when callback-failure
-        (funcall callback-failure))))
+        (funcall callback-failure request-info))))
   (julia-snail--response-base reqid))
 
 
@@ -864,8 +866,7 @@ Julia include on the tmpfile, and then deleting the file."
                 (xref-make descr
                            (if (file-exists-p real-path)
                                (xref-make-file-location real-path line 0)
-                             (xref-make-bogus-location
-                              "xref not supported for definitions evaluated with julia-snail-send-top-level-form")))))
+                             (xref-make-bogus-location "xref location not found")))))
             response)))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql xref-julia-snail)) identifier)
@@ -1104,7 +1105,7 @@ This will occur in the context of the Main module, just as it would at the REPL.
       (julia-snail--send-to-server
         module
         (format "include(\"%s\"); Main.JuliaSnail.elexpr(true)" filename)
-        :callback-success (lambda (&optional _data)
+        :callback-success (lambda (_request-info &optional _data)
                             ;; julia-snail-repl-buffer must be rebound here from
                             ;; jsrb-save, because the callback will run in a
                             ;; different scope, in which the correct binding of
@@ -1147,7 +1148,7 @@ If a prefix arg is used, this instead occurs in the context of Main."
       (julia-snail--send-to-server-via-tmp-file
         module
         text
-        :callback-success (lambda (&optional data)
+        :callback-success (lambda (_request-info &optional data)
                             (message "Selected region evaluated: %s, module %s"
                                      data
                                      (julia-snail--construct-module-path module)))))))
@@ -1158,9 +1159,14 @@ This occurs in the context of the current module.
 Currently only works on blocks terminated with `end'."
   (interactive)
   (let* ((q (julia-snail--cst-block-at (current-buffer) (point)))
+         (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
          (module (julia-snail--module-at-point (-first-item q)))
          (block-start (byte-to-position (or (-second-item q) -1)))
          (block-end (byte-to-position (or (-third-item q) -1)))
+         (top-level-form-name (or (-fourth-item q) nil))
+         (full-identifier (when (and module top-level-form-name)
+                            (format "%s.%s" (s-join "." module) top-level-form-name)))
+         (line-num (line-number-at-pos block-start))
          (text (condition-case nil
                    (buffer-substring-no-properties block-start block-end)
                  (error ""))))
@@ -1169,10 +1175,17 @@ Currently only works on blocks terminated with `end'."
       (julia-snail--flash-region block-start block-end)
       (julia-snail--send-to-server-via-tmp-file
         module text
-        :callback-success (lambda (&optional _data)
+        :callback-success (lambda (request-info &optional _data)
+                            (let* ((tmpfile-local (julia-snail--request-tracker-tmpfile request-info))
+                                   (tmpfile-local-remote (julia-snail--request-tracker-tmpfile-local-remote request-info))
+                                   (tmpfile (or tmpfile-local-remote tmpfile-local)))
+                              (when top-level-form-name
+                                (julia-snail--send-to-server
+                                  :Main
+                                  (format "JuliaSnail.update_method_location(%s, %s, \"%s\", \"%s\")" full-identifier line-num tmpfile filename))))
                             (message "Top-level form evaluated: %s, module %s"
-                                     (if (-fourth-item q)
-                                         (-fourth-item q)
+                                     (if top-level-form-name
+                                         top-level-form-name
                                        "unknown")
                                      (julia-snail--construct-module-path module)))))))
 
@@ -1183,7 +1196,7 @@ Currently only works on blocks terminated with `end'."
     (julia-snail--send-to-server
       :Main
       (format "Pkg.activate(\"%s\")" expanded-dir)
-      :callback-success (lambda (&optional _data)
+      :callback-success (lambda (_request-info &optional _data)
                           (message "Package activated: %s" expanded-dir)))))
 
 (defun julia-snail-doc-lookup (identifier)
