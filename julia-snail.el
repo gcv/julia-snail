@@ -1225,6 +1225,12 @@ Currently only works on blocks terminated with `end'."
   (when (bound-and-true-p julia-snail--repl-go-back-target)
     (pop-to-buffer julia-snail--repl-go-back-target)))
 
+(defun julia-snail-repl-vterm-kill-line ()
+  "Make kill-line (C-k by default) save content to the kill ring."
+  (interactive)
+  (kill-ring-save (point) (vterm-end-of-line))
+  (vterm-send-key "k" nil nil t))
+
 (defun julia-snail-clear-caches ()
   "Clear connection-specific internal Snail xref, completion, and module caches.
 Useful if something seems to wrong."
@@ -1270,6 +1276,7 @@ autocompletion aware of the available modules."
 (defvar julia-snail-repl-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c C-z") #'julia-snail-repl-go-back)
+    (define-key map (kbd "C-k") #'julia-snail-repl-vterm-kill-line)
     map))
 
 
