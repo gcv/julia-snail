@@ -1164,8 +1164,9 @@ Currently only works on blocks terminated with `end'."
          (block-start (byte-to-position (or (-second-item q) -1)))
          (block-end (byte-to-position (or (-third-item q) -1)))
          (top-level-form-name (or (-fourth-item q) nil))
+         (full-module (s-join "." module))
          (full-identifier (when (and module top-level-form-name)
-                            (format "%s.%s" (s-join "." module) top-level-form-name)))
+                            (format "%s.%s" full-module top-level-form-name)))
          (line-num (line-number-at-pos block-start))
          (text (condition-case nil
                    (buffer-substring-no-properties block-start block-end)
@@ -1182,7 +1183,13 @@ Currently only works on blocks terminated with `end'."
                               (when top-level-form-name
                                 (julia-snail--send-to-server
                                   :Main
-                                  (format "JuliaSnail.update_method_location(%s, %s, \"%s\", \"%s\")" full-identifier line-num tmpfile filename))))
+                                  (format "if hasproperty(%s, Symbol(\"%s\")); JuliaSnail.update_method_location(%s, %s, \"%s\", \"%s\"); end"
+                                          full-module
+                                          top-level-form-name
+                                          full-identifier
+                                          line-num
+                                          tmpfile
+                                          filename))))
                             (message "Top-level form evaluated: %s, module %s"
                                      (if top-level-form-name
                                          top-level-form-name
