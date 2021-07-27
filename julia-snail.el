@@ -465,10 +465,16 @@ returns \"/home/username/file.jl\"."
         (message "Starting Julia process and loading Snail...")
         ;; XXX: Wait briefly in case the Julia executable failed to launch.
         (with-current-buffer repl-buf
-          (julia-snail--wait-while
-           (not (string-equal "julia>" (current-word)))
-           100
-           (* 0.750 1000)))
+          ;; XXX: This use of julia-snail--wait-while causes a mysterious
+          ;; byte-compiler warning saying the result value of the macro is
+          ;; unused. Indeed, this is intentional. Plenty of other places in the
+          ;; code ignore the return value of julia-snail--wait-while, all
+          ;; without causing the byte-compiler to complain.
+          (with-no-warnings
+            (julia-snail--wait-while
+             (not (string-equal "julia>" (current-word)))
+             100
+             (* 0.750 1000))))
         (unless (buffer-live-p repl-buf)
           (user-error "The vterm buffer is inactive; double-check julia-snail-executable path"))
         ;; now try to send the Snail startup command
