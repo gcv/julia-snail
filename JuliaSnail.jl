@@ -102,6 +102,13 @@ end
 
 ### --- evaluator for running Julia code in a given module
 
+struct UndefinedModule <: Exception
+   name::Symbol
+end
+
+Base.showerror(io::IO, e::UndefinedModule) =
+   Printf.@printf(io, "Module %s not defined", e.name)
+
 """
 Call eval on expr in the context of the module given by the
 fully_qualified_module_name, which has the form of an array of symbols. If the
@@ -127,7 +134,15 @@ function eval_in_module(fully_qualified_module_name::Array{Symbol}, expr::Expr)
       getfield(Main, root)
    catch err
       if isa(err, UndefVarError)
-         Base.root_module(Base.__toplevel__, root)
+         try
+            Base.root_module(Base.__toplevel__, root)
+         catch err2
+            if isa(err2, MethodError)
+               throw(UndefinedModule(root))
+            else
+               rethrow(err2)
+            end
+         end
       else
          rethrow(err)
       end
