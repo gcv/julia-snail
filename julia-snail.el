@@ -251,19 +251,27 @@ Uses function `compilation-shell-minor-mode'.")
         (julia-snail-message-buffer-mode 1))
       msg-buf)))
 
-;; set error buffer to compilation mode, so that one may directly jump to the relevant files
+;; set target buffer to compilation mode, turning file paths into hyperlinks
 ;; adapted from julia-repl by Tamas Papp
-(defun julia-snail--setup-compilation-mode (message-buffer basedir)
-  "Setup compilation mode for the the current buffer in MESSAGE-BUFFER.
+(defun julia-snail--setup-compilation-mode (target-buffer basedir)
+  "Setup compilation mode for the the current buffer in TARGET-BUFFER.
 BASEDIR is used for resolving relative paths."
-  (with-current-buffer message-buffer
+  (with-current-buffer target-buffer
     (setq-local compilation-error-regexp-alist-alist
                 julia-snail--compilation-regexp-alist)
     (setq-local compilation-error-regexp-alist
                 (mapcar #'car compilation-error-regexp-alist-alist))
-    (compilation-mode)
+    ;; FIXME: This is weird:
+    (if (eq 'vterm-mode major-mode)
+        (compilation-shell-minor-mode 1)
+      (compilation-mode))
+    ;; Is there a mode conflict involved?
     (when basedir
-      (setq-local compilation-search-path (list basedir)))))
+      (setq-local compilation-search-path
+                  (list
+                   default-directory
+                   (file-name-directory julia-snail--server-file)
+                   basedir)))))
 
 (defun julia-snail--flash-region (start end)
   "Highlight the region outlined by START and END for TIMEOUT period."
@@ -495,16 +503,17 @@ returns \"/home/username/file.jl\"."
                                  (setq stream (open-network-stream "julia-process" process-buf "localhost" julia-snail-port))
                                (error (when (< attempt max-attempts)
                                         (sleep-for 0.75)))))
-                           stream)))
+                           stream))
+              (basedir nil))
           (if netstream
               (with-current-buffer repl-buf
                 ;; NB: buffer-local variable!
                 (setq julia-snail--process netstream)
                 (set-process-filter julia-snail--process #'julia-snail--server-response-filter)
                 (message "Snail connected to Julia. Happy hacking!")
-                ;; Query base directory, and cache
-                (puthash process-buf (julia-snail--capture-basedir repl-buf)
-                         julia-snail--cache-proc-basedir))
+                ;; query base directory, and cache
+                (setq basedir (julia-snail--capture-basedir repl-buf))
+                (puthash process-buf basedir julia-snail--cache-proc-basedir))
             ;; something went wrong
             (error "Failed to connect to Snail server"))
           ;; post-connection initialization:
@@ -515,7 +524,8 @@ returns \"/home/username/file.jl\"."
                 "display_on()"
                 :repl-buf repl-buf
                 :async nil))
-            ;; other initializations can go here
+            ;; other initializations goes here
+            (julia-snail--setup-compilation-mode repl-buf basedir)
             ))))))
 
 (defun julia-snail--repl-disable ()
