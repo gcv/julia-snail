@@ -135,6 +135,12 @@ another."
   :type 'keyword)
 (make-variable-buffer-local 'julia-snail-multimedia-buffer-style)
 
+(defcustom julia-snail-company-doc-enable t
+  "If company-mode is installed, this flag determines if its documentation integration should be enabled."
+  :tag "Control company-mode documentation integration"
+  :group 'julia-snail
+  :type 'boolean)
+
 
 ;;; --- constants
 
@@ -973,6 +979,36 @@ Julia include on the tmpfile, and then deleting the file."
             :exclusive 'no))))
 
 
+;;; --- company-mode support
+
+(defun julia-snail--company-doc-buffer (str)
+  (let* ((module (julia-snail--module-at-point))
+         (name (s-concat (s-join "." module) "." str))
+         (doc (julia-snail--send-to-server
+                :Main
+                (format "@doc %s" name)
+                :display-error-buffer-on-failure? nil
+                :async nil)))
+    (let ((buf (julia-snail--message-buffer
+                julia-snail-repl-buffer
+                "doc-buffer"
+                (if (eq :nothing doc)
+                    "Documentation not found!\nDouble-check your package activation and imports."
+                  doc)
+                :markdown nil)))
+      (with-current-buffer buf
+        (julia-snail--add-to-perspective buf)
+        (font-lock-ensure))
+      buf)))
+
+(defun julia-snail-company-capf ()
+  (interactive)
+  (let* ((comp (julia-snail-repl-completion-at-point))
+         (doc (list :company-doc-buffer
+                    #'julia-snail--company-doc-buffer)))
+    (cl-concatenate 'list comp doc)))
+
+
 ;;; --- eldoc implementation
 
 (defun julia-snail-eldoc ()
@@ -1306,12 +1342,20 @@ autocompletion aware of the available modules."
   :keymap julia-snail-mode-map
   (when (eq 'julia-mode major-mode)
     (if julia-snail-mode
+        ;; activate
         (progn
           (julia-snail--enable)
           (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t)
           (add-function :before-until (local 'eldoc-documentation-function) #'julia-snail-eldoc)
-          (add-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point nil t))
-      (remove-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point t)
+          (if (and (featurep 'company)
+                   julia-snail-company-doc-enable)
+              (add-hook 'completion-at-point-functions #'julia-snail-company-capf nil t)
+            (add-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point nil t)))
+      ;; deactivate
+      (if (and (featurep 'company)
+               julia-snail-company-doc-enable)
+          (remove-hook 'completion-at-point-functions #'julia-snail-company-capf t)
+        (remove-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point t))
       (remove-function (local 'eldoc-documentation-function) #'julia-snail-eldoc)
       (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
       (julia-snail--disable))))
