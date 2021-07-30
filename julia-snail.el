@@ -423,6 +423,15 @@ returns \"/home/username/file.jl\"."
         remote-local-path
       expanded)))
 
+(defun julia-snail--add-to-perspective (buf)
+  (when (and (featurep 'perspective) (bound-and-true-p persp-mode)) ; perspective-el support
+    (declare-function persp-add-buffer "perspective.el")
+    (persp-add-buffer buf))
+  (when (and (featurep 'persp-mode) (bound-and-true-p persp-mode)) ; persp-mode support
+    (declare-function persp-add-buffer "persp-mode.el")
+    (declare-function get-current-persp "persp-mode.el")
+    (persp-add-buffer buf (get-current-persp) nil)))
+
 
 ;;; --- connection management functions
 
@@ -445,13 +454,7 @@ returns \"/home/username/file.jl\"."
   (add-hook 'kill-buffer-hook #'julia-snail--repl-cleanup nil t)
   (let ((repl-buf (current-buffer))
         (process-buf (get-buffer-create (julia-snail--process-buffer-name (current-buffer)))))
-    (when (and (featurep 'perspective) (bound-and-true-p persp-mode)) ; perspective-el support
-      (declare-function persp-add-buffer "perspective.el")
-      (persp-add-buffer process-buf))
-    (when (and (featurep 'persp-mode) (bound-and-true-p persp-mode)) ; persp-mode support
-      (declare-function persp-add-buffer "persp-mode.el")
-      (declare-function get-current-persp "persp-mode.el")
-      (persp-add-buffer process-buf (get-current-persp) nil))
+    (julia-snail--add-to-perspective process-buf)
     (with-current-buffer process-buf
       (unless julia-snail--process
         (julia-snail--copy-buffer-local-vars repl-buf)
