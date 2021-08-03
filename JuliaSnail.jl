@@ -100,7 +100,7 @@ function elexpr(arg::ElispKeyword)
 end
 
 
-### --- evaluator for running Julia code in a given module
+### --- evaluation helpers for Julia code coming in from Emacs
 
 struct UndefinedModule <: Exception
    name::Symbol
@@ -151,6 +151,36 @@ function eval_in_module(fully_qualified_module_name::Array{Symbol}, expr::Expr)
       fqm = getfield(fqm, m)
    end
    Core.eval(fqm, expr)
+end
+
+"""
+Change the LineNumberNode instances in the given Expr tree to match real source
+file locations.
+"""
+function expr_change_lnn(expr, filesym, linenum)
+   if Expr !== typeof(expr); return; end
+   for (i, arg) in enumerate(expr.args)
+      if LineNumberNode === typeof(arg)
+         expr.args[i] = LineNumberNode(arg.line + linenum - 1, filesym)
+      elseif Expr === typeof(arg)
+         expr_change_lnn(arg, filesym, linenum)
+      end
+   end
+end
+
+"""
+Parse and eval the given tmpfile in the context of the module given by the
+modpath array and modify the parsed expression to refer to realfile (instead of
+tmpfile) line numbers. Useed to evaluate a top-level form in a file while
+preserving the original filename and line numbers for xref and stack traces.
+"""
+function eval_tmpfile(tmpfile, modpath, realfile, linenum)
+   realfilesym = Symbol(realfile)
+   code = read(tmpfile, String)
+   exprs = Meta.parse(code)
+   expr_change_lnn(exprs, realfilesym, linenum)
+   eval_in_module(modpath, exprs)
+   Main.JuliaSnail.elexpr(true)
 end
 
 
@@ -349,26 +379,6 @@ Completions are provided by the built-in REPL.REPLCompletions.
 function replcompletion(identifier, mod)
    cs, _, _ = REPLCompletions.completions(identifier, lastindex(identifier), mod)
    return [:list; REPLCompletions.completion_text.(cs)]
-end
-
-"""
-When a top-level-form is evaluated using julia-snail-send-top-level-form from
-Emacs, it is internally sent through a tempfile. When the form is then evaluated
-in its module context, the resulting definitions are internally associated with
-the tempfile, not the actual location of the source code. This messes up xref,
-and needs to be set to the correct location data when possible.
-"""
-function update_method_location(full_identifier, line, tmpfile, filename)
-   tmpfile_sym = Symbol(tmpfile)
-   filename_sym = Symbol(filename)
-   # TODO: This works for xref purposes, but not for stack traces.
-   for method in methods(full_identifier)
-      if method.file == tmpfile_sym
-         method.file = filename_sym
-         method.line = line
-         return
-      end
-   end
 end
 
 

@@ -655,14 +655,20 @@ nil, wait for the result and return it."
 (cl-defun julia-snail--send-to-server-via-tmp-file
     (module
      str
+     filename
+     line-num
      &key
      (repl-buf (get-buffer julia-snail-repl-buffer))
      callback-success
      callback-failure)
-  "Send str to server by first writing it to a tmpfile, calling
-Julia include on the tmpfile, and then deleting the file."
+  "Send STR to server by first writing it to a tmpfile, calling
+Julia include on the tmpfile, and then deleting the file. The
+code in the tmpfile will be parsed in Julia as if it were
+actually located in FILENAME starting at LINE-NUM and will be
+evaluated in the context of MODULE."
   (declare (indent defun))
   (let* ((text (s-trim str))
+         (module-ns (julia-snail--construct-module-path module))
          (tmpfile (make-temp-file
                    (expand-file-name "julia-tmp" ; NOT julia-snail--efn
                                      (or small-temporary-file-directory
@@ -672,8 +678,12 @@ Julia include on the tmpfile, and then deleting the file."
       (with-temp-file tmpfile
         (insert text))
       (let ((reqid (julia-snail--send-to-server
-                     module
-                     (format "include(\"%s\"); Main.JuliaSnail.elexpr(true)" (or tmpfile-local-remote tmpfile))
+                     :Main
+                     (format "Main.JuliaSnail.eval_tmpfile(\"%s\", %s, \"%s\", %s)"
+                             (or tmpfile-local-remote tmpfile)
+                             module-ns
+                             filename
+                             line-num)
                      :repl-buf repl-buf
                      ;; TODO: Only async via-tmp-file evaluation is currently
                      ;; supported because we rely on getting the reqid back from
@@ -1188,11 +1198,17 @@ If a prefix arg is used, this instead occurs in the context of Main."
   (interactive)
   (if (null (use-region-p))
       (user-error "No region selected")
-    (let ((text (buffer-substring-no-properties (region-beginning) (region-end)))
-          (module (if current-prefix-arg :Main (julia-snail--module-at-point))))
+    (let* ((block-start (region-beginning))
+           (block-end (region-end))
+           (text (buffer-substring-no-properties block-start block-end))
+           (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
+           (module (if current-prefix-arg :Main (julia-snail--module-at-point)))
+           (line-num (line-number-at-pos block-start)))
       (julia-snail--send-to-server-via-tmp-file
         module
         text
+        filename
+        line-num
         :callback-success (lambda (_request-info &optional data)
                             (message "Selected region evaluated: %s, module %s"
                                      data
@@ -1209,9 +1225,6 @@ Currently only works on blocks terminated with `end'."
          (block-start (byte-to-position (or (-second-item q) -1)))
          (block-end (byte-to-position (or (-third-item q) -1)))
          (top-level-form-name (or (-fourth-item q) nil))
-         (full-module (s-join "." module))
-         (full-identifier (when (and module top-level-form-name)
-                            (format "%s.%s" full-module top-level-form-name)))
          (line-num (line-number-at-pos block-start))
          (text (condition-case nil
                    (buffer-substring-no-properties block-start block-end)
@@ -1220,21 +1233,11 @@ Currently only works on blocks terminated with `end'."
         (user-error "No top-level form at point")
       (julia-snail--flash-region block-start block-end)
       (julia-snail--send-to-server-via-tmp-file
-        module text
-        :callback-success (lambda (request-info &optional _data)
-                            (let* ((tmpfile-local (julia-snail--request-tracker-tmpfile request-info))
-                                   (tmpfile-local-remote (julia-snail--request-tracker-tmpfile-local-remote request-info))
-                                   (tmpfile (or tmpfile-local-remote tmpfile-local)))
-                              (when top-level-form-name
-                                (julia-snail--send-to-server
-                                  :Main
-                                  (format "if hasproperty(%s, Symbol(\"%s\")); JuliaSnail.update_method_location(%s, %s, \"%s\", \"%s\"); end"
-                                          full-module
-                                          top-level-form-name
-                                          full-identifier
-                                          line-num
-                                          tmpfile
-                                          filename))))
+        module
+        text
+        filename
+        line-num
+        :callback-success (lambda (_request-info &optional _data)
                             (message "Top-level form evaluated: %s, module %s"
                                      (if top-level-form-name
                                          top-level-form-name
