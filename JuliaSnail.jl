@@ -150,6 +150,13 @@ function eval_in_module(fully_qualified_module_name::Array{Symbol}, expr::Expr)
    for m in fully_qualified_module_name[2:end]
       fqm = getfield(fqm, m)
    end
+   # If Revise is being used, force it to update its state; invokelatest is
+   # necessary to deal with the World Age problem because Revise was probably
+   # loaded after the main Snail loop started running.
+   if isdefined(Main, :Revise)
+      Base.invokelatest(Main.Revise.revise)
+   end
+   # go
    Core.eval(fqm, expr)
 end
 
@@ -314,14 +321,15 @@ function lsdefinitions(ns, identifier)
       let ms = methods(getproperty(ns, Symbol(identifier))).ms
          # If all definitions point to the same file and line, collapse them
          # into one. This often happens with function default arguments.
-         lines = map(m -> m.line, ms)
-         files = map(m -> m.file, ms)
          [:list;
-          map(m -> (Printf.@sprintf("%s(%s)",
-                                    identifier,
-                                    format_method_signature(m.sig)),
-                    Base.find_source_file(string(m.file)),
-                    m.line),
+          map(function(m)
+                 floc = functionloc(m) # returns a (file, linenum) tuple
+                 (Printf.@sprintf("%s(%s)",
+                                  identifier,
+                                  format_method_signature(m.sig)),
+                  Base.find_source_file(string(floc[1])),
+                  floc[2])
+              end,
               ms)]
       end
    catch
