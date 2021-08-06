@@ -109,6 +109,8 @@ If the Julia program uses Pkg, then run `M-x julia-snail-package-activate` or `C
 
 Load the current Julia source file using `M-x julia-snail-send-buffer-file` or `C-c C-k`. Notice that the REPL does not show an `include()` call, because the command executed across the Snail network connection. Among other advantages, this minimizes REPL history clutter.
 
+Users of Revise should load it normally into the session, and do not need to use `julia-snail-send-buffer-file`.
+
 Once some Julia code has been loaded into the running image, Snail can begin introspecting it for purposes of cross-references and identifier completion.
 
 The `julia-snail-mode` minor mode provides a key binding map (`julia-snail-mode-map`) with the following commands:
