@@ -483,7 +483,7 @@ returns \"/home/username/file.jl\"."
             (julia-snail--wait-while
              (not (string-equal "julia>" (current-word)))
              100
-             (* 0.750 1000))))
+             2000)))
         (unless (buffer-live-p repl-buf)
           (user-error "The vterm buffer is inactive; double-check julia-snail-executable path"))
         ;; now try to send the Snail startup command
