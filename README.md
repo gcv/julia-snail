@@ -252,3 +252,4 @@ Gadfly.plot(sin, 0, 2π)
 - Completion does not pick up local variables.
 - A real eldoc implementation would be great, but difficult to do with Julia’s generic functions.
 - A debugger would be great.
+- A real test suite which fully drives both Julia and Emacs and runs in a CI environment (like GitHub Actions) wouldn’t hurt, either.
