@@ -185,7 +185,8 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum)
    realfilesym = Symbol(realfile)
    code = read(tmpfile, String)
    exprs = Meta.parse(code)
-   expr_change_lnn(exprs, realfilesym, linenum)
+   # linenum - 1 accounts for the leading "begin" line in tmpfiles
+   expr_change_lnn(exprs, realfilesym, linenum - 1)
    eval_in_module(modpath, exprs)
    Main.JuliaSnail.elexpr(true)
 end

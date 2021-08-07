@@ -3,7 +3,7 @@
 
 ;; URL: https://github.com/gcv/julia-snail
 ;; Package-Requires: ((emacs "26.2") (dash "2.16.0") (julia-mode "0.3") (s "1.12.0") (spinner "1.7.3") (vterm "0.0.1"))
-;; Version: 1.0.0rc5
+;; Version: 1.1.1
 ;; Created: 2019-10-27
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -668,7 +668,7 @@ code in the tmpfile will be parsed in Julia as if it were
 actually located in FILENAME starting at LINE-NUM and will be
 evaluated in the context of MODULE."
   (declare (indent defun))
-  (let* ((text (s-trim str))
+  (let* ((text (concat "begin\n" (s-trim str) "\nend\n"))
          (module-ns (julia-snail--construct-module-path module))
          (tmpfile (make-temp-file
                    (expand-file-name "julia-tmp" ; NOT julia-snail--efn
