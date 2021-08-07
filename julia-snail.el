@@ -139,6 +139,7 @@ another."
   "If company-mode is installed, this flag determines if its documentation integration should be enabled."
   :tag "Control company-mode documentation integration"
   :group 'julia-snail
+  :safe 'booleanp
   :type 'boolean)
 
 
