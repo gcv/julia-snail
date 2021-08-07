@@ -22,7 +22,7 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
 
 ## Demo
 
-![img](https://github.com/gcv/julia-snail/wiki/screencasts/screencast-2020-01-26.gif)
+https://user-images.githubusercontent.com/10327/128589405-7368bb50-0ef3-4003-b5d8-2be1da102576.mp4
 
 
 ## Installation
