@@ -3,7 +3,7 @@
 
 ;; URL: https://github.com/gcv/julia-snail
 ;; Package-Requires: ((emacs "26.2") (dash "2.16.0") (julia-mode "0.3") (s "1.12.0") (spinner "1.7.3") (vterm "0.0.1"))
-;; Version: 1.1.1
+;; Version: 1.1.2
 ;; Created: 2019-10-27
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -402,6 +402,7 @@ Returns nil if the poll timed out, t otherwise."
   (let ((extra-args (if (listp julia-snail-extra-args)
                         (mapconcat 'identity julia-snail-extra-args " ")
                       julia-snail-extra-args))
+        (remote-user (file-remote-p default-directory 'user))
         (remote-host (file-remote-p default-directory 'host)))
     (if (or (null remote-host) (string-equal "localhost" remote-host))
         ;; local REPL
@@ -413,7 +414,9 @@ Returns nil if the poll timed out, t otherwise."
         (format "ssh -t -L %1$s:localhost:%2$s %3$s %4$s %5$s -L %6$s"
                 julia-snail-port
                 (or julia-snail-remote-port julia-snail-port)
-                remote-host
+                (concat
+                 (if remote-user (concat remote-user "@") "")
+                 remote-host)
                 julia-snail-executable
                 extra-args
                 remote-dir-server-file)))))
