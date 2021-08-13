@@ -2,6 +2,27 @@
 
 ![img](snail.png)
 
+<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
+- [Features](#features)
+- [Demo](#demo)
+- [Installation](#installation)
+- [Configuration](#configuration)
+    - [`use-package` setup](#use-package-setup)
+    - [Manual setup](#manual-setup)
+    - [`display-buffer-alist` notes](#display-buffer-alist-notes)
+- [Usage](#usage)
+    - [Basics](#basics)
+    - [Multiple Julia versions](#multiple-julia-versions)
+    - [Multiple REPLs](#multiple-repls)
+    - [Remote REPLs](#remote-repls)
+        - [`julia-snail-executable` and the remote shell path](#julia-snail-executable-and-the-remote-shell-path)
+    - [Extra Julia command-line arguments](#extra-julia-command-line-arguments)
+    - [Module-nested `include`s](#module-nested-includes)
+    - [Documentation lookup](#documentation-lookup)
+    - [Multimedia and plotting](#multimedia-and-plotting)
+- [Future improvements](#future-improvements)
+<!-- markdown-toc end -->
+
 Snail is a development environment and REPL interaction package for Julia in the spirit of Common Lisp’s [SLIME](https://common-lisp.net/project/slime/) and Clojure’s [CIDER](https://cider.mx). It enables convenient and dynamic REPL-driven development.
 
 Snail works on platforms which support [libvterm](https://github.com/neovim/libvterm), which currently means Unix-like systems. It should also work on Windows using [WSL](https://docs.microsoft.com/en-us/windows/wsl/about).
@@ -141,7 +162,7 @@ Completion also works. Emacs built-in completion features, as well as `company-c
 
 The `julia-snail-executable` variable can be set at the file level or at the directory level and point to different versions of Julia for different projects. It should be a string referencing the executable binary path.
 
-NB: On a Mac, the Julia binary is typically `Contents/Resources/julia/bin/julia` inside the distribution app bundle. You must either make sure `julia-snail-executable` is set to an absolute path, or configure your Emacs `exec-path` to correctly find the `julia` binary.
+**NB:** On a Mac, the Julia binary is typically `Contents/Resources/julia/bin/julia` inside the distribution app bundle. You must either make sure `julia-snail-executable` is set to an absolute path, or configure your Emacs `exec-path` to correctly find the `julia` binary.
 
 
 ### Multiple REPLs
@@ -181,9 +202,19 @@ If all these things are true, visit a remote Julia source file using Tramp, and 
 
 Just as with local Julia sessions, Snail can be configured using a remote `.dir-locals.el` file or another method for setting variables. In particular, `julia-snail-executable` may need to be changed.
 
-The SSH tunnel will, by default, open from `julia-snail-port` on the remote host to the same port on localhost. The remote host's port can be changed by setting `julia-snail-remote-port`.
+The SSH tunnel will, by default, open from `julia-snail-port` on the remote host to the same port on localhost. The remote host’s port can be changed by setting `julia-snail-remote-port`.
 
-NB: To use `.dir-locals.el` over Tramp, you must set `enable-remote-dir-locals` to `t`!
+**NB:** To use `.dir-locals.el` over Tramp, you must set `enable-remote-dir-locals` to `t`!
+
+
+#### `julia-snail-executable` and the remote shell path
+
+**NB:** It is simpler to set `julia-snail-executable` in your project to the Julia binary’s absolute path than to wrangle your shell path. This section gives a bit of assistance if you disregard this advice.
+
+A subtle problem may occur if `julia-snail-executable` is set to a value you expect to find on the remote host’s shell path. When Snail connects to the remote host using SSH, it will launch Julia in a _non-interactive_, _non-login_ shell. This means that, depending on (1) your remote shell, (2) how you set your path, and (3) which shell startup files you rely on, the path may not be what you have in your ordinary remote shell sessions.
+
+- Zsh: `.zshenv` is always executed; `.zshrc` is only executed by interactive shells. _Make sure you set your path in `.zshenv`._
+- Bash: `.bashrc` is only executed by non-interactive shells; `.bash_profile` is only executed by interactive shells. To run your setup regardless of shell type, put everything in `.bashrc` and source `.bashrc` from `.bash_profile.`
 
 
 ### Extra Julia command-line arguments
@@ -225,7 +256,7 @@ Furthermore, if `alpha-1.jl` is refactored to sit outside the `Alpha` module, or
 
 ### Multimedia and plotting
 
-Snail supports making diagrams by plugging into Julia's [multimedia I/O](https://docs.julialang.org/en/v1/base/io-network/#Multimedia-I/O) system. Any plot back-end which generates SVG or PNG output can display in an Emacs buffer, provided the Emacs instance itself supports images.
+Snail supports making diagrams by plugging into Julia’s [multimedia I/O](https://docs.julialang.org/en/v1/base/io-network/#Multimedia-I/O) system. Any plot back-end which generates SVG or PNG output can display in an Emacs buffer, provided the Emacs instance itself supports images.
 
 To enable Emacs-Julia multimedia integration, either (1) set local variable `julia-snail-multimedia-enable` to `t`, preferably in `.dir-locals.el`, or (2) after the Julia REPL connects to Emacs, call the function `julia-snail-multimedia-toggle-display-in-emacs`.
 
