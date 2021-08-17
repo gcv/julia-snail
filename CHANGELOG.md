@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+### Fixed
+
+- Some versions of [`emacs-libvterm`](https://github.com/akermu/emacs-libvterm) notice that `default-directory` of a buffer points to a remote host and hijack the `ssh` invocation. Prevent this from conflicting with Snail's own use of `ssh`.
+
+
 ## [1.1.2] — 2021-08-11
 
 ### Fixed

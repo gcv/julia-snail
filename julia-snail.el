@@ -1120,7 +1120,12 @@ To create multiple REPLs, give these variables distinct values (e.g.:
           (pop-to-buffer repl-buf))
       ;; run Julia in a vterm and load the Snail server file
       (let ((vterm-shell (julia-snail--launch-command))
-            (vterm-buf (generate-new-buffer julia-snail-repl-buffer)))
+            ;; XXX: Allocate a buffer for the vterm. Bind its default-directory
+            ;; to the user's home because if (1) a remote REPL is being started,
+            ;; default-directory may be remote, and (2) Tramp may notice this,
+            ;; mess with the path, and run ssh incorrectly.
+            (vterm-buf (let ((default-directory (expand-file-name "~")))
+                         (generate-new-buffer julia-snail-repl-buffer))))
         (pop-to-buffer vterm-buf)
         (with-current-buffer vterm-buf
           ;; XXX: Set the error color to red to work around breakage relating to
