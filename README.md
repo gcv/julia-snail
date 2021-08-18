@@ -22,6 +22,7 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
     - [Multiple REPLs](#multiple-repls)
     - [Remote REPLs](#remote-repls)
         - [`julia-snail-executable` and the remote shell path](#julia-snail-executable-and-the-remote-shell-path)
+        - [Remote environment setup](#remote-environment-setup)
     - [Extra Julia command-line arguments](#extra-julia-command-line-arguments)
     - [Module-nested `include`s](#module-nested-includes)
     - [Documentation lookup](#documentation-lookup)
@@ -215,6 +216,19 @@ A subtle problem may occur if `julia-snail-executable` is set to a value you exp
 
 - Zsh: `.zshenv` is always executed; `.zshrc` is only executed by interactive shells. _Make sure you set your path in `.zshenv`._
 - Bash: `.bashrc` is only executed by non-interactive shells; `.bash_profile` is only executed by interactive shells. To run your setup regardless of shell type, put everything in `.bashrc` and source `.bashrc` from `.bash_profile.`
+
+
+#### Remote environment setup
+
+You may encounter a situation in which your remote host’s shell is configured to read startup files you do not control, and this setup does not occur when you attempt to launch a remote REPL. This may happen, e.g., in a computing cluster, where some startup files are required to correctly set up your environment (libraries, paths, and so forth) but are not being read by non-interactive non-login shells. In that case, it may be useful to force those extra scripts to load. Try adding the following code in your remote `.bashrc` or `.zshenv` scripts:
+
+```shell
+# bash (replace /etc/profile in both places with the file you need):
+[[ ! $(shopt -q login_shell) && $- != *i* && -f /etc/profile ]] && . /etc/profile
+
+# zsh (replace /etc/profile in both places with the file you need):
+[[ ! -o login && ! -o interactive && -f /etc/profile ]] && . /etc/profile
+```
 
 
 ### Extra Julia command-line arguments
