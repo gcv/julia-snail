@@ -1489,6 +1489,47 @@ autocompletion aware of the available modules."
     (define-key map (kbd "C-k") #'julia-snail-repl-vterm-kill-line)
     map))
 
+;; Format regions and buffers via JuliaFormatter
+;; Inspired by https://codeberg.org/FelipeLema/julia-formatter.el/
+
+(defun julia-snail--format-text (txt)
+  (julia-snail--send-to-server
+    :JuliaSnail
+    (format "format_data(\"%s\")" txt)
+    :async nil))
+
+
+(defun julia-snail-format-region (begin end)
+  "Format region delimited by BEGIN and END  using JuliaFormatter.jl.
+The code in the region must be syntactically valid Julia, otherwise no formatting will take place. "
+  (interactive "r")
+  (let* ((text-to-be-formatted
+          (buffer-substring-no-properties
+           begin end))
+         (ftext (julia-snail--format-text
+                    text-to-be-formatted))
+         )
+    
+    (if (eq :nothing ftext)
+        (message "Parsing error, formatting failed")
+      (progn
+        (delete-region begin end)
+        (insert ftext)
+      ))
+    ))
+
+                          
+(defun julia-snail-format-buffer ()
+  "Format buffer using JuliaFormatter.jl.
+The buffer must be syntactically valid Julia, otherwise no formatting will take place.
+Point placement after reformatting is heuristic, since the code might have changed quite a bit.  "
+
+  (interactive )
+  (let* ((old-point (point) ))
+    (julia-snail-format-region (point-min) (point-max))
+    (goto-char old-point)
+    )
+)
 
 ;;; --- mode definitions
 
