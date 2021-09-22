@@ -39,7 +39,6 @@ import Markdown
 import Printf
 import REPL
 import Sockets
-import REPL.REPLCompletions
 
 export start, stop
 
