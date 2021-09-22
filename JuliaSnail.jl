@@ -23,7 +23,7 @@ module JuliaSnail
 
 # external dependency hack continues
 try
-   import CSTParser
+   import CSTParser,REPLHistory
 catch err
    if isa(err, ArgumentError)
       # force dependency installation
@@ -574,7 +574,7 @@ end
 
 module Multimedia
 
-import Base64
+import Base64,REPL
 
 struct EmacsDisplay <: Base.AbstractDisplay
 end
@@ -779,5 +779,39 @@ function send_to_client(expr, client_socket=nothing)
    println(client_socket, expr)
 end
 
+
+#adapted from https://github.com/carstenbauer/SaveREPL.jl
+function history(n::Int)
+    h = reverse(readlines(REPL.find_hist_file()))
+    entries = String[]
+    i = 1
+    N = length(h)
+    c = 0
+    while i<=N && c<n
+        line = h[i]
+        cmdlines = String[]
+        while startswith(line, "\t")
+            push!(cmdlines, replace(line, "\t" => ""; count=1))
+            i+=1
+            line = h[i]
+        end
+        command = join(reverse(cmdlines), "\n")
+
+        contains(line, "# mode:") || warn("wrong order: expected mode")
+        mode = replace(chomp(line), "# mode: " => "")
+
+        i+=1
+        line = h[i]
+        contains(line, "# time: ") || warn("wrong order: expected time")
+        time = replace(chomp(line), "# time: " => "")
+        i+=1
+
+        contains(mode, "julia") || continue
+        #        push!(entries, REPLEntry(time, mode, command))
+        push!(entries, command)
+        c+=1
+    end
+    return reverse(entries)
+end
 
 end
