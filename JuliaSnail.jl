@@ -23,7 +23,7 @@ module JuliaSnail
 
 # external dependency hack continues
 try
-   import CSTParser,REPLHistory
+   import CSTParser
 catch err
    if isa(err, ArgumentError)
       # force dependency installation
@@ -39,6 +39,7 @@ import Markdown
 import Printf
 import REPL
 import Sockets
+import REPL.REPLCompletions
 
 export start, stop
 
