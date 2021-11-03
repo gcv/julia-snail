@@ -14,24 +14,36 @@
 import Pkg
 
 
-# a quick hack to allow using external dependencies
-push!(LOAD_PATH, @__DIR__)
-
-
 module JuliaSnail
 
 
-# external dependency hack continues
+# XXX: External dependency hack. Snail's own dependencies need to be listed
+# first in LOAD_PATH during initial load, otherwise conflicting versions
+# installed in the Julia global environment cause conflicts. Especially
+# CSTParser, with its unstable API. However, Snail should not be listed first
+# the rest of the time.
 try
+   insert!(LOAD_PATH, 1, @__DIR__)
+   # list all external dependency imports here (from Snail's Project.toml):
    import CSTParser
+   # check for dependency API compatibility
+   !isdefined(CSTParser, :iscall) &&
+      throw(ArgumentError("CSTParser API not compatible, must install Snail-specific version"))
 catch err
    if isa(err, ArgumentError)
       # force dependency installation
       Main.Pkg.activate(@__DIR__)
       Main.Pkg.instantiate()
       Main.Pkg.precompile()
-      Main.Pkg.activate()
+      # activate what was the first entry before Snail was pushed to the head of LOAD_PATH
+      Main.Pkg.activate(LOAD_PATH[2])
    end
+finally
+   # Remove Snail from the head of the LOAD_PATH and put it at the tail. At this
+   # point, all of its own dependencies should be loaded and the user's
+   # preferred project should be active.
+   deleteat!(LOAD_PATH, 1)
+   push!(LOAD_PATH, @__DIR__)
 end
 
 

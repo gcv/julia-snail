@@ -514,6 +514,9 @@ returns \"/home/username/file.jl\"."
                 ;; NB: buffer-local variable!
                 (setq julia-snail--process netstream)
                 (set-process-filter julia-snail--process #'julia-snail--server-response-filter)
+                ;; TODO: Implement a sanity check on the Julia environment. Not
+                ;; sure how. But a failed dependency load (like CSTParser) will
+                ;; leave Snail in a bad state.
                 (message "Snail connected to Julia. Happy hacking!")
                 ;; Query base directory, and cache
                 (puthash process-buf (julia-snail--capture-basedir repl-buf)
