@@ -667,9 +667,9 @@ Standard output and standard error during evaluation go into the REPL. Errors
 during evaluation are captured and sent back to the client as Elisp
 s-expressions. Special queries also write back their responses as s-expressions.
 """
-function start(port=10011)
+function start(port=10011; addr="127.0.0.1")
    global running = false
-   global server_socket = Sockets.listen(port)
+   global server_socket = Sockets.listen(Sockets.IPv4(addr), port)
    let wait_result = timedwait(function(); server_socket.status == Base.StatusActive; end,
                                5.0)
       if :timedout == wait_result
