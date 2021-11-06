@@ -409,12 +409,15 @@ Returns nil if the poll timed out, t otherwise."
   (let ((extra-args (if (listp julia-snail-extra-args)
                         (mapconcat 'identity julia-snail-extra-args " ")
                       julia-snail-extra-args))
+	(remote-method (file-remote-p default-directory 'method))
         (remote-user (file-remote-p default-directory 'user))
         (remote-host (file-remote-p default-directory 'host)))
-    (if (or (null remote-host) (string-equal "localhost" remote-host))
-        ;; local REPL
-        (format "%s %s -L %s" julia-snail-executable extra-args julia-snail--server-file)
-      ;; remote REPL
+    (cond
+     ;; local REPL
+     ((equal nil remote-method)
+      (format "%s %s -L %s" julia-snail-executable extra-args julia-snail--server-file))
+     ;; remote REPL
+     ((string-equal "ssh" remote-method)
       (let* ((remote-dir (julia-snail--copy-snail-to-remote-host))
              (remote-dir-localname (file-remote-p remote-dir 'localname))
              (remote-dir-server-file (concat remote-dir-localname "JuliaSnail.jl")))
@@ -426,7 +429,13 @@ Returns nil if the poll timed out, t otherwise."
                  remote-host)
                 julia-snail-executable
                 extra-args
-                remote-dir-server-file)))))
+                remote-dir-server-file)))
+     ((string-equal "docker" remote-method)
+      (format "docker exec -it %s %s %s -L %s"
+	      remote-host
+	      julia-snail-executable
+	      extra-args
+	      julia-snail--server-file)))))
 
 (defun julia-snail--efn (path &optional starting-dir)
   "A variant of expand-file-name that (1) just does
