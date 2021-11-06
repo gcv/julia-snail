@@ -67,6 +67,13 @@
                  (repeat :tag "List of strings" string)))
 (make-variable-buffer-local 'julia-snail-extra-args)
 
+(defcustom julia-snail-host "127.0.0.1"
+  "Default Snail server ip to listen on."
+  :tag "Snail server port (local)"
+  :group 'julia-snail
+  :safe 'integerp
+  :type 'string)
+
 (defcustom julia-snail-port 10011
   "Default Snail server port for Emacs to connect to."
   :tag "Snail server port (local)"
@@ -492,7 +499,7 @@ returns \"/home/username/file.jl\"."
           (user-error "The vterm buffer is inactive; double-check julia-snail-executable path"))
         ;; now try to send the Snail startup command
         (julia-snail--send-to-repl
-          (format "JuliaSnail.start(%d); # please wait, time-to-first-plot..." (or julia-snail-remote-port julia-snail-port))
+          (format "JuliaSnail.start(%d; addr=\"%s\"); # please wait, time-to-first-plot..." (or julia-snail-remote-port julia-snail-port) julia-snail-host)
           :repl-buf repl-buf
           ;; wait a while in case dependencies need to be downloaded
           :polling-timeout (* 5 60 1000)
