@@ -400,29 +400,30 @@ Returns nil if the poll timed out, t otherwise."
 
 (defun julia-snail--launch-command ()
   (let* ((extra-args (if (listp julia-snail-extra-args)
-                        (mapconcat 'identity julia-snail-extra-args " ")
-                      julia-snail-extra-args))
-	(remote-method (file-remote-p default-directory 'method))
-        (remote-user (file-remote-p default-directory 'user))
-        (remote-host (file-remote-p default-directory 'host))
-	(remote-dir-server-file (if (equal nil remote-method)
-				    ""
-				  (concat  (file-remote-p (julia-snail--copy-snail-to-remote-host) 'localname) "JuliaSnail.jl"))))
+                         (mapconcat 'identity julia-snail-extra-args " ")
+                       julia-snail-extra-args))
+	 (remote-method (file-remote-p default-directory 'method))
+         (remote-user (file-remote-p default-directory 'user))
+         (remote-host (file-remote-p default-directory 'host))
+	 (remote-dir-server-file (if (equal nil remote-method)
+				     ""
+				   (concat (file-remote-p (julia-snail--copy-snail-to-remote-host) 'localname) "JuliaSnail.jl"))))
     (cond
      ;; local REPL
      ((equal nil remote-method)
       (format "%s %s -L %s" julia-snail-executable extra-args julia-snail--server-file))
      ;; remote REPL
      ((string-equal "ssh" remote-method)
-        (format "ssh -t -L %1$s:localhost:%2$s %3$s %4$s %5$s -L %6$s"
-                julia-snail-port
-                (or julia-snail-remote-port julia-snail-port)
-                (concat
-                 (if remote-user (concat remote-user "@") "")
-                 remote-host)
-                julia-snail-executable
-                extra-args
-                remote-dir-server-file))
+      (format "ssh -t -L %1$s:localhost:%2$s %3$s %4$s %5$s -L %6$s"
+              julia-snail-port
+              (or julia-snail-remote-port julia-snail-port)
+              (concat
+               (if remote-user (concat remote-user "@") "")
+               remote-host)
+              julia-snail-executable
+              extra-args
+              remote-dir-server-file))
+     ;; container REPL
      ((string-equal "docker" remote-method)
       (format "docker exec -it %s %s %s -L %s"
 	      remote-host
