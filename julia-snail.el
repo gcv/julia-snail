@@ -502,10 +502,10 @@ returns \"/home/username/file.jl\"."
           (user-error "The vterm buffer is inactive; double-check julia-snail-executable path"))
         ;; now try to send the Snail startup command
         (julia-snail--send-to-repl
-         (format "JuliaSnail.start(%d; %s) ; # please wait, time-to-first-plot..."
+         (format "JuliaSnail.start(%d%s) ; # please wait, time-to-first-plot..."
 		 (or julia-snail-remote-port julia-snail-port)
 		 (if (string-equal "docker" (file-remote-p (buffer-file-name julia-snail--repl-go-back-target) 'method))
-		     "addr=\"0.0.0.0\""
+		     "; addr=\"0.0.0.0\""
 		   ""))
           :repl-buf repl-buf
           ;; wait a while in case dependencies need to be downloaded
