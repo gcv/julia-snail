@@ -67,13 +67,6 @@
                  (repeat :tag "List of strings" string)))
 (make-variable-buffer-local 'julia-snail-extra-args)
 
-(defcustom julia-snail-host "127.0.0.1"
-  "Default Snail server ip to listen on."
-  :tag "Snail server port (local)"
-  :group 'julia-snail
-  :safe 'integerp
-  :type 'string)
-
 (defcustom julia-snail-port 10011
   "Default Snail server port for Emacs to connect to."
   :tag "Snail server port (local)"
@@ -406,21 +399,21 @@ Returns nil if the poll timed out, t otherwise."
     snail-remote-dir))
 
 (defun julia-snail--launch-command ()
-  (let ((extra-args (if (listp julia-snail-extra-args)
+  (let* ((extra-args (if (listp julia-snail-extra-args)
                         (mapconcat 'identity julia-snail-extra-args " ")
                       julia-snail-extra-args))
 	(remote-method (file-remote-p default-directory 'method))
         (remote-user (file-remote-p default-directory 'user))
-        (remote-host (file-remote-p default-directory 'host)))
+        (remote-host (file-remote-p default-directory 'host))
+	(remote-dir-server-file (if (equal nil remote-method)
+				    ""
+				  (concat  (file-remote-p (julia-snail--copy-snail-to-remote-host) 'localname) "JuliaSnail.jl"))))
     (cond
      ;; local REPL
      ((equal nil remote-method)
       (format "%s %s -L %s" julia-snail-executable extra-args julia-snail--server-file))
      ;; remote REPL
      ((string-equal "ssh" remote-method)
-      (let* ((remote-dir (julia-snail--copy-snail-to-remote-host))
-             (remote-dir-localname (file-remote-p remote-dir 'localname))
-             (remote-dir-server-file (concat remote-dir-localname "JuliaSnail.jl")))
         (format "ssh -t -L %1$s:localhost:%2$s %3$s %4$s %5$s -L %6$s"
                 julia-snail-port
                 (or julia-snail-remote-port julia-snail-port)
@@ -429,13 +422,13 @@ Returns nil if the poll timed out, t otherwise."
                  remote-host)
                 julia-snail-executable
                 extra-args
-                remote-dir-server-file)))
+                remote-dir-server-file))
      ((string-equal "docker" remote-method)
       (format "docker exec -it %s %s %s -L %s"
 	      remote-host
 	      julia-snail-executable
 	      extra-args
-	      julia-snail--server-file)))))
+	      remote-dir-server-file)))))
 
 (defun julia-snail--efn (path &optional starting-dir)
   "A variant of expand-file-name that (1) just does
@@ -508,7 +501,11 @@ returns \"/home/username/file.jl\"."
           (user-error "The vterm buffer is inactive; double-check julia-snail-executable path"))
         ;; now try to send the Snail startup command
         (julia-snail--send-to-repl
-          (format "JuliaSnail.start(%d; addr=\"%s\"); # please wait, time-to-first-plot..." (or julia-snail-remote-port julia-snail-port) julia-snail-host)
+         (format "JuliaSnail.start(%d; %s) ; # please wait, time-to-first-plot..."
+		 (or julia-snail-remote-port julia-snail-port)
+		 (if (string-equal "docker" (file-remote-p (buffer-file-name julia-snail--repl-go-back-target) 'method))
+		     "addr=\"0.0.0.0\""
+		   ""))
           :repl-buf repl-buf
           ;; wait a while in case dependencies need to be downloaded
           :polling-timeout (* 5 60 1000)
