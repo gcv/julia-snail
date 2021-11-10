@@ -23,6 +23,7 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
     - [Remote REPLs](#remote-repls)
         - [`julia-snail-executable` and the remote shell path](#julia-snail-executable-and-the-remote-shell-path)
         - [Remote environment setup](#remote-environment-setup)
+    - [Docker container REPLs](#docker-container-repls)
     - [Extra Julia command-line arguments](#extra-julia-command-line-arguments)
     - [Module-nested `include`s](#module-nested-includes)
     - [Documentation lookup](#documentation-lookup)
@@ -193,7 +194,7 @@ Now, source files in `Mars` will interact with the REPL running in the `*julia M
 
 ### Remote REPLs
 
-Snail can use a REPL located on a remote host using SSH tunneling and Emacs [Tramp](https://www.gnu.org/software/tramp/), subject to the following conditions:
+Snail can use a Julia REPL instance running on a remote host using SSH tunneling and Emacs [Tramp](https://www.gnu.org/software/tramp/), subject to the following conditions:
 
 1. A full Julia environment must be installed on the remote host.
 2. The code under development is likewise on the remote host. Emacs must open source files using Tramp.
@@ -229,6 +230,25 @@ You may encounter a situation in which your remote host’s shell is configured 
 # zsh (replace /etc/profile in both places with the file you need):
 [[ ! -o login && ! -o interactive && -f /etc/profile ]] && . /etc/profile
 ```
+
+
+### Docker container REPLs
+
+Snail can use a Julia REPL instance running inside a Docker container. Like [SSH remote REPLs](#remote-repls), this uses [Tramp](https://www.gnu.org/software/tramp/). To make this work:
+
+1. The [docker-tramp](https://github.com/emacs-pe/docker-tramp.el) package must be installed in the local Emacs instance. (Snail does not automatically install this dependency because the container feature is optional.)
+2. A full Julia environment is available in-container.
+3. The code under development is available in-container (using volumes or some other mechanism).
+4. Ports must be appropriately mapped in-container.
+
+A sample container invocation should help understand the requirements:
+```shell
+docker run --name julia-1 --rm -it -p 127.0.0.1:10011:10011 -v "${HOME}/work:/work" julia bash
+```
+
+Visit an in-container Julia source file using Tramp, and start `julia-snail`. It should transparently start an in-container REPL.
+
+Snail configuration, in particular port mapping, works the same as for remote SSH REPLs.
 
 
 ### Extra Julia command-line arguments
