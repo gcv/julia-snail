@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - When a Julia-side dependency of Snail (like CSTParser) has already been installed in the Julia global environment, it can cause conflicts (see [#62](https://github.com/gcv/julia-snail/issues/62)). Work around this problem by forcing the Snail Julia project to be first in `LOAD_PATH` order, but only during initial Snail load.
+- Local REPLs should start with the same working directory as the starting file ([#69](https://github.com/gcv/julia-snail/issues/69)).
 
 
 ### Added
