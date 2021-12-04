@@ -16,6 +16,7 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
     - [`use-package` setup](#use-package-setup)
     - [Manual setup](#manual-setup)
     - [`display-buffer-alist` notes](#display-buffer-alist-notes)
+    - [Other customizations](#other-customizations)
 - [Usage](#usage)
     - [Basics](#basics)
     - [Multiple Julia versions](#multiple-julia-versions)
@@ -113,6 +114,11 @@ It is likely that most users will want the default REPL pop-up behavior to split
 ```elisp
 (customize-set-variable 'split-height-threshold 15)
 ```
+
+
+### Other customizations
+
+- `julia-snail-use-emoji-mode-lighter` (default `t`) — attempt to use a 🐌 emoji in the Emacs modeline lighter if the display supports it. Set to `nil` to use the ASCII string `"Snail"` instead (a `:diminish` override in `use-package` should also work).
 
 
 ## Usage

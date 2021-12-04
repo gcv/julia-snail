@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for running Julia instances in Docker containers using Tramp.
 
 
+### Changed
+
+- The modeline lighter now shows a 🐌 emoji instead of the string `"Snail"` (unless `julia-snail-use-emoji-mode-lighter` is `nil` or overriden elsewhere).
+
+
 ## [1.1.4] — 2021-08-17
 
 ### Fixed

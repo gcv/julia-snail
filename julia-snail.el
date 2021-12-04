@@ -142,6 +142,13 @@ another."
   :safe 'booleanp
   :type 'boolean)
 
+(defcustom julia-snail-use-emoji-mode-lighter t
+  "If true, try to use a snail emoji in the modeline lighter instead of text."
+  :tag "Control use of emoji in modeline lighter"
+  :group 'julia-snail
+  :safe 'booleanp
+  :type 'boolean)
+
 
 ;;; --- constants
 
@@ -451,6 +458,14 @@ returns \"/home/username/file.jl\"."
     (declare-function persp-add-buffer "persp-mode.el")
     (declare-function get-current-persp "persp-mode.el")
     (persp-add-buffer buf (get-current-persp) nil)))
+
+(defun julia-snail--mode-lighter (&optional extra)
+  (let ((snail-emoji (char-from-name "SNAIL")))
+    (if (and julia-snail-use-emoji-mode-lighter
+             snail-emoji
+             (char-displayable-p snail-emoji))
+        (format " %c%s" snail-emoji (if extra extra ""))
+      (format " Snail%s" (if extra extra "")))))
 
 
 ;;; --- connection management functions
@@ -1370,7 +1385,7 @@ autocompletion aware of the available modules."
 (define-minor-mode julia-snail-mode
   "A minor mode for interactive Julia development. Should only be turned on in source buffers."
   :init-value nil
-  :lighter " Snail"
+  :lighter (:eval (julia-snail--mode-lighter))
   :keymap julia-snail-mode-map
   (when (eq 'julia-mode major-mode)
     (if julia-snail-mode
@@ -1397,7 +1412,7 @@ autocompletion aware of the available modules."
   "A minor mode for interactive Julia development. Should only be
 turned on in REPL buffers."
   :init-value nil
-  :lighter " Snail"
+  :lighter (:eval (julia-snail--mode-lighter))
   :keymap julia-snail-repl-mode-map
   (when (eq 'vterm-mode major-mode)
     (if julia-snail-repl-mode
@@ -1407,13 +1422,13 @@ turned on in REPL buffers."
 (define-minor-mode julia-snail-message-buffer-mode
   "A minor mode for displaying messages returned from the Julia REPL."
   :init-value nil
-  :lighter " Snail Message"
+  :lighter (:eval (julia-snail--mode-lighter " Message"))
   :keymap '(((kbd "q") . quit-window)))
 
 (define-minor-mode julia-snail-multimedia-buffer-mode
   "A minor mode for displaying Julia multimedia output an Emacs buffer."
   :init-value nil
-  :lighter " Snail MM"
+  :lighter (:eval (julia-snail--mode-lighter " MM"))
   :keymap '(((kbd "q") . quit-window)))
 
 
