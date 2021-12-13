@@ -1191,6 +1191,22 @@ This is not module-context aware."
       (user-error                       ; block fails, so send line
        (julia-snail-send-line)))))
 
+(defun julia-snail-send-code-cell (block-start block-end)
+  "Send the current code cell to Julia REPL"
+    (let* ((text (buffer-substring-no-properties block-start block-end))
+           (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
+           (module (if current-prefix-arg :Main (julia-snail--module-at-point)))
+           (line-num (line-number-at-pos block-start)))
+      (julia-snail--send-to-server-via-tmp-file
+        module
+        text
+        filename
+        line-num
+        :callback-success (lambda (_request-info &optional data)
+                            (message "code cell evaluated: %s, module %s"
+                                     data
+                                     (julia-snail--construct-module-path module))))))
+
 (defun julia-snail-send-buffer-file ()
   "Send the current buffer's file into the Julia REPL, and include() it.
 This will occur in the context of the Main module, just as it would at the REPL."
