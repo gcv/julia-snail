@@ -770,7 +770,7 @@ evaluated in the context of MODULE."
            (throw 'julia-snail--server-filter-error err)))))))
 
 
- ;;; --- Snail server response handling functions
+;;; --- Snail server response handling functions
 
 (defun julia-snail--response-base (reqid)
   "Snail response handler for REQID, base function."
