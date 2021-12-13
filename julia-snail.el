@@ -1192,20 +1192,25 @@ This is not module-context aware."
        (julia-snail-send-line)))))
 
 (defun julia-snail-send-code-cell (block-start block-end)
-  "Send the current code cell to Julia REPL"
-    (let* ((text (buffer-substring-no-properties block-start block-end))
-           (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
-           (module (if current-prefix-arg :Main (julia-snail--module-at-point)))
-           (line-num (line-number-at-pos block-start)))
-      (julia-snail--send-to-server-via-tmp-file
-        module
-        text
-        filename
-        line-num
-        :callback-success (lambda (_request-info &optional data)
-                            (message "code cell evaluated: %s, module %s"
-                                     data
-                                     (julia-snail--construct-module-path module))))))
+  "Send the current code cell to the Julia REPL and run it in the context of the current module.
+Code cells is a notebook-style feature implemented with
+https://github.com/astoff/code-cells.el. code-cells-mode must be
+enabled for this to work, and something like this is required for
+activation:
+(add-to-list 'code-cells-eval-region-commands '(julia-snail-mode . julia-snail-send-code-cell))"
+  (let* ((text (buffer-substring-no-properties block-start block-end))
+         (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
+         (module (if current-prefix-arg :Main (julia-snail--module-at-point)))
+         (line-num (line-number-at-pos block-start)))
+    (julia-snail--send-to-server-via-tmp-file
+      module
+      text
+      filename
+      line-num
+      :callback-success (lambda (_request-info &optional data)
+                          (message "code cell evaluated: %s, module %s"
+                                   data
+                                   (julia-snail--construct-module-path module))))))
 
 (defun julia-snail-send-buffer-file ()
   "Send the current buffer's file into the Julia REPL, and include() it.
