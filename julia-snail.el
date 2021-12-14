@@ -149,6 +149,13 @@ another."
   :safe 'booleanp
   :type 'boolean)
 
+(defcustom julia-snail-max-history-lines 10000
+  "How many lines of REPL command history to display ."
+  :tag "Max. number of Julia REPL history lines"
+  :group 'julia-snail
+  :safe 'integerp
+  :type 'integer)
+
 
 ;;; --- constants
 
@@ -1376,7 +1383,59 @@ autocompletion aware of the available modules."
     (message "Caches updated: parent module %s"
              (julia-snail--construct-module-path module))))
 
+;; some functions for using REPL history
 
+(defvar-local julia-snail-history-buf "*julia* REPL command history")
+
+(cl-defun julia-snail--lookup-history (n)
+  (julia-snail--send-to-server
+    :JuliaSnail
+    (format "join(history(%i),\"\n\")" n)
+    :async nil))
+
+(cl-defun julia-snail-yank-from-history (&optional (n 1))
+  "Paste last n lines from Julia REPL history into current buffer.
+By default n=1, but the value can be given as a prefix argument. For instance if the function is bound to C-c C-h C-y, typing C-u 5 C-c C-y will set n=5.
+"
+  (interactive "p")
+  (let* (res (julia-snail--lookup-history n))
+    (insert res)
+  ))
+
+
+
+(cl-defun julia-snail--history-search ( &optional (n julia-snail-max-history-lines))
+  (interactive)
+  (let* ((hst (julia-snail--lookup-history n))
+         (res (completing-read "" (split-string hst))))
+    res)
+  )
+
+(cl-defun julia-snail-history-search-and-insert ( &optional (n julia-snail-max-history-lines))
+  "Search Julia REPL history and insert hit at point. This uses completing-read, so the search interface can be provided by ivy/counsel/helm etc.
+Also works in the REPL, where it can substitue for Ctrl+R. A limitation is that only the lines in the main Julia mode can be searched (excluding shell mode or package mode, for instance).
+Optional argument sets the maximum number of lines of history to search through."
+  (interactive)
+  (let* ((res (julia-snail--history-search n)))
+    (if (symbol-value julia-snail-repl-mode)
+        (vterm-insert res)
+      (insert res))
+  ))
+
+(cl-defun julia-snail-open-history (&optional (n julia-snail-max-history-lines))
+  "Display last n lines of Julia REPL history in a separate buffer"
+  (interactive "p")
+  (let ((buf (get-buffer-create julia-snail-history-buf))
+        (hst (julia-snail--lookup-history n)))
+    (with-current-buffer buf
+      (erase-buffer)
+      (goto-char (point-min))
+      (insert hst)
+      (julia-mode)
+      (julia-snail-mode)
+      (pop-to-buffer buf)
+      ))
+  )
 ;;; --- keymaps
 
 (defvar julia-snail-mode-map
@@ -1390,6 +1449,10 @@ autocompletion aware of the available modules."
     (define-key map (kbd "C-c C-l") #'julia-snail-send-line)
     (define-key map (kbd "C-c C-e") #'julia-snail-send-dwim)
     (define-key map (kbd "C-c C-k") #'julia-snail-send-buffer-file)
+    (define-key map (kbd "C-c C-h C-y") #'julia-snail-yank-from-history)
+    (define-key map (kbd "C-c C-h C-s") #'julia-snail-history-search-and-insert)
+    (define-key map (kbd "C-c C-h C-y") #'julia-snail-yank-from-history)
+    (define-key map (kbd "C-c C-h C-o") #'julia-snail-open-history)
     (define-key map (kbd "C-c C-m u") #'julia-snail-update-module-cache)
     map))
 
