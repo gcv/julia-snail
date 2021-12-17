@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Support for running Julia instances in Docker containers using Tramp.
+- Support for evaluating code in notebook-style code-cells (https://github.com/astoff/code-cells.el).
 
 
 ### Changed

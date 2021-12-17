@@ -29,6 +29,7 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
     - [Module-nested `include`s](#module-nested-includes)
     - [Documentation lookup](#documentation-lookup)
     - [Multimedia and plotting](#multimedia-and-plotting)
+    - [`code-cells` integration (notebook mode)](#code-cells-integration-notebook-mode)
 - [Future improvements](#future-improvements)
 <!-- markdown-toc end -->
 
@@ -314,6 +315,18 @@ As a simple example, activate Emacs plotting and try this code:
 Pkg.add("Gadfly")
 import Gadfly
 Gadfly.plot(sin, 0, 2π)
+```
+
+
+### `code-cells` integration (notebook mode)
+
+Snail can be used with the [`code-cells`](https://github.com/astoff/code-cells.el) package for (Jupyter) notebook-style work. Sample configuration follows:
+
+```elisp
+(use-package code-cells
+  :hook (julia-mode . code-cells-mode)
+  :config
+  (add-to-list 'code-cells-eval-region-commands '(julia-snail-mode . julia-snail-send-code-cell)))
 ```
 
 
