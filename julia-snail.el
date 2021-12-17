@@ -1079,6 +1079,8 @@ evaluated in the context of MODULE."
                         (generate-new-buffer-name mm-buf-name-base)))
          (mm-buf (get-buffer-create mm-buf-name))
          (decoded-img (base64-decode-string img)))
+    (with-current-buffer julia-snail--repl-go-back-target
+      (spinner-stop))
     (with-current-buffer mm-buf
       ;; allow directly-inserted images to be erased
       (fundamental-mode)
