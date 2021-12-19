@@ -570,13 +570,13 @@ end
 
 # XXX: Dirty hackery to improve perceived startup performance follows. Running
 # this function in a separate thread should, in theory, force a bunch of things
-# to JIT-compile in the background before the users notices.
+# to JIT-compile in the background before the user notices.
 # Thank you very much, time-to-first-plot problem!
-function forcecompile()
-   # call these functions before the user does
-   includesin(Base64.base64encode("module Alpha\ninclude(\"a.jl\")\nend"))
-   moduleat(Base64.base64encode("module Alpha\nend"), 1)
-end
+#function forcecompile()
+#   # call these functions before the user does
+#   includesin(Base64.base64encode("module Alpha\ninclude(\"a.jl\")\nend"))
+#   moduleat(Base64.base64encode("module Alpha\nend"), 1)
+#end
 
 end
 
