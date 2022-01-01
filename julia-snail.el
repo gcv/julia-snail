@@ -36,6 +36,7 @@
 (require 'pulse)
 (require 'rx)
 (require 's)
+(require 'seq)
 (require 'spinner)
 (require 'subr-x)
 (require 'thingatpt)
@@ -43,7 +44,7 @@
 (require 'xref)
 
 
-;;; --- customization
+;;; --- customizations
 
 (defgroup julia-snail nil
   "Customization options for Julia Snail mode."
