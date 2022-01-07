@@ -22,28 +22,40 @@ module JuliaSnail
 # installed in the Julia global environment cause conflicts. Especially
 # CSTParser, with its unstable API. However, Snail should not be listed first
 # the rest of the time.
-try
-   insert!(LOAD_PATH, 1, @__DIR__)
-   # list all external dependency imports here (from Snail's Project.toml):
+macro with_pkg_env(dir, action)
+   :(
+   try
+      insert!(LOAD_PATH, 1, $dir)
+      $action
+   catch err
+      if isa(err, ArgumentError)
+         if isfile(joinpath($dir, "Project.toml"))
+            # force dependency installation
+            Main.Pkg.activate($dir)
+            Main.Pkg.instantiate()
+            Main.Pkg.precompile()
+            # activate what was the first entry before Snail was pushed to the head of LOAD_PATH
+            Main.Pkg.activate(LOAD_PATH[2])
+         end
+      end
+   finally
+      # Remove Snail from the head of the LOAD_PATH and put it at the tail. At this
+      # point, all of its own dependencies should be loaded and the user's
+      # preferred project should be active.
+      deleteat!(LOAD_PATH, 1)
+      if isfile(joinpath($dir, "Project.toml"))
+         push!(LOAD_PATH, $dir)
+      end
+   end
+   )
+end
+
+@with_pkg_env (@__DIR__) begin
+   # list all external dependency imports here (from the appropriate Project.toml, either Snail's or an extension's):
    import CSTParser
    # check for dependency API compatibility
    !isdefined(CSTParser, :iscall) &&
-      throw(ArgumentError("CSTParser API not compatible, must install Snail-specific version"))
-catch err
-   if isa(err, ArgumentError)
-      # force dependency installation
-      Main.Pkg.activate(@__DIR__)
-      Main.Pkg.instantiate()
-      Main.Pkg.precompile()
-      # activate what was the first entry before Snail was pushed to the head of LOAD_PATH
-      Main.Pkg.activate(LOAD_PATH[2])
-   end
-finally
-   # Remove Snail from the head of the LOAD_PATH and put it at the tail. At this
-   # point, all of its own dependencies should be loaded and the user's
-   # preferred project should be active.
-   deleteat!(LOAD_PATH, 1)
-   push!(LOAD_PATH, @__DIR__)
+     throw(ArgumentError("CSTParser API not compatible, must install Snail-specific version"))
 end
 
 
@@ -586,7 +598,7 @@ end
 
 module Multimedia
 
-import Base64,REPL
+import Base64
 
 struct EmacsDisplay <: Base.AbstractDisplay
 end
@@ -645,6 +657,22 @@ end
 function display_off()
    popdisplay(EMACS)
    return true
+end
+
+end
+
+
+### --- extras: support for extending Snail
+
+module Extensions
+
+"""
+Load an extension located in the "extensions" directory. Note that the extension
+will load in the context of the JuliaSnail.Extensions module.
+"""
+function load(path)
+   f = Base.Filesystem.joinpath([@__DIR__, "extensions", path...]...)
+   include(f)
 end
 
 end
@@ -791,39 +819,5 @@ function send_to_client(expr, client_socket=nothing)
    println(client_socket, expr)
 end
 
-
-#adapted from https://github.com/carstenbauer/SaveREPL.jl
-function history(n::Int)
-    h = reverse(readlines(REPL.find_hist_file()))
-    entries = String[]
-    i = 1
-    N = length(h)
-    c = 0
-    while i<=N && c<n
-        line = h[i]
-        cmdlines = String[]
-        while startswith(line, "\t")
-            push!(cmdlines, replace(line, "\t" => ""; count=1))
-            i+=1
-            line = h[i]
-        end
-        command = join(reverse(cmdlines), "\n")
-
-        contains(line, "# mode:") || warn("wrong order: expected mode")
-        mode = replace(chomp(line), "# mode: " => "")
-
-        i+=1
-        line = h[i]
-        contains(line, "# time: ") || warn("wrong order: expected time")
-        time = replace(chomp(line), "# time: " => "")
-        i+=1
-
-        contains(mode, "julia") || continue
-        #        push!(entries, REPLEntry(time, mode, command))
-        push!(entries, command)
-        c+=1
-    end
-    return reverse(entries)
-end
 
 end

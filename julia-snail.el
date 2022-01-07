@@ -150,13 +150,6 @@ another."
   :safe 'booleanp
   :type 'boolean)
 
-(defcustom julia-snail-max-history-lines 10000
-  "How many lines of REPL command history to display ."
-  :tag "Max. number of Julia REPL history lines"
-  :group 'julia-snail
-  :safe 'integerp
-  :type 'integer)
-
 
 ;;; --- constants
 
@@ -568,6 +561,22 @@ returns \"/home/username/file.jl\"."
                 "display_on()"
                 :repl-buf repl-buf
                 :async nil))
+            ;; activate extensions
+            (cl-loop for extname in julia-snail-extensions do
+                     ;; load the extension Elisp file (if necessary)
+                     (julia-snail--extension-load extname)
+                     ;; run extension initialization function
+                     (let ((init-fn (julia-snail--extension-init extname)))
+                       ;; XXX: Loading status messages should be in Julia-side
+                       ;; init functions. Otherwise they either pollute REPL
+                       ;; history (if used with julia-snail--send-to-repl) or
+                       ;; produce messy output (if used with
+                       ;; julia-snail--send-to-server).
+                       (when (functionp init-fn)
+                         (funcall init-fn repl-buf))
+                       ;; XXX: Send a backspace character to the REPL to force
+                       ;; prompt redisplay.
+                       (julia-snail--send-to-repl (char-to-string ?\b) :repl-buf repl-buf :send-return nil)))
             ;; other initializations can go here
             ))))))
 
@@ -577,14 +586,25 @@ returns \"/home/username/file.jl\"."
 
 (defun julia-snail--enable ()
   "Source buffer minor mode initializer."
-  ;; placeholder
-  nil
+  ;; turn on extension minor modes
+  (hack-dir-local-variables-non-file-buffer) ; force .dir-locals.el to load
+  (cl-loop for extname in julia-snail-extensions do
+           ;; load the extension Elisp file (if necessary)
+           (julia-snail--extension-load extname)
+           (let ((minor-mode-fn (julia-snail--extension-mode extname)))
+             (when (functionp minor-mode-fn)
+               (funcall minor-mode-fn 1))))
+  ;; other minor mode initializations can go here
   )
 
 (defun julia-snail--disable ()
   "Source buffer minor mode cleanup."
-  ;; placeholder
-  nil
+  ;; turn off extension minor modes
+  (cl-loop for extname in julia-snail-extensions do
+           (let ((minor-mode-fn (julia-snail--extension-mode extname)))
+             (when (functionp minor-mode-fn)
+               (funcall minor-mode-fn -1))))
+  ;; other minor mode cleanup can go here
   )
 
 
@@ -594,6 +614,7 @@ returns \"/home/username/file.jl\"."
     (str
      &key
      (repl-buf (get-buffer julia-snail-repl-buffer))
+     (send-return t)
      (async t)
      (polling-interval 20)
      (polling-timeout julia-snail-async-timeout))
@@ -604,7 +625,7 @@ wait for the REPL prompt to return, otherwise return immediately."
     (user-error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
   (with-current-buffer repl-buf
     (vterm-send-string str)
-    (vterm-send-return))
+    (when send-return (vterm-send-return)))
   (unless async
     ;; wait for the inclusion to succeed (i.e., the prompt prints)
     (julia-snail--wait-while
@@ -1141,6 +1162,39 @@ evaluated in the context of MODULE."
        :async nil))))
 
 
+;;; --- extension support
+
+(defcustom julia-snail-extensions (list)
+  "FIXME"
+  :tag "FIXME"
+  :group 'julia-snail
+  :safe (lambda (obj)
+          (and (listp obj)
+               (seq-every-p #'symbolp obj)))
+  :type '(repeat :tag "List of Snail extensions" symbol))
+(make-variable-buffer-local 'julia-snail-extensions)
+
+(defun julia-snail--extension-symbol (extname)
+  (intern (format "julia-snail/%s" extname)))
+
+(defun julia-snail--extension-init (extname)
+  (intern (format "%s-init" (julia-snail--extension-symbol extname))))
+
+(defun julia-snail--extension-mode (extname)
+  (intern (format "%s-mode" (julia-snail--extension-symbol extname))))
+
+(defun julia-snail--extension-load (extname)
+  (let ((extsym (julia-snail--extension-symbol extname)))
+    (unless (featurep extsym)
+      (let* ((current-file (symbol-file 'julia-snail--extension-load))
+             (extdir (concat (file-name-directory current-file)
+                             (file-name-as-directory "extensions")
+                             (file-name-as-directory (symbol-name extname))))
+             (load-path (append load-path (list extdir)))
+             (extfile (concat extdir (symbol-name extname) ".el")))
+        (require extsym extfile)))))
+
+
 ;;; --- commands
 
 ;;;###autoload
@@ -1384,59 +1438,7 @@ autocompletion aware of the available modules."
     (message "Caches updated: parent module %s"
              (julia-snail--construct-module-path module))))
 
-;; some functions for using REPL history
 
-(defvar-local julia-snail-history-buf "*julia* REPL command history")
-
-(cl-defun julia-snail--lookup-history (n)
-  (julia-snail--send-to-server
-    :JuliaSnail
-    (format "join(history(%i),\"\n\")" n)
-    :async nil))
-
-(cl-defun julia-snail-yank-from-history (&optional (n 1))
-  "Paste last n lines from Julia REPL history into current buffer.
-By default n=1, but the value can be given as a prefix argument. For instance if the function is bound to C-c C-h C-y, typing C-u 5 C-c C-y will set n=5.
-"
-  (interactive "p")
-  (let* (res (julia-snail--lookup-history n))
-    (insert res)
-  ))
-
-
-
-(cl-defun julia-snail--history-search ( &optional (n julia-snail-max-history-lines))
-  (interactive)
-  (let* ((hst (julia-snail--lookup-history n))
-         (res (completing-read "" (split-string hst))))
-    res)
-  )
-
-(cl-defun julia-snail-history-search-and-insert ( &optional (n julia-snail-max-history-lines))
-  "Search Julia REPL history and insert hit at point. This uses completing-read, so the search interface can be provided by ivy/counsel/helm etc.
-Also works in the REPL, where it can substitue for Ctrl+R. A limitation is that only the lines in the main Julia mode can be searched (excluding shell mode or package mode, for instance).
-Optional argument sets the maximum number of lines of history to search through."
-  (interactive)
-  (let* ((res (julia-snail--history-search n)))
-    (if (symbol-value julia-snail-repl-mode)
-        (vterm-insert res)
-      (insert res))
-  ))
-
-(cl-defun julia-snail-open-history (&optional (n julia-snail-max-history-lines))
-  "Display last n lines of Julia REPL history in a separate buffer"
-  (interactive "p")
-  (let ((buf (get-buffer-create julia-snail-history-buf))
-        (hst (julia-snail--lookup-history n)))
-    (with-current-buffer buf
-      (erase-buffer)
-      (goto-char (point-min))
-      (insert hst)
-      (julia-mode)
-      (julia-snail-mode)
-      (pop-to-buffer buf)
-      ))
-  )
 ;;; --- keymaps
 
 (defvar julia-snail-mode-map
@@ -1450,10 +1452,6 @@ Optional argument sets the maximum number of lines of history to search through.
     (define-key map (kbd "C-c C-l") #'julia-snail-send-line)
     (define-key map (kbd "C-c C-e") #'julia-snail-send-dwim)
     (define-key map (kbd "C-c C-k") #'julia-snail-send-buffer-file)
-    (define-key map (kbd "C-c C-h C-y") #'julia-snail-yank-from-history)
-    (define-key map (kbd "C-c C-h C-s") #'julia-snail-history-search-and-insert)
-    (define-key map (kbd "C-c C-h C-y") #'julia-snail-yank-from-history)
-    (define-key map (kbd "C-c C-h C-o") #'julia-snail-open-history)
     (define-key map (kbd "C-c C-m u") #'julia-snail-update-module-cache)
     map))
 
