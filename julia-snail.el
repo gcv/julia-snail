@@ -163,28 +163,30 @@ another."
 
 ;;; --- constants
 
-(cl-labels ((list-extension-files (&optional (path "extensions"))
-               (let* ((result nil)
-                      (entries (cl-remove-if
-                                (lambda (entry)
-                                  (or (string-match-p "^\\." (file-name-nondirectory entry))
-                                      (and (file-regular-p entry)
-                                           (not (or (string-equal "jl" (downcase (or (file-name-extension entry) "")))
-                                                    (string-equal "toml" (downcase (or (file-name-extension entry) ""))))))))
-                                (directory-files path)))
-                      (qualified-entries (if (string-equal "." path)
-                                             entries
-                                           (mapcar (lambda (entry)
-                                                     (concat (file-name-as-directory path) entry))
-                                                   entries))))
-                 (cl-loop for entry in qualified-entries do
-                          (if (file-regular-p entry)
-                              (setq result (cons entry result))
-                            (when (file-directory-p entry)
-                              (setq result (cons entry result))
-                              (setq result (append result (list-extension-files entry))))))
-                 result)))
-  (defconst julia-snail--julia-files
+(defconst julia-snail--julia-files
+  ;; a slightly specialized directory walker to collect the correct file and directory list:
+  (cl-labels ((list-extension-files (&optional (path "extensions"))
+                 (let* ((result nil)
+                        (entries (cl-remove-if
+                                  (lambda (entry)
+                                    (or (string-match-p "^\\." (file-name-nondirectory entry))
+                                        (and (file-regular-p entry)
+                                             (not (or (string-equal "jl" (downcase (or (file-name-extension entry) "")))
+                                                      (string-equal "toml" (downcase (or (file-name-extension entry) ""))))))))
+                                  (directory-files path)))
+                        (qualified-entries (if (string-equal "." path)
+                                               entries
+                                             (mapcar (lambda (entry)
+                                                       (concat (file-name-as-directory path) entry))
+                                                     entries))))
+                   (cl-loop for entry in qualified-entries do
+                            (if (file-regular-p entry)
+                                (setq result (cons entry result))
+                              (when (file-directory-p entry)
+                                (setq result (cons entry result))
+                                (setq result (append result (list-extension-files entry))))))
+                   result)))
+    ;; actually put together the list
     (append
      (list "JuliaSnail.jl" "Manifest.toml" "Project.toml"
            "extensions")
