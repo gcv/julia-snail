@@ -150,18 +150,50 @@ another."
   :safe 'booleanp
   :type 'boolean)
 
+(defcustom julia-snail-extensions (list)
+  "A list of enabled Snail extensions."
+  :tag "Enabled Snail extensions"
+  :group 'julia-snail
+  :safe (lambda (obj)
+          (and (listp obj)
+               (seq-every-p #'symbolp obj)))
+  :type '(repeat :tag "Extension" symbol))
+(make-variable-buffer-local 'julia-snail-extensions)
+
 
 ;;; --- constants
 
-(defconst julia-snail--julia-files
-  (list "JuliaSnail.jl" "Manifest.toml" "Project.toml"))
+(cl-labels ((list-extension-files (&optional (path "extensions"))
+               (let* ((result nil)
+                      (entries (cl-remove-if
+                                (lambda (entry)
+                                  (or (string-match-p "^\\." (file-name-nondirectory entry))
+                                      (and (file-regular-p entry)
+                                           (not (or (string-equal "jl" (downcase (or (file-name-extension entry) "")))
+                                                    (string-equal "toml" (downcase (or (file-name-extension entry) ""))))))))
+                                (directory-files path)))
+                      (qualified-entries (if (string-equal "." path)
+                                             entries
+                                           (mapcar (lambda (entry)
+                                                     (concat (file-name-as-directory path) entry))
+                                                   entries))))
+                 (cl-loop for entry in qualified-entries do
+                          (if (file-regular-p entry)
+                              (setq result (cons entry result))
+                            (when (file-directory-p entry)
+                              (setq result (cons entry result))
+                              (setq result (append result (list-extension-files entry))))))
+                 result)))
+  (defconst julia-snail--julia-files
+    (append
+     (list "JuliaSnail.jl" "Manifest.toml" "Project.toml"
+           "extensions")
+     (let ((default-directory (file-name-directory (or load-file-name (buffer-file-name)))))
+       (list-extension-files)))))
 
 (defconst julia-snail--julia-files-local
   (mapcar (lambda (f)
-            (concat (if load-file-name
-                        (file-name-directory load-file-name)
-                      (file-name-as-directory default-directory))
-                    f))
+            (concat (file-name-directory (or load-file-name (buffer-file-name))) f))
           julia-snail--julia-files))
 
 (defconst julia-snail--server-file
@@ -396,14 +428,18 @@ Returns nil if the poll timed out, t otherwise."
          ;; the current version of the Julia code (.jl and .toml files)
          (checksum (with-temp-buffer
                      (cl-loop for f in julia-snail--julia-files-local do
-                              (insert-file-contents-literally f))
+                              (when (file-regular-p f)
+                                (insert-file-contents-literally f)))
                      (secure-hash 'sha256 (current-buffer))))
          (snail-remote-dir (concat (file-name-as-directory (temporary-file-directory))
                                    (concat "julia-snail-" checksum "/"))))
     (unless (file-exists-p snail-remote-dir)
       (make-directory snail-remote-dir)
-      (cl-loop for f in julia-snail--julia-files-local do
-               (copy-file f snail-remote-dir t)))
+      (let ((default-directory (file-name-directory (symbol-file 'julia-snail))))
+        (cl-loop for f in julia-snail--julia-files do
+                 (if (file-directory-p f)
+                     (make-directory (concat snail-remote-dir f))
+                   (copy-file f (concat snail-remote-dir (file-name-directory f)) t)))))
     snail-remote-dir))
 
 (defun julia-snail--launch-command ()
@@ -1164,16 +1200,6 @@ evaluated in the context of MODULE."
 
 ;;; --- extension support
 
-(defcustom julia-snail-extensions (list)
-  "FIXME"
-  :tag "FIXME"
-  :group 'julia-snail
-  :safe (lambda (obj)
-          (and (listp obj)
-               (seq-every-p #'symbolp obj)))
-  :type '(repeat :tag "List of Snail extensions" symbol))
-(make-variable-buffer-local 'julia-snail-extensions)
-
 (defun julia-snail--extension-symbol (extname)
   (intern (format "julia-snail/%s" extname)))
 
@@ -1186,7 +1212,7 @@ evaluated in the context of MODULE."
 (defun julia-snail--extension-load (extname)
   (let ((extsym (julia-snail--extension-symbol extname)))
     (unless (featurep extsym)
-      (let* ((current-file (symbol-file 'julia-snail--extension-load))
+      (let* ((current-file (symbol-file 'julia-snail))
              (extdir (concat (file-name-directory current-file)
                              (file-name-as-directory "extensions")
                              (file-name-as-directory (symbol-name extname))))
