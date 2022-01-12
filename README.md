@@ -30,6 +30,7 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
     - [Documentation lookup](#documentation-lookup)
     - [Multimedia and plotting](#multimedia-and-plotting)
     - [`code-cells` integration (notebook mode)](#code-cells-integration-notebook-mode)
+- [Extensions](#extensions)
 - [Future improvements](#future-improvements)
 <!-- markdown-toc end -->
 
@@ -328,6 +329,41 @@ Snail can be used with the [`code-cells`](https://github.com/astoff/code-cells.e
   :config
   (add-to-list 'code-cells-eval-region-commands '(julia-snail-mode . julia-snail-send-code-cell)))
 ```
+
+
+## Extensions
+
+Snail supports opt-in extensions. The `julia-snail-extensions` variable controls which extensions load in a given Snail session. As most other Snail configuration variables, it is best set at a project level using `.dir-locals.el`:
+
+```elisp
+((julia-mode . ((julia-snail-extensions . (repl-history formatter)))))
+```
+
+Extensions will be enabled at Snail startup, and will install their own Julia-side dependencies as needed into their own individual Pkg environments.
+
+An annoyance: because Snail extensions do not use Elisp autoloading, customizing their keybindings must be performed in an explicit `with-eval-after-load` form. This cannot (currently) be done in a `use-package` `:bind` directive. To change extension keybindings, use the following pattern (which can be placed in a `use-package` `:config` directive):
+
+```elisp
+(with-eval-after-load 'julia-snail/repl-history
+  (define-key julia-snail/repl-history-mode-map (kbd "H-y") #'julia-snail/repl-history-search-and-yank))
+```
+
+
+### REPL history
+
+This extension provides access Julia REPL history from `julia-snail-mode` buffers using the following commands (the letters in the key sequences stand for **j**ulia **r**epl **h**istory):
+
+- `julia-snail/repl-history-search-and-yank` provides a search interface (<kbd>C-c j r h C-s</kbd>)
+- `julia-snail/repl-history-yank` yanks recent history entries (1 by default) (<kbd>C-j r h C-y</kbd>)
+- `julia-snail/repl-history-buffer` opens a buffer with the history (<kbd>C-c j r h C-o</kbd>)
+
+
+### Formatter
+
+This extension uses [JuliaFormatter.jl](https://github.com/domluna/JuliaFormatter.jl) to modify source buffer text (the letters in the key sequences stand for **j**ulia **f**ormatter):
+
+- `julia-snail/formatter-format-region` modifies the current region (<kbd>C-c j f r</kbd>)
+- `julia-snail/formatter-format-buffer` modifies the entire current buffer (<kbd>C-c j f b</kbd>)
 
 
 ## Future improvements
