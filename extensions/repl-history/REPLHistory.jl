@@ -16,7 +16,7 @@ module REPLHistory
 import REPL
 
 function init()
-   println("# activating Snail extension: REPLHistory\n")
+   # initialization code can go here
 end
 
 """

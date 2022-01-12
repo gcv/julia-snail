@@ -585,7 +585,7 @@ returns \"/home/username/file.jl\"."
                 ;; TODO: Implement a sanity check on the Julia environment. Not
                 ;; sure how. But a failed dependency load (like CSTParser) will
                 ;; leave Snail in a bad state.
-                (message "Snail connected to Julia. Happy hacking!")
+                (message "Successfully connected to Snail server in Julia REPL")
                 ;; Query base directory, and cache
                 (puthash process-buf (julia-snail--capture-basedir repl-buf)
                          julia-snail--cache-proc-basedir))
@@ -605,17 +605,14 @@ returns \"/home/username/file.jl\"."
                      (julia-snail--extension-load extname)
                      ;; run extension initialization function
                      (let ((init-fn (julia-snail--extension-init extname)))
-                       ;; XXX: Loading status messages should be in Julia-side
-                       ;; init functions. Otherwise they either pollute REPL
-                       ;; history (if used with julia-snail--send-to-repl) or
-                       ;; produce messy output (if used with
-                       ;; julia-snail--send-to-server).
+                       (message "Loading Snail extension %s..." extname)
                        (when (functionp init-fn)
-                         (funcall init-fn repl-buf))
-                       ;; XXX: Send a backspace character to the REPL to force
-                       ;; prompt redisplay.
-                       (julia-snail--send-to-repl (char-to-string ?\b) :repl-buf repl-buf :send-return nil)))
+                         (funcall init-fn repl-buf))))
+            (when (> (length julia-snail-extensions) 0)
+              (message "Finished loading Snail extensions"))
             ;; other initializations can go here
+            ;; all done!
+            (message "Snail initialization complete. Happy hacking!")
             ))))))
 
 (defun julia-snail--repl-disable ()
