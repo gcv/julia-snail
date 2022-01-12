@@ -170,7 +170,7 @@ another."
                         (entries (cl-remove-if
                                   (lambda (entry)
                                     (or (string-match-p "^\\." (file-name-nondirectory entry))
-                                        (and (file-regular-p entry)
+                                        (and (file-regular-p (concat (file-name-as-directory path) entry))
                                              (not (or (string-equal "jl" (downcase (or (file-name-extension entry) "")))
                                                       (string-equal "toml" (downcase (or (file-name-extension entry) ""))))))))
                                   (directory-files path)))
