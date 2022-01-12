@@ -31,6 +31,8 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
     - [Multimedia and plotting](#multimedia-and-plotting)
     - [`code-cells` integration (notebook mode)](#code-cells-integration-notebook-mode)
 - [Extensions](#extensions)
+    - [REPL history](#repl-history)
+    - [Formatter](#formatter)
 - [Future improvements](#future-improvements)
 <!-- markdown-toc end -->
 
