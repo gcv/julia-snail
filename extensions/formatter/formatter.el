@@ -35,7 +35,8 @@
     '("JuliaSnail" "Extensions")
     "load([\"formatter\" \"Formatter.jl\"]); Formatter.init()"
     :repl-buf repl-buf
-    :async nil))
+    :async nil
+    :async-poll-maximum 120000))
 
 
 ;;; --- implementation
