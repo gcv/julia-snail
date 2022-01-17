@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Support for running Julia instances in Docker containers using Tramp.
 - Support for evaluating code in notebook-style code-cells (https://github.com/astoff/code-cells.el).
+- Support for Snail extensions. See [README](https://github.com/gcv/julia-snail#extensions) and [EXTENSIONS](https://github.com/gcv/julia-snail/blob/master/EXTENSIONS.md) files for details.
+- New extension: `repl-history`, which allows searching and yanking REPL history in source buffers.
+- New extension: `formatter`, a wrapper for [JuliaFormatter.jl](https://github.com/domluna/JuliaFormatter.jl).
 
 
 ### Changed

@@ -36,6 +36,7 @@
 (require 'pulse)
 (require 'rx)
 (require 's)
+(require 'seq)
 (require 'spinner)
 (require 'subr-x)
 (require 'thingatpt)
@@ -43,7 +44,7 @@
 (require 'xref)
 
 
-;;; --- customization
+;;; --- customizations
 
 (defgroup julia-snail nil
   "Customization options for Julia Snail mode."
@@ -149,18 +150,52 @@ another."
   :safe 'booleanp
   :type 'boolean)
 
+(defcustom julia-snail-extensions (list)
+  "A list of enabled Snail extensions."
+  :tag "Enabled Snail extensions"
+  :group 'julia-snail
+  :safe (lambda (obj)
+          (and (listp obj)
+               (seq-every-p #'symbolp obj)))
+  :type '(repeat :tag "Extension" symbol))
+(make-variable-buffer-local 'julia-snail-extensions)
+
 
 ;;; --- constants
 
 (defconst julia-snail--julia-files
-  (list "JuliaSnail.jl" "Manifest.toml" "Project.toml"))
+  ;; a slightly specialized directory walker to collect the correct file and directory list:
+  (cl-labels ((list-extension-files (&optional (path "extensions"))
+                 (let* ((result nil)
+                        (entries (cl-remove-if
+                                  (lambda (entry)
+                                    (or (string-match-p "^\\." (file-name-nondirectory entry))
+                                        (and (file-regular-p (concat (file-name-as-directory path) entry))
+                                             (not (or (string-equal "jl" (downcase (or (file-name-extension entry) "")))
+                                                      (string-equal "toml" (downcase (or (file-name-extension entry) ""))))))))
+                                  (directory-files path)))
+                        (qualified-entries (if (string-equal "." path)
+                                               entries
+                                             (mapcar (lambda (entry)
+                                                       (concat (file-name-as-directory path) entry))
+                                                     entries))))
+                   (cl-loop for entry in qualified-entries do
+                            (if (file-regular-p entry)
+                                (setq result (cons entry result))
+                              (when (file-directory-p entry)
+                                (setq result (cons entry result))
+                                (setq result (append result (list-extension-files entry))))))
+                   result)))
+    ;; actually put together the list
+    (append
+     (list "JuliaSnail.jl" "Manifest.toml" "Project.toml"
+           "extensions")
+     (let ((default-directory (file-name-directory (or load-file-name (buffer-file-name)))))
+       (list-extension-files)))))
 
 (defconst julia-snail--julia-files-local
   (mapcar (lambda (f)
-            (concat (if load-file-name
-                        (file-name-directory load-file-name)
-                      (file-name-as-directory default-directory))
-                    f))
+            (concat (file-name-directory (or load-file-name (buffer-file-name))) f))
           julia-snail--julia-files))
 
 (defconst julia-snail--server-file
@@ -395,14 +430,18 @@ Returns nil if the poll timed out, t otherwise."
          ;; the current version of the Julia code (.jl and .toml files)
          (checksum (with-temp-buffer
                      (cl-loop for f in julia-snail--julia-files-local do
-                              (insert-file-contents-literally f))
+                              (when (file-regular-p f)
+                                (insert-file-contents-literally f)))
                      (secure-hash 'sha256 (current-buffer))))
          (snail-remote-dir (concat (file-name-as-directory (temporary-file-directory))
                                    (concat "julia-snail-" checksum "/"))))
     (unless (file-exists-p snail-remote-dir)
       (make-directory snail-remote-dir)
-      (cl-loop for f in julia-snail--julia-files-local do
-               (copy-file f snail-remote-dir t)))
+      (let ((default-directory (file-name-directory (symbol-file 'julia-snail))))
+        (cl-loop for f in julia-snail--julia-files do
+                 (if (file-directory-p f)
+                     (make-directory (concat snail-remote-dir f))
+                   (copy-file f (concat snail-remote-dir (file-name-directory f)) t)))))
     snail-remote-dir))
 
 (defun julia-snail--launch-command ()
@@ -546,7 +585,7 @@ returns \"/home/username/file.jl\"."
                 ;; TODO: Implement a sanity check on the Julia environment. Not
                 ;; sure how. But a failed dependency load (like CSTParser) will
                 ;; leave Snail in a bad state.
-                (message "Snail connected to Julia. Happy hacking!")
+                (message "Successfully connected to Snail server in Julia REPL")
                 ;; Query base directory, and cache
                 (puthash process-buf (julia-snail--capture-basedir repl-buf)
                          julia-snail--cache-proc-basedir))
@@ -560,7 +599,20 @@ returns \"/home/username/file.jl\"."
                 "display_on()"
                 :repl-buf repl-buf
                 :async nil))
+            ;; activate extensions
+            (cl-loop for extname in julia-snail-extensions do
+                     ;; load the extension Elisp file (if necessary)
+                     (julia-snail--extension-load extname)
+                     ;; run extension initialization function
+                     (let ((init-fn (julia-snail--extension-init extname)))
+                       (message "Loading Snail extension %s..." extname)
+                       (when (functionp init-fn)
+                         (funcall init-fn repl-buf))))
+            (when (> (length julia-snail-extensions) 0)
+              (message "Finished loading Snail extensions"))
             ;; other initializations can go here
+            ;; all done!
+            (message "Snail initialization complete. Happy hacking!")
             ))))))
 
 (defun julia-snail--repl-disable ()
@@ -569,14 +621,25 @@ returns \"/home/username/file.jl\"."
 
 (defun julia-snail--enable ()
   "Source buffer minor mode initializer."
-  ;; placeholder
-  nil
+  ;; turn on extension minor modes
+  (hack-dir-local-variables-non-file-buffer) ; force .dir-locals.el to load
+  (cl-loop for extname in julia-snail-extensions do
+           ;; load the extension Elisp file (if necessary)
+           (julia-snail--extension-load extname)
+           (let ((minor-mode-fn (julia-snail--extension-mode extname)))
+             (when (functionp minor-mode-fn)
+               (funcall minor-mode-fn 1))))
+  ;; other minor mode initializations can go here
   )
 
 (defun julia-snail--disable ()
   "Source buffer minor mode cleanup."
-  ;; placeholder
-  nil
+  ;; turn off extension minor modes
+  (cl-loop for extname in julia-snail-extensions do
+           (let ((minor-mode-fn (julia-snail--extension-mode extname)))
+             (when (functionp minor-mode-fn)
+               (funcall minor-mode-fn -1))))
+  ;; other minor mode cleanup can go here
   )
 
 
@@ -586,6 +649,7 @@ returns \"/home/username/file.jl\"."
     (str
      &key
      (repl-buf (get-buffer julia-snail-repl-buffer))
+     (send-return t)
      (async t)
      (polling-interval 20)
      (polling-timeout julia-snail-async-timeout))
@@ -596,7 +660,7 @@ wait for the REPL prompt to return, otherwise return immediately."
     (user-error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
   (with-current-buffer repl-buf
     (vterm-send-string str)
-    (vterm-send-return))
+    (when send-return (vterm-send-return)))
   (unless async
     ;; wait for the inclusion to succeed (i.e., the prompt prints)
     (julia-snail--wait-while
@@ -1133,6 +1197,29 @@ evaluated in the context of MODULE."
        "display_toggle()"
        :repl-buf repl-buf
        :async nil))))
+
+
+;;; --- extension support
+
+(defun julia-snail--extension-symbol (extname)
+  (intern (format "julia-snail/%s" extname)))
+
+(defun julia-snail--extension-init (extname)
+  (intern (format "%s-init" (julia-snail--extension-symbol extname))))
+
+(defun julia-snail--extension-mode (extname)
+  (intern (format "%s-mode" (julia-snail--extension-symbol extname))))
+
+(defun julia-snail--extension-load (extname)
+  (let ((extsym (julia-snail--extension-symbol extname)))
+    (unless (featurep extsym)
+      (let* ((current-file (symbol-file 'julia-snail))
+             (extdir (concat (file-name-directory current-file)
+                             (file-name-as-directory "extensions")
+                             (file-name-as-directory (symbol-name extname))))
+             (load-path (append load-path (list extdir)))
+             (extfile (concat extdir (symbol-name extname) ".el")))
+        (require extsym extfile)))))
 
 
 ;;; --- commands
