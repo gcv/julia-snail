@@ -84,7 +84,6 @@ Because Julia supports Unicode identifiers and uses them for mathematical symbol
 
 (use-package julia-snail
   :ensure t
-  :requires vterm
   :hook (julia-mode . julia-snail-mode))
 ```
 
