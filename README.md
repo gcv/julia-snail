@@ -81,6 +81,7 @@ Because Julia supports Unicode identifiers and uses them for mathematical symbol
 ```elisp
 (use-package vterm
   :ensure t)
+;; Now run `M-x vterm` and make sure it works!
 
 (use-package julia-snail
   :ensure t
