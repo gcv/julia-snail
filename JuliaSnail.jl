@@ -181,7 +181,7 @@ function eval_in_module(fully_qualified_module_name::Array{Symbol}, expr::Expr)
       Base.invokelatest(Main.Revise.revise)
    end
    # go
-   Core.eval(fqm, expr)
+   return Core.eval(fqm, expr)
 end
 
 """
@@ -202,7 +202,7 @@ end
 """
 Parse and eval the given tmpfile in the context of the module given by the
 modpath array and modify the parsed expression to refer to realfile (instead of
-tmpfile) line numbers. Useed to evaluate a top-level form in a file while
+tmpfile) line numbers. Used to evaluate a top-level form in a file while
 preserving the original filename and line numbers for xref and stack traces.
 """
 function eval_tmpfile(tmpfile, modpath, realfile, linenum)
@@ -211,8 +211,8 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum)
    exprs = Meta.parse(code)
    # linenum - 1 accounts for the leading "begin" line in tmpfiles
    expr_change_lnn(exprs, realfilesym, linenum - 1)
-   eval_in_module(modpath, exprs)
-   Main.JuliaSnail.elexpr(true)
+   result = eval_in_module(modpath, exprs)
+   Main.JuliaSnail.elexpr(result)
 end
 
 
