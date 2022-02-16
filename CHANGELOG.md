@@ -26,7 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Evaluating an expression now shows the result of the evaluation in the minibuffer.
 - The modeline lighter now shows a 🐌 emoji instead of the string `"Snail"` (unless `julia-snail-use-emoji-mode-lighter` is `nil` or overriden elsewhere). Excellent idea from the discussion in [#70](https://github.com/gcv/julia-snail/issues/70).
 
 

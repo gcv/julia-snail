@@ -212,7 +212,11 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum)
    # linenum - 1 accounts for the leading "begin" line in tmpfiles
    expr_change_lnn(exprs, realfilesym, linenum - 1)
    result = eval_in_module(modpath, exprs)
-   Main.JuliaSnail.elexpr(result)
+   # TODO: Returning the result of the expression can be really ugly if it's
+   # displayed in the minibuffer. There should be a nicer way to show it on
+   # the Emacs side (perhaps using overlays).
+   # Main.JuliaSnail.elexpr(result)
+   Main.JuliaSnail.elexpr(true)
 end
 
 
