@@ -153,6 +153,9 @@ function eval_in_module(fully_qualified_module_name::Array{Symbol}, expr::Expr)
    # dependencies are not necessarily loaded into Main, and so must be found
    # using another mechanism, i.e., the Base.root_module trick.
    # https://discourse.julialang.org/t/resolving-a-module-by-its-name/30569/6
+   if expr.head == :block
+      expr.head = :toplevel
+   end
    root = first(fully_qualified_module_name)
    fqm = try
       getfield(Main, root)
