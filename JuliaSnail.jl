@@ -148,14 +148,16 @@ Main.One.Two.Three.eval(:(x = 3 + 5))
 ```
 """
 function eval_in_module(fully_qualified_module_name::Array{Symbol}, expr::Expr)
+   # Work around Julia top-level loading requirements for certain forms; also:
+   # https://github.com/gcv/julia-snail/pull/78
+   if expr.head == :block
+      expr.head = :toplevel
+   end
    # Retrieving the first module in the chain can be tricky. In general, using
    # getfield to find a module works, but packages loaded as transitive
    # dependencies are not necessarily loaded into Main, and so must be found
    # using another mechanism, i.e., the Base.root_module trick.
    # https://discourse.julialang.org/t/resolving-a-module-by-its-name/30569/6
-   if expr.head == :block
-      expr.head = :toplevel
-   end
    root = first(fully_qualified_module_name)
    fqm = try
       getfield(Main, root)
