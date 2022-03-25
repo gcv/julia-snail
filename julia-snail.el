@@ -1493,7 +1493,10 @@ autocompletion aware of the available modules."
 
 ;;;###autoload
 (define-minor-mode julia-snail-mode
-  "A minor mode for interactive Julia development. Should only be turned on in source buffers."
+  "A minor mode for interactive Julia development. Should only be turned on in source buffers.
+
+The following keys are set:
+\\{julia-snail-mode-map}"
   :init-value nil
   :lighter (:eval (julia-snail--mode-lighter))
   :keymap julia-snail-mode-map
