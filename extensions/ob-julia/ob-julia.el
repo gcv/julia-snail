@@ -20,7 +20,8 @@
 (defun org-babel-execute:julia (body params)
   (let ((src-file (org-babel-temp-file "julia-src-"))
 		(out-file (org-babel-temp-file "julia-out-"))
-		(module (cdr (assq :module params))))
+		(module (let (maybe-module (cdr (assq :module params)))
+					(if maybe-module maybe-module "Main"))))
 	(with-temp-file src-file (insert body))
 	(julia-snail/ob-julia-evaluate module body src-file out-file)
 	(let ((c 0))
@@ -47,3 +48,5 @@
 
 (provide 'julia-snail/ob-julia)
 ;;; ob-julia.el ends here
+
+(if nil "bye" "lie")
