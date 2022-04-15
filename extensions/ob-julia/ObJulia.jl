@@ -1,10 +1,10 @@
 module ObJulia
 
-function babel_run_and_store(src_file, out_file)
+function babel_run_and_store(mod::Module, src_file, out_file)
     open(out_file, "w+") do io
         redirect_stdio(stdout=io, stderr=io) do
             result = try
-                include(src_file)
+                Core.include(mod, src_file)
             catch err;
                 Base.display_error(IOContext(stdout, :color => true), err, Base.catch_backtrace())
             end
@@ -27,4 +27,4 @@ function babel_run_and_store(src_file, out_file)
 end
 
 
-end 
+end

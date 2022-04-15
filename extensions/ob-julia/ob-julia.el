@@ -4,19 +4,25 @@
 
 (require 'julia-snail)
 
-(defun julia-snail/ob-julia-evaluate (body src-file out-file)
+(defvar org-babel-default-header-args:julia '((:wrap)
+											  (:module . "Main")))
+
+(defun julia-snail/ob-julia-evaluate (module body src-file out-file)
   (let* ((filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
-         (module :Main)
          (line-num 0)
-		 (text (format "JuliaSnail.Extensions.ObJulia.babel_run_and_store(\"%s\", \"%s\")" src-file out-file)))
+		 (text (format "JuliaSnail.Extensions.ObJulia.babel_run_and_store(%s, \"%s\", \"%s\")" module src-file out-file)))
     ;; (julia-snail--send-to-repl text)
+	;; (unless (get-buffer julia-snail-repl-buffer)
+	;;   (progn
+	;; 	(julia-snail) t))
 	(julia-snail--send-to-server :Main text)))
 
 (defun org-babel-execute:julia (body params)
   (let ((src-file (org-babel-temp-file "julia-src-"))
-		(out-file (org-babel-temp-file "julia-out-")))
+		(out-file (org-babel-temp-file "julia-out-"))
+		(module (cdr (assq :module params))))
 	(with-temp-file src-file (insert body))
-	(julia-snail/ob-julia-evaluate body src-file out-file)
+	(julia-snail/ob-julia-evaluate module body src-file out-file)
 	(let ((c 0))
       (while (and (< c 100) (= 0 (file-attribute-size (file-attributes out-file))))
 		(sit-for 0.1)
@@ -40,5 +46,4 @@
 
 
 (provide 'julia-snail/ob-julia)
-
-;;; repl-history.el ends here
+;;; ob-julia.el ends here

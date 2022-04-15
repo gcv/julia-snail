@@ -367,8 +367,11 @@ This extension provides access Julia REPL history from `julia-snail-mode` buffer
 This extension uses [JuliaFormatter.jl](https://github.com/domluna/JuliaFormatter.jl) to modify source buffer text (the letters in the key sequences stand for **j**ulia **f**ormatter):
 
 - `julia-snail/formatter-format-region` modifies the current region (<kbd>C-c j f r</kbd>)
-- `julia-snail/formatter-format-buffer` modifies the entire current buffer (<kbd>C-c j f b</kbd>)
+- `julia-snail/formatter-format-buffer` modifies the entire current buffer (<kbd>C-c j f b</kbd>**
 
+### Ob-Julia
+
+This extension lets `julia-snail` be used in [Org Mode](https://orgmode.org/) src blocks. This implementation does not closely observe the usual functional conventions of org babel langauges, and instead more closely mirrors [emacs-jupyter's behaviour](https://github.com/nnicandro/emacs-jupyter). This mode is not very mature yet, but it *does* support rich multimedia display of images and plots, and also allows one to choose the evaluation module with a `:module` session parameter (default is `Main`).
 
 ## Future improvements
 
