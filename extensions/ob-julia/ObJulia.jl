@@ -25,7 +25,7 @@ function babel_run_and_store(mod::Module, src_file, out_file)
         end
     end
     println()
-    @info "ob-julia evaluated\n"*read(out_file, String)
+    @info "ob-julia evaluated in module $mod\n"*read(out_file, String)
 end
 
 
