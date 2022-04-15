@@ -33,6 +33,7 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
 - [Extensions](#extensions)
     - [REPL history](#repl-history)
     - [Formatter](#formatter)
+	- [Ob-Julia](#ob-julia)
 - [Future improvements](#future-improvements)
 <!-- markdown-toc end -->
 
