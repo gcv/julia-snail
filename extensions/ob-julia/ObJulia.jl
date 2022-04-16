@@ -1,13 +1,18 @@
 module ObJulia
 
-function babel_run_and_store(mod::Module, src_file, out_file)
+function babel_run_and_store(mod::Module, src_file, out_file, use_error_pane::Bool)
     open(out_file, "w+") do _io
         io = IOContext(_io, :limit => true, :module => mod, :color => true)
         redirect_stdio(stdout=io, stderr=io) do
             result = try
                 Core.include(mod, src_file)
             catch err;
-                Base.display_error(io, err, Base.catch_backtrace())
+                if use_error_pane
+                    flush(_io)
+                    rethrow()
+                else
+                    Base.display_error(io, err, Base.catch_backtrace())
+                end 
             end
             Base.invokelatest() do 
                 for (imgtype, ext) ∈ [("image/png", ".png"), ("image/svg+xml", ".svg")]
