@@ -1233,7 +1233,7 @@ The following buffer-local variables control it:
 To create multiple REPLs, give these variables distinct values (e.g.:
 *julia my-project-1* and 10012)."
   (interactive)
-  (let ((source-buf (when (eq 'julia-mode major-mode) (current-buffer)))
+  (let ((source-buf (current-buffer))
         (repl-buf (get-buffer julia-snail-repl-buffer)))
     (if repl-buf
         (progn
