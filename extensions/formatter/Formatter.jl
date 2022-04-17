@@ -31,7 +31,7 @@ function format_data(encodedstr::String)
       str = String(Base64.base64decode(encodedstr))
       JuliaFormatter.format_text(str)
    catch # something broke, syntax probably invalid
-      return [] 
+      return []
    end
 end
 
