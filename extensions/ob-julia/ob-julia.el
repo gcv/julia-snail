@@ -23,6 +23,7 @@
 ;;; --- requirements
 
 (require 'julia-snail)
+(require 'ob-core)
 
 
 ;;; --- customizations
@@ -39,9 +40,9 @@
 
 ;;; --- implementation
 
-(defun julia-snail/ob-julia-evaluate (module body src-file out-file)
-  (let* ((filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
-         (line-num 0)
+(defun julia-snail/ob-julia-evaluate (module _body src-file out-file)
+  (let* (;;(filename (julia-snail--efn (buffer-file-name (buffer-base-buffer)))) ; commented out to make byte-compiler happy
+         ;;(line-num 0)                                                          ; commented out to make byte-compiler happy
 	 (text (format "JuliaSnail.Extensions.ObJulia.babel_run_and_store(%s, \"%s\", \"%s\", %s)"
 		       module
 		       src-file
