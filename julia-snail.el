@@ -947,14 +947,19 @@ evaluated in the context of MODULE."
 
 (defun julia-snail--module-at-point (&optional partial-module)
   "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
-  (let ((partial-module (or partial-module
-                            (julia-snail--cst-module-at (current-buffer) (point))))
-        (module-for-file (julia-snail--module-for-file (buffer-file-name (buffer-base-buffer)))))
-    (or (if module-for-file
-            (append module-for-file partial-module)
-          partial-module)
-        '("Main"))))
-
+  (cond ((string-equal major-mode "julia-mode")
+         (let ((partial-module (or partial-module
+                                   (julia-snail--cst-module-at (current-buffer) (point))))
+               (module-for-file (julia-snail--module-for-file (buffer-file-name (buffer-base-buffer)))))
+           (or (if module-for-file
+                   (append module-for-file partial-module)
+                 partial-module)
+               '("Main"))))
+        ((string-equal major-mode "org-mode")
+         (let ((info (org-babel-get-src-block-info)))
+           (when (and info (string-equal (nth 0 info) "julia"))
+             (split-string (or (cdr (assq :module (nth 2 info))) "Main") "\\."))))
+        (t '("Main"))))
 
 ;;; --- xref implementation
 
