@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A problem where certain Julia forms were not correctly evaluated as top-level.
 
 
+### Added
+
+- New extension: `ob-julia`, which adds Julia support to Org Babel.
+
+
 ## [1.1.5] — 2022-02-17
 
 ### Fixed
