@@ -17,14 +17,17 @@
 
 ;; A Julia Snail extension to work with Org Babel
 
+;;; Code:
 
-;;; --- requirements
+
+;;; --- requirements
 
 (require 'julia-snail)
 
-;; Customization
-(defvar org-babel-default-header-args:julia '((:wrap)
-											  (:module . "Main")))
+
+;;; --- customizations
+
+(defvar org-babel-default-header-args:julia '((:wrap) (:module . "Main")))
 
 (defcustom julia-snail/ob-julia-use-error-pane t
   "If true, use julia-snail's popup error pane. Otherwise, display errors inline"
@@ -33,6 +36,8 @@
   :safe 'booleanp
   :type 'boolean)
 
+
+;;; --- implementation
 
 (defun julia-snail/ob-julia-evaluate (module body src-file out-file)
   (let* ((filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
@@ -72,6 +77,9 @@
 	    "Output suppressed (line too long)"
 	  bs)))))
 
+
+;;; --- initialiation function
+
 (defun julia-snail/ob-julia-init (repl-buf)
   (julia-snail--send-to-server
     '("JuliaSnail" "Extensions")
@@ -79,5 +87,10 @@
     :repl-buf repl-buf
     :async nil))
 
+
+;;; --- done
+
 (provide 'julia-snail/ob-julia)
+
+
 ;;; ob-julia.el ends here
