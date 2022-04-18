@@ -91,24 +91,6 @@
 (add-hook 'org-babel-after-execute-hook 'ek/babel-ansi)
 
 
-(define-minor-mode julia-snail-org-interaction-mode 
-  "Minor mode for interacting with julia-snail through an org-mode buffer. So far this only has implemented completion inside `julia` blocks."
-  :init-value nil
-  (cond
-   (julia-snail-org-interaction-mode
-    (add-hook 'completion-at-point-functions 'ob-julia-completion-at-point nil t)
-    (add-hook 'after-revert-hook 'julia-snail-org-interaction-mode nil t))
-   (t
-    (remove-hook 'completion-at-point-functions 'ob-julia-completion-at-point t)
-    (remove-hook 'after-revert-hook 'julia-snail-org-interaction-mode t))))
-
-(add-hook 'org-mode-hook #'julia-snail-org-interaction-mode)
-
-(defun ob-julia-completion-at-point ()
-  (let ((info (org-babel-get-src-block-info)))
-	(when (and info (string-equal (nth 0 info) "julia"))
-      (julia-snail-repl-completion-at-point))))
-
 ;;; --- initialiation function
 
 (defun julia-snail/ob-julia-init (repl-buf)
