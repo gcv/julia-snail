@@ -1047,7 +1047,7 @@ evaluated in the context of MODULE."
 ;;; --- completion implementation
 
 (defun julia-snail--repl-completions (identifier &optional module-finder)
-  (let* ((module (if module-finder (module-finder) (julia-snail--module-at-point)))
+  (let* ((module (if module-finder (apply module-finder (list)) (julia-snail--module-at-point)))
          (res (julia-snail--send-to-server
                 :Main
                 (format "try; JuliaSnail.replcompletion(\"%1$s\", %2$s); catch; JuliaSnail.replcompletion(\"%1$s\", Main); end"
@@ -1084,7 +1084,7 @@ evaluated in the context of MODULE."
       (list start
             (cdr bounds)
             (completion-table-dynamic
-             (lambda (_) (julia-snail--repl-completions (concat prefix identifier))))
+             (lambda (_) (julia-snail--repl-completions (concat prefix identifier) module-finder)))
             :exclusive 'no))))
 
 
