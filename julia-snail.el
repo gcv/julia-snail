@@ -947,19 +947,13 @@ evaluated in the context of MODULE."
 
 (defun julia-snail--module-at-point (&optional partial-module)
   "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
-  (cond ((string-equal major-mode "julia-mode")
-         (let ((partial-module (or partial-module
-                                   (julia-snail--cst-module-at (current-buffer) (point))))
-               (module-for-file (julia-snail--module-for-file (buffer-file-name (buffer-base-buffer)))))
-           (or (if module-for-file
-                   (append module-for-file partial-module)
-                 partial-module)
-               '("Main"))))
-        ((string-equal major-mode "org-mode")
-         (let ((info (org-babel-get-src-block-info)))
-           (when (and info (string-equal (nth 0 info) "julia"))
-             (split-string (or (cdr (assq :module (nth 2 info))) "Main") "\\."))))
-        (t '("Main"))))
+  (let ((partial-module (or partial-module
+                            (julia-snail--cst-module-at (current-buffer) (point))))
+        (module-for-file (julia-snail--module-for-file (buffer-file-name (buffer-base-buffer)))))
+    (or (if module-for-file
+            (append module-for-file partial-module)
+          partial-module)
+        '("Main"))))
 
 ;;; --- xref implementation
 
@@ -1052,8 +1046,8 @@ evaluated in the context of MODULE."
 
 ;;; --- completion implementation
 
-(defun julia-snail--repl-completions (identifier)
-  (let* ((module (julia-snail--module-at-point))
+(defun julia-snail--repl-completions (identifier &optional module-finder)
+  (let* ((module (if module-finder (module-finder) (julia-snail--module-at-point)))
          (res (julia-snail--send-to-server
                 :Main
                 (format "try; JuliaSnail.replcompletion(\"%1$s\", %2$s); catch; JuliaSnail.replcompletion(\"%1$s\", Main); end"
@@ -1064,7 +1058,7 @@ evaluated in the context of MODULE."
         (list)
       res)))
 
-(defun julia-snail-repl-completion-at-point ()
+(defun julia-snail-repl-completion-at-point (&optional module-finder)
   "Implementation for Emacs `completion-at-point' system using REPL.REPLCompletions as the provider."
   (let ((identifier (julia-snail--identifier-at-point))
         (bounds (julia-snail--identifier-at-point-bounds))
@@ -1556,17 +1550,12 @@ turned on in REPL buffers."
   :init-value nil
   (cond
    (julia-snail-org-interaction-mode
-    (add-hook 'completion-at-point-functions 'ob-julia-completion-at-point nil t)
+    (add-hook 'completion-at-point-functions 'julia-snail/ob-julia-completion-at-point nil t)
     (add-hook 'after-revert-hook 'julia-snail-org-interaction-mode nil t))
    (t
-    (remove-hook 'completion-at-point-functions 'ob-julia-completion-at-point t)
+    (remove-hook 'completion-at-point-functions 'julia-snail/ob-julia-completion-at-point t)
     (remove-hook 'after-revert-hook 'julia-snail-org-interaction-mode t))))
 
-(defun ob-julia-completion-at-point ()
-  "Check if point is inside an org julia SRC block, and if so, use julia-snail repl completions"
-  (let ((info (org-babel-get-src-block-info)))
-	(when (and info (string-equal (nth 0 info) "julia"))
-      (julia-snail-repl-completion-at-point))))
 
 (add-hook 'org-mode-hook #'julia-snail-org-interaction-mode)
 

@@ -80,7 +80,7 @@
 
 ;; Deal with colour ANSI escape colour codes
 ;; from https://emacs.stackexchange.com/a/63562/19896
-(defun ek/babel-ansi ()
+(defun julia-snail/ob-julia-abel-ansi ()
   (when-let ((beg (org-babel-where-is-src-block-result nil nil)))
     (save-excursion
       (goto-char beg)
@@ -88,8 +88,33 @@
         (let ((end (org-babel-result-end))
               (ansi-color-context-region nil))
           (ansi-color-apply-on-region beg end))))))
-(add-hook 'org-babel-after-execute-hook 'ek/babel-ansi)
+(add-hook 'org-babel-after-execute-hook #'julia-snail/ob-julia-abel-ansi)
 
+
+(defun julia-snail/ob-julia--module-for-src-block ()
+  (let ((info (org-babel-get-src-block-info)))
+    (when (and info (string-equal (nth 0 info) "julia"))
+      (split-string (or (cdr (assq :module (nth 2 info))) "Main") "\\."))))
+
+(defun julia-snail/ob-julia--module-at-point ()
+  (let* ((src-module (julia-snail/ob-julia--module-for-src-block))
+		 (context (org-element-context (org-element-at-point)))
+         (beg (org-element-property :begin context))
+         (end (org-element-property :end context))
+		 (contents (buffer-substring beg end))
+		 (pt (- (point) beg))
+		 (inner-module (with-temp-buffer
+						 (insert contents)
+						 (julia-snail--cst-module-at (current-buffer) pt))))
+	(if inner-module 
+		(append src-module inner-module)
+	  src-module)))
+
+(defun julia-snail/ob-julia-completion-at-point ()
+  "Check if point is inside an org julia SRC block, and if so, use julia-snail repl completions"
+  (let ((info (org-babel-get-src-block-info)))
+	(when (and info (string-equal (nth 0 info) "julia"))
+      (julia-snail-repl-completion-at-point #'julia-snail/ob-julia--module-at-point))))
 
 ;;; --- initialiation function
 
