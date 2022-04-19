@@ -116,14 +116,34 @@
 	(when (and info (string-equal (nth 0 info) "julia"))
       (julia-snail-repl-completion-at-point #'julia-snail/ob-julia--module-at-point))))
 
+(define-minor-mode julia-snail/ob-julia-interaction-mode
+  "Minor mode for interacting with julia-snail through an org-mode buffer. So far this only has implemented completion inside `julia` blocks."
+  :group 'julia-snail
+  :init-value nil
+  (cond
+   (julia-snail/ob-julia-interaction-mode
+    (add-hook 'completion-at-point-functions 'julia-snail/ob-julia-completion-at-point nil t))
+   (t
+    (remove-hook 'after-revert-hook 'julia-snail-interaction-mode t))))
+
+
+
 ;;; --- initialiation function
+
+(defvar julia-snail/ob-julia--has-initialized nil)
 
 (defun julia-snail/ob-julia-init (repl-buf)
   (julia-snail--send-to-server
     '("JuliaSnail" "Extensions")
     "load([\"ob-julia\" \"ObJulia.jl\"])"
     :repl-buf repl-buf
-    :async nil))
+    :async nil)
+  (add-hook 'org-mode-hook #'julia-snail/ob-julia-interaction-mode)
+  (unless julia-snail/ob-julia--has-initialized
+    (mapcar (lambda (buf) (with-current-buffer buf
+                            (if (string-equal major-mode "org-mode")
+                                (julia-snail/ob-julia-interaction-mode)))) (buffer-list))
+    (setf julia-snail/ob-julia--has-initialized t)))
 
 
 ;;; --- done
