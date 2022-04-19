@@ -133,7 +133,9 @@ another."
   :group 'julia-snail
   :options '(:single-reuse :single-new :multi)
   :safe (lambda (v) (memq v '(:single-reuse :single-new :multi)))
-  :type 'keyword)
+  :type '(choice (const :tag "Reuse buffer and replace image" :single-reuse)
+                 (const :tag "New buffer for each image" :single-new)
+                 (const :tag "Append images to buffer" :multi)))
 (make-variable-buffer-local 'julia-snail-multimedia-buffer-style)
 
 (defcustom julia-snail-company-doc-enable t
