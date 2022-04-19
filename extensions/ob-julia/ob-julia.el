@@ -37,17 +37,28 @@
   :safe 'booleanp
   :type 'boolean)
 
+(defcustom julia-snail/ob-julia-mirror-output-in-repl t
+  "If true, all output from code evaluated in ob-julia will also be shown in the julia REPL.
+Note that due to problem with async evaluation, trying to use emacs while julia code is running
+will cause your program's output to not be shown in org-mode, so this is currently a bad idea
+to disable."
+  :tag "Control the display of code evaluation in the Julia REPL"
+  :group 'julia-snail
+  :safe 'booleanp
+  :type 'boolean)
+
 
 ;;; --- implementation
 
 (defun julia-snail/ob-julia-evaluate (module _body src-file out-file)
   (let* (;;(filename (julia-snail--efn (buffer-file-name (buffer-base-buffer)))) ; commented out to make byte-compiler happy
          ;;(line-num 0)                                                          ; commented out to make byte-compiler happy
-	 (text (format "JuliaSnail.Extensions.ObJulia.babel_run_and_store(%s, \"%s\", \"%s\", %s)"
+	 (text (format "JuliaSnail.Extensions.ObJulia.babel_run_and_store(%s, \"%s\", \"%s\", %s, %s)"
 		       module
 		       src-file
 		       out-file
-		       (if julia-snail/ob-julia-use-error-pane "true" "false"))))
+		       (if julia-snail/ob-julia-use-error-pane "true" "false")
+               (if julia-snail/ob-julia-mirror-output-in-repl "true" "false"))))
     ;; This code was meant to startup julia-snail in the org buffer if it's not active, but caused an error
     ;; in org-mode on showing the first result of evalutation. Not sure why.
     ;; (unless (get-buffer julia-snail-repl-buffer)
