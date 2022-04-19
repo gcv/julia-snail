@@ -126,6 +126,7 @@ It is likely that most users will want the default REPL pop-up behavior to split
 ### Other customizations
 
 - `julia-snail-use-emoji-mode-lighter` (default `t`) — attempt to use a 🐌 emoji in the Emacs modeline lighter if the display supports it. Set to `nil` to use the ASCII string `"Snail"` instead (a `:diminish` override in `use-package` should also work).
+- `julia-snail-repl-display-eval-results` (default `nil`) — print the result of evaluating code sent from Emacs to the REPL.
 
 
 ## Usage
