@@ -133,7 +133,9 @@ another."
   :group 'julia-snail
   :options '(:single-reuse :single-new :multi)
   :safe (lambda (v) (memq v '(:single-reuse :single-new :multi)))
-  :type 'keyword)
+  :type '(choice (const :tag "Reuse buffer and replace image" :single-reuse)
+                 (const :tag "New buffer for each image" :single-new)
+                 (const :tag "Append images to buffer" :multi)))
 (make-variable-buffer-local 'julia-snail-multimedia-buffer-style)
 
 (defcustom julia-snail-company-doc-enable t
@@ -146,6 +148,13 @@ another."
 (defcustom julia-snail-use-emoji-mode-lighter t
   "If true, try to use a snail emoji in the modeline lighter instead of text."
   :tag "Control use of emoji in modeline lighter"
+  :group 'julia-snail
+  :safe 'booleanp
+  :type 'boolean)
+
+(defcustom julia-snail-repl-display-eval-results nil
+  "If true, show the results of evaluating code sent from Emacs in the Julia REPL."
+  :tag "Control display of eval results in Julia REPL"
   :group 'julia-snail
   :safe 'booleanp
   :type 'boolean)
@@ -610,6 +619,13 @@ returns \"/home/username/file.jl\"."
                          (funcall init-fn repl-buf))))
             (when (> (length julia-snail-extensions) 0)
               (message "Finished loading Snail extensions"))
+            ;; enable REPL evaluation output
+            (when julia-snail-repl-display-eval-results
+              (julia-snail--send-to-server
+                '("JuliaSnail" "Conf")
+                "set!(:repl_display_eval_results, true)"
+                :repl-buf repl-buf
+                :async nil))
             ;; other initializations can go here
             ;; all done!
             (message "Snail initialization complete. Happy hacking!")

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- New configuration setting: `julia-snail-repl-display-eval-results`. When set to `t` (defaults to `nil`), it prints the result of evaluating some code from Emacs to the REPL.
 - New extension: `ob-julia`, which adds Julia support to Org Babel.
 
 
