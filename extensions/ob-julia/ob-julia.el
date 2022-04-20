@@ -53,41 +53,41 @@ to disable."
 (defun julia-snail/ob-julia-evaluate (module _body src-file out-file)
   (let* (;;(filename (julia-snail--efn (buffer-file-name (buffer-base-buffer)))) ; commented out to make byte-compiler happy
          ;;(line-num 0)                                                          ; commented out to make byte-compiler happy
-	 (text (format "JuliaSnail.Extensions.ObJulia.babel_run_and_store(%s, \"%s\", \"%s\", %s, %s)"
-		       module
-		       src-file
-		       out-file
-		       (if julia-snail/ob-julia-use-error-pane "true" "false")
-               (if julia-snail/ob-julia-mirror-output-in-repl "true" "false"))))
+         (text (format "JuliaSnail.Extensions.ObJulia.babel_run_and_store(%s, \"%s\", \"%s\", %s, %s)"
+                       module
+                       src-file
+                       out-file
+                       (if julia-snail/ob-julia-use-error-pane "true" "false")
+                       (if julia-snail/ob-julia-mirror-output-in-repl "true" "false"))))
     ;; This code was meant to startup julia-snail in the org buffer if it's not active, but caused an error
     ;; in org-mode on showing the first result of evalutation. Not sure why.
     ;; (unless (get-buffer julia-snail-repl-buffer)
     ;;   (progn
-    ;; 	(julia-snail) t))
+    ;;  (julia-snail) t))
     (julia-snail--send-to-server :Main text)))
 
 ;; This function was adapted from ob-julia-vterm by Shigeaki Nishina (GPL-v3)
 ;; https://github.com/shg/ob-julia-vterm.el as of April 14, 2022
 (defun org-babel-execute:julia (body params)
   (let ((src-file (concat (org-babel-temp-file "julia-src-") ".jl"))
-	(out-file (org-babel-temp-file "julia-out-"))
-	(module (let ((maybe-module (cdr (assq :module params))))
-		  (if maybe-module maybe-module "Main"))))
+        (out-file (org-babel-temp-file "julia-out-"))
+        (module (let ((maybe-module (cdr (assq :module params))))
+                  (if maybe-module maybe-module "Main"))))
     (with-temp-file src-file (insert body))
     (julia-snail/ob-julia-evaluate module body src-file out-file)
     (let ((c 0))
       (while (and (< c 100) (= 0 (file-attribute-size (file-attributes out-file))))
-	(sit-for 0.1)
-	(setq c (1+ c))))
+        (sit-for 0.1)
+        (setq c (1+ c))))
     (with-temp-buffer
       (insert-file-contents out-file)
       (let ((bs (buffer-string)))
-	(if (catch 'loop
-	      (dolist (line (split-string bs "\n"))
-		(if (> (length line) 12000)
-		    (throw 'loop t))))
-	    "Output suppressed (line too long)"
-	  bs)))))
+        (if (catch 'loop
+              (dolist (line (split-string bs "\n"))
+                (if (> (length line) 12000)
+                    (throw 'loop t))))
+            "Output suppressed (line too long)"
+          bs)))))
 
 ;; Deal with colour ANSI escape colour codes
 ;; from https://emacs.stackexchange.com/a/63562/19896
@@ -101,7 +101,6 @@ to disable."
           (ansi-color-apply-on-region beg end))))))
 (add-hook 'org-babel-after-execute-hook #'julia-snail/ob-julia-abel-ansi)
 
-
 (defun julia-snail/ob-julia--module-for-src-block ()
   (let ((info (org-babel-get-src-block-info)))
     (when (and info (string-equal (nth 0 info) "julia"))
@@ -109,22 +108,22 @@ to disable."
 
 (defun julia-snail/ob-julia--module-at-point ()
   (let* ((src-module (julia-snail/ob-julia--module-for-src-block))
-		 (context (org-element-context (org-element-at-point)))
+         (context (org-element-context (org-element-at-point)))
          (beg (org-element-property :begin context))
          (end (org-element-property :end context))
-		 (contents (buffer-substring beg end))
-		 (pt (- (point) beg))
-		 (inner-module (with-temp-buffer
-						 (insert contents)
-						 (julia-snail--cst-module-at (current-buffer) pt))))
-	(if inner-module 
-		(append src-module inner-module)
-	  src-module)))
+         (contents (buffer-substring beg end))
+         (pt (- (point) beg))
+         (inner-module (with-temp-buffer
+                         (insert contents)
+                         (julia-snail--cst-module-at (current-buffer) pt))))
+    (if inner-module
+        (append src-module inner-module)
+      src-module)))
 
 (defun julia-snail/ob-julia-completion-at-point ()
   "Check if point is inside an org julia SRC block, and if so, use julia-snail repl completions"
   (let ((info (org-babel-get-src-block-info)))
-	(when (and info (string-equal (nth 0 info) "julia"))
+    (when (and info (string-equal (nth 0 info) "julia"))
       (julia-snail-repl-completion-at-point #'julia-snail/ob-julia--module-at-point))))
 
 (define-minor-mode julia-snail/ob-julia-interaction-mode
@@ -136,7 +135,6 @@ to disable."
     (add-hook 'completion-at-point-functions 'julia-snail/ob-julia-completion-at-point nil t))
    (t
     (remove-hook 'after-revert-hook 'julia-snail-interaction-mode t))))
-
 
 
 ;;; --- initialiation function
