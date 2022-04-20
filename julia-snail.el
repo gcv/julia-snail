@@ -971,6 +971,7 @@ evaluated in the context of MODULE."
           partial-module)
         '("Main"))))
 
+
 ;;; --- xref implementation
 
 (defun julia-snail-xref-backend ()
@@ -1558,6 +1559,7 @@ turned on in REPL buffers."
   :init-value nil
   :lighter (:eval (julia-snail--mode-lighter " MM"))
   :keymap '(((kbd "q") . quit-window)))
+
 
 ;;; --- done
 
