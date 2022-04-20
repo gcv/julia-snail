@@ -13,7 +13,7 @@
 
 module ObJulia
 
-function babel_run_and_store(mod::Module, src_file, out_file, use_error_pane::Bool)
+function babel_run_and_store(mod::Module, src_file, out_file, use_error_pane::Bool, mirror_to_repl::Bool)
     open(out_file, "w+") do _io
         io = IOContext(_io, :limit => true, :module => mod, :color => true)
         redirect_stdio(stdout=io, stderr=io) do
@@ -42,8 +42,10 @@ function babel_run_and_store(mod::Module, src_file, out_file, use_error_pane::Bo
             end
         end
     end
-    println()
-    @info "ob-julia evaluated in module $mod\n"*read(out_file, String)
+    if mirror_to_repl
+        println()
+        @info "ob-julia evaluated in module $mod\n"*read(out_file, String)
+    end
 end
 
 end

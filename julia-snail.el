@@ -971,7 +971,6 @@ evaluated in the context of MODULE."
           partial-module)
         '("Main"))))
 
-
 ;;; --- xref implementation
 
 (defun julia-snail-xref-backend ()
@@ -1063,8 +1062,8 @@ evaluated in the context of MODULE."
 
 ;;; --- completion implementation
 
-(defun julia-snail--repl-completions (identifier)
-  (let* ((module (julia-snail--module-at-point))
+(defun julia-snail--repl-completions (identifier &optional module-finder)
+  (let* ((module (if module-finder (apply module-finder (list)) (julia-snail--module-at-point)))
          (res (julia-snail--send-to-server
                 :Main
                 (format "try; JuliaSnail.replcompletion(\"%1$s\", %2$s); catch; JuliaSnail.replcompletion(\"%1$s\", Main); end"
@@ -1075,7 +1074,7 @@ evaluated in the context of MODULE."
         (list)
       res)))
 
-(defun julia-snail-repl-completion-at-point ()
+(defun julia-snail-repl-completion-at-point (&optional module-finder)
   "Implementation for Emacs `completion-at-point' system using REPL.REPLCompletions as the provider."
   (let ((identifier (julia-snail--identifier-at-point))
         (bounds (julia-snail--identifier-at-point-bounds))
@@ -1101,7 +1100,7 @@ evaluated in the context of MODULE."
       (list start
             (cdr bounds)
             (completion-table-dynamic
-             (lambda (_) (julia-snail--repl-completions (concat prefix identifier))))
+             (lambda (_) (julia-snail--repl-completions (concat prefix identifier) module-finder)))
             :exclusive 'no))))
 
 
@@ -1559,7 +1558,6 @@ turned on in REPL buffers."
   :init-value nil
   :lighter (:eval (julia-snail--mode-lighter " MM"))
   :keymap '(((kbd "q") . quit-window)))
-
 
 ;;; --- done
 
