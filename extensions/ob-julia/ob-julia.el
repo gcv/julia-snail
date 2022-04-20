@@ -99,8 +99,11 @@ to disable."
   (interactive)
   (make-thread
    (lambda ()
-     (org-ctrl-c-ctrl-c)
-     (goto-char julia-snail/ob-julia--point-marker))))
+     (let ((res (org-ctrl-c-ctrl-c)))
+       (if julia-snail/ob-julia--point-marker
+         (goto-char julia-snail/ob-julia--point-marker))
+       (setq julia-snail/ob-julia--point-marker nil)
+       res))))
 
 ;; Deal with colour ANSI escape colour codes
 ;; from https://emacs.stackexchange.com/a/63562/19896
