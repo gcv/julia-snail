@@ -97,11 +97,10 @@ to disable."
 
 (defun julia-snail/ob-julia-ctrl-c-ctrl-c ()
   (interactive)
-  (let ((pt (point)))
-    (make-thread
-     (lambda ()
-       (org-ctrl-c-ctrl-c)
-       (goto-char julia-snail/ob-julia--point-marker)))))
+  (make-thread
+   (lambda ()
+     (org-ctrl-c-ctrl-c)
+     (goto-char julia-snail/ob-julia--point-marker))))
 
 ;; Deal with colour ANSI escape colour codes
 ;; from https://emacs.stackexchange.com/a/63562/19896
