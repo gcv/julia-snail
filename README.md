@@ -376,7 +376,7 @@ This extension uses [JuliaFormatter.jl](https://github.com/domluna/JuliaFormatte
 
 This extension lets `julia-snail` be used in [Org Mode](https://orgmode.org/) src blocks. This implementation does not closely observe the usual functional conventions of org babel langauges, and instead more closely mirrors [emacs-jupyter's behaviour](https://github.com/nnicandro/emacs-jupyter). This mode is not very mature yet, but it *does* support rich multimedia display of images and plots, and also allows one to choose the evaluation module with a `:module` session parameter (default is `Main`).
 
-To use it, enable the `ob-julia` extension, either globally, or by putting the following snippet as the _first_ line of your Org file:
+To use it, enable the `ob-julia` extension, either globally with `M-x customize-variable`, or by putting the following snippet as the _first_ line of your Org file:
 
 ```
 -*- julia-snail-extensions: (ob-julia) -*-
@@ -384,7 +384,9 @@ To use it, enable the `ob-julia` extension, either globally, or by putting the f
 
 Then re-open the Org file (using `find-alternate-file` or a similar command. Note that other Snail configuration variables may also be set in this block. See the Emacs manual's section on [file-local variables](https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html) for syntax details.
 
-After that, run `julia-snail` to start the REPL. Once the REPL starts, Org Babel commands should work on Julia code as expected. Completion support is available through the Emacs `completion-at-point` system.
+Once the extension is enabled, Org Babel commands should work on Julia code as expected, and the first time you execute a block, it'll automatically start a `julia-snail` session if no existing session is running. Completion support is available through the Emacs `completion-at-point` system. 
+
+Be default, executing a source block will lock emacs until the source block finishes running, however if instead of using the function `org-ctrl-c-ctrl-c` (bound to `C-c C-c` inside org-mode buffers), you use `julia-snail/ob-julia-ctrl-c-ctrl-c` (I recommend binding it to `C-c C-c`), then you can continue editing files while code runs.
 
 Limitations: no `xref` support currently available.
 
