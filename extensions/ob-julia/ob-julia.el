@@ -64,34 +64,34 @@ to disable."
     ;; in org-mode on showing the first result of evalutation. Not sure why.
     (unless (get-buffer julia-snail-repl-buffer)
       (progn
-    	(julia-snail) t))
+        (julia-snail) t))
     (julia-snail--send-to-server :Main text :async nil)))
 
 ;; This function was adapted from ob-julia-vterm by Shigeaki Nishina (GPL-v3)
 ;; https://github.com/shg/ob-julia-vterm.el as of April 14, 2022
 (defun org-babel-execute:julia (body params)
   (let ((src-file (concat (org-babel-temp-file "julia-src-") ".jl"))
-	    (out-file (org-babel-temp-file "julia-out-"))
-	    (module (let ((maybe-module (cdr (assq :module params))))
-		          (if maybe-module maybe-module "Main"))))
+        (out-file (org-babel-temp-file "julia-out-"))
+        (module (let ((maybe-module (cdr (assq :module params))))
+                  (if maybe-module maybe-module "Main"))))
     (save-excursion
       (with-temp-file src-file (insert body))
       (julia-snail/ob-julia-evaluate module body src-file out-file)
       (let ((c 0))
         (while (and (< c 1000) (= 0 (file-attribute-size (file-attributes out-file))))
           (thread-yield)
-	      (sit-for 0.1)
-	      (setq c (1+ c))))
+          (sit-for 0.1)
+          (setq c (1+ c))))
       (setq julia-snail/ob-julia--point-marker (point))
       (with-temp-buffer
         (insert-file-contents out-file)
         (let ((bs (buffer-string)))
-	      (if (catch 'loop
-	            (dolist (line (split-string bs "\n"))
-		          (if (> (length line) 12000)
-		              (throw 'loop t))))
-	          "Output suppressed (line too long)"
-	        bs))))))
+          (if (catch 'loop
+                (dolist (line (split-string bs "\n"))
+                  (if (> (length line) 12000)
+                      (throw 'loop t))))
+              "Output suppressed (line too long)"
+            bs))))))
 
 (defvar julia-snail/ob-julia--point-marker nil)
 
