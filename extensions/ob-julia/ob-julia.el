@@ -147,7 +147,7 @@ to disable."
    (julia-snail/ob-julia-interaction-mode
     (add-hook 'completion-at-point-functions 'julia-snail/ob-julia-completion-at-point nil t))
    (t
-    (remove-hook 'after-revert-hook 'julia-snail-interaction-mode t))))
+    (remove-hook 'completion-at-point-functions 'julia-snail/ob-julia-completion-at-point t))))
 
 
 ;;; --- initialiation function
