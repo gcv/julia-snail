@@ -24,6 +24,7 @@
 
 (require 'julia-snail)
 (require 'ob-core)
+(require 'org-element)
 
 
 ;;; --- customizations
@@ -149,9 +150,10 @@ to disable."
     :async nil)
   (add-hook 'org-mode-hook #'julia-snail/ob-julia-interaction-mode)
   (unless julia-snail/ob-julia--has-initialized
-    (mapcar (lambda (buf) (with-current-buffer buf
-                            (if (string-equal major-mode "org-mode")
-                                (julia-snail/ob-julia-interaction-mode)))) (buffer-list))
+    (mapc (lambda (buf) (with-current-buffer buf
+                          (if (string-equal major-mode "org-mode")
+                              (julia-snail/ob-julia-interaction-mode))))
+          (buffer-list))
     (setf julia-snail/ob-julia--has-initialized t)))
 
 
