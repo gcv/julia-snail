@@ -61,33 +61,43 @@ to disable."
                (if julia-snail/ob-julia-mirror-output-in-repl "true" "false"))))
     ;; This code was meant to startup julia-snail in the org buffer if it's not active, but caused an error
     ;; in org-mode on showing the first result of evalutation. Not sure why.
-    ;; (unless (get-buffer julia-snail-repl-buffer)
-    ;;   (progn
-    ;; 	(julia-snail) t))
-    (julia-snail--send-to-server :Main text)))
+    (unless (get-buffer julia-snail-repl-buffer)
+      (progn
+    	(julia-snail) t))
+    (julia-snail--send-to-server :Main text :async nil)))
 
 ;; This function was adapted from ob-julia-vterm by Shigeaki Nishina (GPL-v3)
 ;; https://github.com/shg/ob-julia-vterm.el as of April 14, 2022
 (defun org-babel-execute:julia (body params)
   (let ((src-file (concat (org-babel-temp-file "julia-src-") ".jl"))
-	(out-file (org-babel-temp-file "julia-out-"))
-	(module (let ((maybe-module (cdr (assq :module params))))
-		  (if maybe-module maybe-module "Main"))))
-    (with-temp-file src-file (insert body))
-    (julia-snail/ob-julia-evaluate module body src-file out-file)
-    (let ((c 0))
-      (while (and (< c 100) (= 0 (file-attribute-size (file-attributes out-file))))
-	(sit-for 0.1)
-	(setq c (1+ c))))
-    (with-temp-buffer
-      (insert-file-contents out-file)
-      (let ((bs (buffer-string)))
-	(if (catch 'loop
-	      (dolist (line (split-string bs "\n"))
-		(if (> (length line) 12000)
-		    (throw 'loop t))))
-	    "Output suppressed (line too long)"
-	  bs)))))
+	    (out-file (org-babel-temp-file "julia-out-"))
+	    (module (let ((maybe-module (cdr (assq :module params))))
+		          (if maybe-module maybe-module "Main"))))
+    (save-excursion
+      (with-temp-file src-file (insert body))
+      (julia-snail/ob-julia-evaluate module body src-file out-file)
+      (let ((c 0))
+        (while (and (< c 1000) (= 0 (file-attribute-size (file-attributes out-file))))
+          (thread-yield)
+	      (sit-for 0.1)
+	      (setq c (1+ c))))
+      (with-temp-buffer
+        (insert-file-contents out-file)
+        (let ((bs (buffer-string)))
+	      (if (catch 'loop
+	            (dolist (line (split-string bs "\n"))
+		          (if (> (length line) 12000)
+		              (throw 'loop t))))
+	          "Output suppressed (line too long)"
+	        bs))))))
+
+(defun julia-snail/ob-julia-ctrl-c-ctrl-c ()
+  (interactive)
+  (let ((pt (point)))
+    (make-thread
+     (lambda ()
+	   (save-excursion
+         (org-ctrl-c-ctrl-c))))))
 
 ;; Deal with colour ANSI escape colour codes
 ;; from https://emacs.stackexchange.com/a/63562/19896
