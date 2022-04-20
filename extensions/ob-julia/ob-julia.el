@@ -81,6 +81,7 @@ to disable."
           (thread-yield)
 	      (sit-for 0.1)
 	      (setq c (1+ c))))
+      (setq julia-snail/ob-julia--point-marker (point))
       (with-temp-buffer
         (insert-file-contents out-file)
         (let ((bs (buffer-string)))
@@ -91,13 +92,17 @@ to disable."
 	          "Output suppressed (line too long)"
 	        bs))))))
 
+(defvar julia-snail/ob-julia--point-marker nil)
+
 (defun julia-snail/ob-julia-ctrl-c-ctrl-c ()
   (interactive)
   (let ((pt (point)))
     (make-thread
      (lambda ()
-	   (save-excursion
-         (org-ctrl-c-ctrl-c))))))
+       (org-ctrl-c-ctrl-c)
+       (goto-char julia-snail/ob-julia--point-marker)))))
+
+
 
 ;; Deal with colour ANSI escape colour codes
 ;; from https://emacs.stackexchange.com/a/63562/19896
