@@ -68,6 +68,17 @@ import REPL.REPLCompletions
 export start, stop
 
 
+### --- configuration
+
+module Conf
+
+repl_display_eval_results = false
+
+set!(var, val) = Base.eval(Main.JuliaSnail.Conf, :($var = $val))
+
+end
+
+
 ### --- Elisp s-expression constructor
 
 struct ElispKeyword
@@ -148,6 +159,11 @@ Main.One.Two.Three.eval(:(x = 3 + 5))
 ```
 """
 function eval_in_module(fully_qualified_module_name::Array{Symbol}, expr::Expr)
+   # Work around Julia top-level loading requirements for certain forms; also:
+   # https://github.com/gcv/julia-snail/pull/78
+   if expr.head == :block
+      expr.head = :toplevel
+   end
    # Retrieving the first module in the chain can be tricky. In general, using
    # getfield to find a module works, but packages loaded as transitive
    # dependencies are not necessarily loaded into Main, and so must be found
@@ -212,10 +228,14 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum)
    # linenum - 1 accounts for the leading "begin" line in tmpfiles
    expr_change_lnn(exprs, realfilesym, linenum - 1)
    result = eval_in_module(modpath, exprs)
+   if Conf.repl_display_eval_results
+      println()
+      @info "Module $modpath\n$result"
+   end
    # TODO: Returning the result of the expression can be really ugly if it's
    # displayed in the minibuffer. There should be a nicer way to show it on
    # the Emacs side (perhaps using overlays).
-   # Main.JuliaSnail.elexpr(result)
+   #Main.JuliaSnail.elexpr(result)
    Main.JuliaSnail.elexpr(true)
 end
 

@@ -33,6 +33,7 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
 - [Extensions](#extensions)
     - [REPL history](#repl-history)
     - [Formatter](#formatter)
+    - [Ob-Julia](#ob-julia)
 - [Future improvements](#future-improvements)
 <!-- markdown-toc end -->
 
@@ -125,6 +126,7 @@ It is likely that most users will want the default REPL pop-up behavior to split
 ### Other customizations
 
 - `julia-snail-use-emoji-mode-lighter` (default `t`) — attempt to use a 🐌 emoji in the Emacs modeline lighter if the display supports it. Set to `nil` to use the ASCII string `"Snail"` instead (a `:diminish` override in `use-package` should also work).
+- `julia-snail-repl-display-eval-results` (default `nil`) — print the result of evaluating code sent from Emacs to the REPL.
 
 
 ## Usage
@@ -368,6 +370,23 @@ This extension uses [JuliaFormatter.jl](https://github.com/domluna/JuliaFormatte
 
 - `julia-snail/formatter-format-region` modifies the current region (<kbd>C-c j f r</kbd>)
 - `julia-snail/formatter-format-buffer` modifies the entire current buffer (<kbd>C-c j f b</kbd>)
+
+
+### Ob-Julia
+
+This extension lets `julia-snail` be used in [Org Mode](https://orgmode.org/) src blocks. This implementation does not closely observe the usual functional conventions of org babel langauges, and instead more closely mirrors [emacs-jupyter's behaviour](https://github.com/nnicandro/emacs-jupyter). This mode is not very mature yet, but it *does* support rich multimedia display of images and plots, and also allows one to choose the evaluation module with a `:module` session parameter (default is `Main`).
+
+To use it, enable the `ob-julia` extension, either globally, or by putting the following snippet as the _first_ line of your Org file:
+
+```
+-*- julia-snail-extensions: (ob-julia) -*-
+```
+
+Then re-open the Org file (using `find-alternate-file` or a similar command. Note that other Snail configuration variables may also be set in this block. See the Emacs manual's section on [file-local variables](https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html) for syntax details.
+
+After that, run `julia-snail` to start the REPL. Once the REPL starts, Org Babel commands should work on Julia code as expected. Completion support is available through the Emacs `completion-at-point` system.
+
+Limitations: no `xref` support currently available.
 
 
 ## Future improvements

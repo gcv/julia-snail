@@ -133,7 +133,9 @@ another."
   :group 'julia-snail
   :options '(:single-reuse :single-new :multi)
   :safe (lambda (v) (memq v '(:single-reuse :single-new :multi)))
-  :type 'keyword)
+  :type '(choice (const :tag "Reuse buffer and replace image" :single-reuse)
+                 (const :tag "New buffer for each image" :single-new)
+                 (const :tag "Append images to buffer" :multi)))
 (make-variable-buffer-local 'julia-snail-multimedia-buffer-style)
 
 (defcustom julia-snail-company-doc-enable t
@@ -146,6 +148,13 @@ another."
 (defcustom julia-snail-use-emoji-mode-lighter t
   "If true, try to use a snail emoji in the modeline lighter instead of text."
   :tag "Control use of emoji in modeline lighter"
+  :group 'julia-snail
+  :safe 'booleanp
+  :type 'boolean)
+
+(defcustom julia-snail-repl-display-eval-results nil
+  "If true, show the results of evaluating code sent from Emacs in the Julia REPL."
+  :tag "Control display of eval results in Julia REPL"
   :group 'julia-snail
   :safe 'booleanp
   :type 'boolean)
@@ -610,6 +619,13 @@ returns \"/home/username/file.jl\"."
                          (funcall init-fn repl-buf))))
             (when (> (length julia-snail-extensions) 0)
               (message "Finished loading Snail extensions"))
+            ;; enable REPL evaluation output
+            (when julia-snail-repl-display-eval-results
+              (julia-snail--send-to-server
+                '("JuliaSnail" "Conf")
+                "set!(:repl_display_eval_results, true)"
+                :repl-buf repl-buf
+                :async nil))
             ;; other initializations can go here
             ;; all done!
             (message "Snail initialization complete. Happy hacking!")
@@ -1047,8 +1063,8 @@ evaluated in the context of MODULE."
 
 ;;; --- completion implementation
 
-(defun julia-snail--repl-completions (identifier)
-  (let* ((module (julia-snail--module-at-point))
+(defun julia-snail--repl-completions (identifier &optional module-finder)
+  (let* ((module (if module-finder (apply module-finder (list)) (julia-snail--module-at-point)))
          (res (julia-snail--send-to-server
                 :Main
                 (format "try; JuliaSnail.replcompletion(\"%1$s\", %2$s); catch; JuliaSnail.replcompletion(\"%1$s\", Main); end"
@@ -1059,7 +1075,7 @@ evaluated in the context of MODULE."
         (list)
       res)))
 
-(defun julia-snail-repl-completion-at-point ()
+(defun julia-snail-repl-completion-at-point (&optional module-finder)
   "Implementation for Emacs `completion-at-point' system using REPL.REPLCompletions as the provider."
   (let ((identifier (julia-snail--identifier-at-point))
         (bounds (julia-snail--identifier-at-point-bounds))
@@ -1085,7 +1101,7 @@ evaluated in the context of MODULE."
       (list start
             (cdr bounds)
             (completion-table-dynamic
-             (lambda (_) (julia-snail--repl-completions (concat prefix identifier))))
+             (lambda (_) (julia-snail--repl-completions (concat prefix identifier) module-finder)))
             :exclusive 'no))))
 
 
@@ -1233,7 +1249,7 @@ The following buffer-local variables control it:
 To create multiple REPLs, give these variables distinct values (e.g.:
 *julia my-project-1* and 10012)."
   (interactive)
-  (let ((source-buf (when (eq 'julia-mode major-mode) (current-buffer)))
+  (let ((source-buf (current-buffer))
         (repl-buf (get-buffer julia-snail-repl-buffer)))
     (if repl-buf
         (progn
@@ -1500,7 +1516,10 @@ autocompletion aware of the available modules."
 
 ;;;###autoload
 (define-minor-mode julia-snail-mode
-  "A minor mode for interactive Julia development. Should only be turned on in source buffers."
+  "A minor mode for interactive Julia development. Should only be turned on in source buffers.
+
+The following keys are set:
+\\{julia-snail-mode-map}"
   :init-value nil
   :lighter (:eval (julia-snail--mode-lighter))
   :keymap julia-snail-mode-map
