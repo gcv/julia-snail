@@ -1156,6 +1156,13 @@ This is not module-context aware."
       (user-error                       ; block fails, so send line
        (julia-snail-send-line)))))
 
+(defun julia-snail--tidy-up-error-buffer
+    ()
+  (popper--bury-all)
+  (if (buffer-live-p "*julia* error") (kill-buffer   "*julia* error") ))
+  
+
+
 (defun julia-snail-send-buffer-file ()
   "Send the current buffer's file into the Julia REPL, and include() it.
 This will occur in the context of the Main module, just as it would at the REPL."
@@ -1196,6 +1203,7 @@ This will occur in the context of the Main module, just as it would at the REPL.
                                     (pop-to-buffer error-buffer))
                                 ;; successful load
                                 (julia-snail--module-merge-includes filename includes)
+                                (julia-snail--tidy-up-error-buffer)
                                 (message "%s loaded: module %s"
                                          filename
                                          (julia-snail--construct-module-path module)))))))))
