@@ -14,24 +14,48 @@
 import Pkg
 
 
-# a quick hack to allow using external dependencies
-push!(LOAD_PATH, @__DIR__)
-
-
 module JuliaSnail
 
 
-# external dependency hack continues
-try
-   import CSTParser
-catch err
-   if isa(err, ArgumentError)
-      # force dependency installation
-      Main.Pkg.activate(@__DIR__)
-      Main.Pkg.instantiate()
-      Main.Pkg.precompile()
-      Main.Pkg.activate()
+# XXX: External dependency hack. Snail's own dependencies need to be listed
+# first in LOAD_PATH during initial load, otherwise conflicting versions
+# installed in the Julia global environment cause conflicts. Especially
+# CSTParser, with its unstable API. However, Snail should not be listed first
+# the rest of the time.
+macro with_pkg_env(dir, action)
+   :(
+   try
+      insert!(LOAD_PATH, 1, $dir)
+      $action
+   catch err
+      if isa(err, ArgumentError)
+         if isfile(joinpath($dir, "Project.toml"))
+            # force dependency installation
+            Main.Pkg.activate($dir)
+            Main.Pkg.instantiate()
+            Main.Pkg.precompile()
+            # activate what was the first entry before Snail was pushed to the head of LOAD_PATH
+            Main.Pkg.activate(LOAD_PATH[2])
+         end
+      end
+   finally
+      # Remove Snail from the head of the LOAD_PATH and put it at the tail. At this
+      # point, all of its own dependencies should be loaded and the user's
+      # preferred project should be active.
+      deleteat!(LOAD_PATH, 1)
+      if isfile(joinpath($dir, "Project.toml"))
+         push!(LOAD_PATH, $dir)
+      end
    end
+   )
+end
+
+@with_pkg_env (@__DIR__) begin
+   # list all external dependency imports here (from the appropriate Project.toml, either Snail's or an extension's):
+   import CSTParser
+   # check for dependency API compatibility
+   !isdefined(CSTParser, :iscall) &&
+     throw(ArgumentError("CSTParser API not compatible, must install Snail-specific version"))
 end
 
 
@@ -157,7 +181,7 @@ function eval_in_module(fully_qualified_module_name::Array{Symbol}, expr::Expr)
       Base.invokelatest(Main.Revise.revise)
    end
    # go
-   Core.eval(fqm, expr)
+   return Core.eval(fqm, expr)
 end
 
 """
@@ -178,7 +202,7 @@ end
 """
 Parse and eval the given tmpfile in the context of the module given by the
 modpath array and modify the parsed expression to refer to realfile (instead of
-tmpfile) line numbers. Useed to evaluate a top-level form in a file while
+tmpfile) line numbers. Used to evaluate a top-level form in a file while
 preserving the original filename and line numbers for xref and stack traces.
 """
 function eval_tmpfile(tmpfile, modpath, realfile, linenum)
@@ -187,7 +211,11 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum)
    exprs = Meta.parse(code)
    # linenum - 1 accounts for the leading "begin" line in tmpfiles
    expr_change_lnn(exprs, realfilesym, linenum - 1)
-   eval_in_module(modpath, exprs)
+   result = eval_in_module(modpath, exprs)
+   # TODO: Returning the result of the expression can be really ugly if it's
+   # displayed in the minibuffer. There should be a nicer way to show it on
+   # the Emacs side (perhaps using overlays).
+   # Main.JuliaSnail.elexpr(result)
    Main.JuliaSnail.elexpr(true)
 end
 
@@ -558,12 +586,12 @@ end
 
 # XXX: Dirty hackery to improve perceived startup performance follows. Running
 # this function in a separate thread should, in theory, force a bunch of things
-# to JIT-compile in the background before the users notices.
+# to JIT-compile in the background before the user notices.
 # Thank you very much, time-to-first-plot problem!
 function forcecompile()
-   # call these functions before the user does
-   includesin(Base64.base64encode("module Alpha\ninclude(\"a.jl\")\nend"))
-   moduleat(Base64.base64encode("module Alpha\nend"), 1)
+  # call these functions before the user does
+  includesin(Base64.base64encode("module Alpha\ninclude(\"a.jl\")\nend"))
+  moduleat(Base64.base64encode("module Alpha\nend"), 1)
 end
 
 end
@@ -638,6 +666,22 @@ end
 end
 
 
+### --- extras: support for extending Snail
+
+module Extensions
+
+"""
+Load an extension located in the "extensions" directory. Note that the extension
+will load in the context of the JuliaSnail.Extensions module.
+"""
+function load(path)
+   f = Base.Filesystem.joinpath([@__DIR__, "extensions", path...]...)
+   include(f)
+end
+
+end
+
+
 ### --- server code
 
 running = false
@@ -655,9 +699,9 @@ Standard output and standard error during evaluation go into the REPL. Errors
 during evaluation are captured and sent back to the client as Elisp
 s-expressions. Special queries also write back their responses as s-expressions.
 """
-function start(port=10011)
+function start(port=10011; addr="127.0.0.1")
    global running = false
-   global server_socket = Sockets.listen(port)
+   global server_socket = Sockets.listen(Sockets.IPv4(addr), port)
    let wait_result = timedwait(function(); server_socket.status == Base.StatusActive; end,
                                5.0)
       if :timedout == wait_result

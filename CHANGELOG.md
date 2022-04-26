@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.1.5] — 2022-02-17
+
+### Fixed
+
+- When a Julia-side dependency of Snail (like CSTParser) has already been installed in the Julia global environment, it can cause conflicts (see [#62](https://github.com/gcv/julia-snail/issues/62)). Work around this problem by forcing the Snail Julia project to be first in `LOAD_PATH` order, but only during initial Snail load.
+- Local REPLs should start with the same working directory as the starting file ([#69](https://github.com/gcv/julia-snail/issues/69)).
+- A bug that kept the spinner running in a source buffer when a multimedia image about to be displayed ([#73](https://github.com/gcv/julia-snail/pull/73)).
+
+
+### Added
+
+- Support for running Julia instances in Docker containers using Tramp.
+- Support for evaluating code in notebook-style code-cells (https://github.com/astoff/code-cells.el).
+- Support for Snail extensions. See [README](https://github.com/gcv/julia-snail#extensions) and [EXTENSIONS](https://github.com/gcv/julia-snail/blob/master/EXTENSIONS.md) files for details.
+- New extension: `repl-history`, which allows searching and yanking REPL history in source buffers.
+- New extension: `formatter`, a wrapper for [JuliaFormatter.jl](https://github.com/domluna/JuliaFormatter.jl).
+
+
+### Changed
+
+- The modeline lighter now shows a 🐌 emoji instead of the string `"Snail"` (unless `julia-snail-use-emoji-mode-lighter` is `nil` or overriden elsewhere). Excellent idea from the discussion in [#70](https://github.com/gcv/julia-snail/issues/70).
+
+
 ## [1.1.4] — 2021-08-17
 
 ### Fixed

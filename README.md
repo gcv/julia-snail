@@ -16,6 +16,7 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
     - [`use-package` setup](#use-package-setup)
     - [Manual setup](#manual-setup)
     - [`display-buffer-alist` notes](#display-buffer-alist-notes)
+    - [Other customizations](#other-customizations)
 - [Usage](#usage)
     - [Basics](#basics)
     - [Multiple Julia versions](#multiple-julia-versions)
@@ -23,10 +24,15 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
     - [Remote REPLs](#remote-repls)
         - [`julia-snail-executable` and the remote shell path](#julia-snail-executable-and-the-remote-shell-path)
         - [Remote environment setup](#remote-environment-setup)
+    - [Docker container REPLs](#docker-container-repls)
     - [Extra Julia command-line arguments](#extra-julia-command-line-arguments)
     - [Module-nested `include`s](#module-nested-includes)
     - [Documentation lookup](#documentation-lookup)
     - [Multimedia and plotting](#multimedia-and-plotting)
+    - [`code-cells` integration (notebook mode)](#code-cells-integration-notebook-mode)
+- [Extensions](#extensions)
+    - [REPL history](#repl-history)
+    - [Formatter](#formatter)
 - [Future improvements](#future-improvements)
 <!-- markdown-toc end -->
 
@@ -75,15 +81,17 @@ Because Julia supports Unicode identifiers and uses them for mathematical symbol
 ```elisp
 (use-package vterm
   :ensure t)
+;; Now run `M-x vterm` and make sure it works!
 
 (use-package julia-snail
   :ensure t
-  :requires vterm
   :hook (julia-mode . julia-snail-mode))
 ```
 
 
 ### Manual setup
+
+Install dependencies as noted in the `Package-Requires` line of `julia-snail.el`. Then make sure `vterm` works, as described in the [Installation](#installation) section.
 
 ```elisp
 (add-to-list 'load-path "/path/to/julia-snail")
@@ -112,6 +120,11 @@ It is likely that most users will want the default REPL pop-up behavior to split
 ```elisp
 (customize-set-variable 'split-height-threshold 15)
 ```
+
+
+### Other customizations
+
+- `julia-snail-use-emoji-mode-lighter` (default `t`) — attempt to use a 🐌 emoji in the Emacs modeline lighter if the display supports it. Set to `nil` to use the ASCII string `"Snail"` instead (a `:diminish` override in `use-package` should also work).
 
 
 ## Usage
@@ -193,7 +206,7 @@ Now, source files in `Mars` will interact with the REPL running in the `*julia M
 
 ### Remote REPLs
 
-Snail can use a REPL located on a remote host using SSH tunneling and Emacs [Tramp](https://www.gnu.org/software/tramp/), subject to the following conditions:
+Snail can use a Julia REPL instance running on a remote host using SSH tunneling and Emacs [Tramp](https://www.gnu.org/software/tramp/), subject to the following conditions:
 
 1. A full Julia environment must be installed on the remote host.
 2. The code under development is likewise on the remote host. Emacs must open source files using Tramp.
@@ -229,6 +242,25 @@ You may encounter a situation in which your remote host’s shell is configured 
 # zsh (replace /etc/profile in both places with the file you need):
 [[ ! -o login && ! -o interactive && -f /etc/profile ]] && . /etc/profile
 ```
+
+
+### Docker container REPLs
+
+Snail can use a Julia REPL instance running inside a Docker container. Like [SSH remote REPLs](#remote-repls), this uses [Tramp](https://www.gnu.org/software/tramp/). To make this work:
+
+1. The [docker-tramp](https://github.com/emacs-pe/docker-tramp.el) package must be installed in the local Emacs instance. (Snail does not automatically install this dependency because the container feature is optional.)
+2. A full Julia environment is available in-container.
+3. The code under development is available in-container (using volumes or some other mechanism).
+4. Ports must be appropriately mapped in-container.
+
+A sample container invocation should help understand the requirements:
+```shell
+docker run --name julia-1 --rm -it -p 127.0.0.1:10011:10011 -v "${HOME}/work:/work" julia bash
+```
+
+Visit an in-container Julia source file using Tramp, and start `julia-snail`. It should transparently start an in-container REPL.
+
+Snail configuration, in particular port mapping, works the same as for remote SSH REPLs.
 
 
 ### Extra Julia command-line arguments
@@ -289,6 +321,53 @@ Pkg.add("Gadfly")
 import Gadfly
 Gadfly.plot(sin, 0, 2π)
 ```
+
+
+### `code-cells` integration (notebook mode)
+
+Snail can be used with the [`code-cells`](https://github.com/astoff/code-cells.el) package for (Jupyter) notebook-style work. Sample configuration follows:
+
+```elisp
+(use-package code-cells
+  :hook (julia-mode . code-cells-mode)
+  :config
+  (add-to-list 'code-cells-eval-region-commands '(julia-snail-mode . julia-snail-send-code-cell)))
+```
+
+
+## Extensions
+
+Snail supports opt-in extensions. The `julia-snail-extensions` variable controls which extensions load in a given Snail session. As most other Snail configuration variables, it is best set at a project level using `.dir-locals.el`:
+
+```elisp
+((julia-mode . ((julia-snail-extensions . (repl-history formatter)))))
+```
+
+Extensions will be enabled at Snail startup, and will install their own Julia-side dependencies as needed into their own individual Pkg environments.
+
+An annoyance: because Snail extensions do not use Elisp autoloading, customizing their keybindings must be performed in an explicit `with-eval-after-load` form. This cannot (currently) be done in a `use-package` `:bind` directive. To change extension keybindings, use the following pattern (which can be placed in a `use-package` `:config` directive):
+
+```elisp
+(with-eval-after-load 'julia-snail/repl-history
+  (define-key julia-snail/repl-history-mode-map (kbd "H-y") #'julia-snail/repl-history-search-and-yank))
+```
+
+
+### REPL history
+
+This extension provides access Julia REPL history from `julia-snail-mode` buffers using the following commands (the letters in the key sequences stand for **j**ulia **r**epl **h**istory):
+
+- `julia-snail/repl-history-search-and-yank` provides a search interface (<kbd>C-c j r h C-s</kbd>)
+- `julia-snail/repl-history-yank` yanks recent history entries (1 by default) (<kbd>C-j r h C-y</kbd>)
+- `julia-snail/repl-history-buffer` opens a buffer with the history (<kbd>C-c j r h C-o</kbd>)
+
+
+### Formatter
+
+This extension uses [JuliaFormatter.jl](https://github.com/domluna/JuliaFormatter.jl) to modify source buffer text (the letters in the key sequences stand for **j**ulia **f**ormatter):
+
+- `julia-snail/formatter-format-region` modifies the current region (<kbd>C-c j f r</kbd>)
+- `julia-snail/formatter-format-buffer` modifies the entire current buffer (<kbd>C-c j f b</kbd>)
 
 
 ## Future improvements

@@ -1,12 +1,15 @@
 # This file is machine-generated - editing it directly is not advised
 
-[[CSTParser]]
-deps = ["Tokenize"]
-git-tree-sha1 = "9723e1c07c1727082e169ca50789644a552fb023"
-uuid = "00ebfdb7-1f24-5e51-bd34-a7502290713f"
-version = "3.2.3"
+julia_version = "1.7.1"
+manifest_format = "2.0"
 
-[[Tokenize]]
-git-tree-sha1 = "eee92eda3cc8e104b7e56ff4c1fcf0d78ca37c89"
+[[deps.CSTParser]]
+deps = ["Tokenize"]
+git-tree-sha1 = "f9a6389348207faf5e5c62cbc7e89d19688d338a"
+uuid = "00ebfdb7-1f24-5e51-bd34-a7502290713f"
+version = "3.3.0"
+
+[[deps.Tokenize]]
+git-tree-sha1 = "0952c9cee34988092d73a5708780b3917166a0dd"
 uuid = "0796e94c-ce3b-5d07-9a54-7f471281c624"
-version = "0.5.18"
+version = "0.5.21"

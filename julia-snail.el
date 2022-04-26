@@ -3,7 +3,7 @@
 
 ;; URL: https://github.com/gcv/julia-snail
 ;; Package-Requires: ((emacs "26.2") (dash "2.16.0") (julia-mode "0.3") (s "1.12.0") (spinner "1.7.3") (vterm "0.0.1"))
-;; Version: 1.1.4
+;; Version: 1.1.5
 ;; Created: 2019-10-27
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -36,6 +36,7 @@
 (require 'pulse)
 (require 'rx)
 (require 's)
+(require 'seq)
 (require 'spinner)
 (require 'subr-x)
 (require 'thingatpt)
@@ -43,7 +44,7 @@
 (require 'xref)
 
 
-;;; --- customization
+;;; --- customizations
 
 (defgroup julia-snail nil
   "Customization options for Julia Snail mode."
@@ -142,18 +143,59 @@ another."
   :safe 'booleanp
   :type 'boolean)
 
+(defcustom julia-snail-use-emoji-mode-lighter t
+  "If true, try to use a snail emoji in the modeline lighter instead of text."
+  :tag "Control use of emoji in modeline lighter"
+  :group 'julia-snail
+  :safe 'booleanp
+  :type 'boolean)
+
+(defcustom julia-snail-extensions (list)
+  "A list of enabled Snail extensions."
+  :tag "Enabled Snail extensions"
+  :group 'julia-snail
+  :safe (lambda (obj)
+          (and (listp obj)
+               (seq-every-p #'symbolp obj)))
+  :type '(repeat :tag "Extension" symbol))
+(make-variable-buffer-local 'julia-snail-extensions)
+
 
 ;;; --- constants
 
 (defconst julia-snail--julia-files
-  (list "JuliaSnail.jl" "Manifest.toml" "Project.toml"))
+  ;; a slightly specialized directory walker to collect the correct file and directory list:
+  (cl-labels ((list-extension-files (&optional (path "extensions"))
+                 (let* ((result nil)
+                        (entries (cl-remove-if
+                                  (lambda (entry)
+                                    (or (string-match-p "^\\." (file-name-nondirectory entry))
+                                        (and (file-regular-p (concat (file-name-as-directory path) entry))
+                                             (not (or (string-equal "jl" (downcase (or (file-name-extension entry) "")))
+                                                      (string-equal "toml" (downcase (or (file-name-extension entry) ""))))))))
+                                  (directory-files path)))
+                        (qualified-entries (if (string-equal "." path)
+                                               entries
+                                             (mapcar (lambda (entry)
+                                                       (concat (file-name-as-directory path) entry))
+                                                     entries))))
+                   (cl-loop for entry in qualified-entries do
+                            (if (file-regular-p entry)
+                                (setq result (cons entry result))
+                              (when (file-directory-p entry)
+                                (setq result (cons entry result))
+                                (setq result (append result (list-extension-files entry))))))
+                   result)))
+    ;; actually put together the list
+    (append
+     (list "JuliaSnail.jl" "Manifest.toml" "Project.toml"
+           "extensions")
+     (let ((default-directory (file-name-directory (or load-file-name (buffer-file-name)))))
+       (list-extension-files)))))
 
 (defconst julia-snail--julia-files-local
   (mapcar (lambda (f)
-            (concat (if load-file-name
-                        (file-name-directory load-file-name)
-                      (file-name-as-directory default-directory))
-                    f))
+            (concat (file-name-directory (or load-file-name (buffer-file-name))) f))
           julia-snail--julia-files))
 
 (defconst julia-snail--server-file
@@ -388,38 +430,52 @@ Returns nil if the poll timed out, t otherwise."
          ;; the current version of the Julia code (.jl and .toml files)
          (checksum (with-temp-buffer
                      (cl-loop for f in julia-snail--julia-files-local do
-                              (insert-file-contents-literally f))
+                              (when (file-regular-p f)
+                                (insert-file-contents-literally f)))
                      (secure-hash 'sha256 (current-buffer))))
          (snail-remote-dir (concat (file-name-as-directory (temporary-file-directory))
                                    (concat "julia-snail-" checksum "/"))))
     (unless (file-exists-p snail-remote-dir)
       (make-directory snail-remote-dir)
-      (cl-loop for f in julia-snail--julia-files-local do
-               (copy-file f snail-remote-dir t)))
+      (let ((default-directory (file-name-directory (symbol-file 'julia-snail))))
+        (cl-loop for f in julia-snail--julia-files do
+                 (if (file-directory-p f)
+                     (make-directory (concat snail-remote-dir f))
+                   (copy-file f (concat snail-remote-dir (file-name-directory f)) t)))))
     snail-remote-dir))
 
 (defun julia-snail--launch-command ()
-  (let ((extra-args (if (listp julia-snail-extra-args)
-                        (mapconcat 'identity julia-snail-extra-args " ")
-                      julia-snail-extra-args))
-        (remote-user (file-remote-p default-directory 'user))
-        (remote-host (file-remote-p default-directory 'host)))
-    (if (or (null remote-host) (string-equal "localhost" remote-host))
-        ;; local REPL
-        (format "%s %s -L %s" julia-snail-executable extra-args julia-snail--server-file)
-      ;; remote REPL
-      (let* ((remote-dir (julia-snail--copy-snail-to-remote-host))
-             (remote-dir-localname (file-remote-p remote-dir 'localname))
-             (remote-dir-server-file (concat remote-dir-localname "JuliaSnail.jl")))
-        (format "ssh -t -L %1$s:localhost:%2$s %3$s %4$s %5$s -L %6$s"
-                julia-snail-port
-                (or julia-snail-remote-port julia-snail-port)
-                (concat
-                 (if remote-user (concat remote-user "@") "")
-                 remote-host)
-                julia-snail-executable
-                extra-args
-                remote-dir-server-file)))))
+  (let* ((extra-args (if (listp julia-snail-extra-args)
+                         (mapconcat 'identity julia-snail-extra-args " ")
+                       julia-snail-extra-args))
+	 (remote-method (file-remote-p default-directory 'method))
+         (remote-user (file-remote-p default-directory 'user))
+         (remote-host (file-remote-p default-directory 'host))
+	 (remote-dir-server-file (if (equal nil remote-method)
+				     ""
+				   (concat (file-remote-p (julia-snail--copy-snail-to-remote-host) 'localname) "JuliaSnail.jl"))))
+    (cond
+     ;; local REPL
+     ((equal nil remote-method)
+      (format "%s %s -L %s" julia-snail-executable extra-args julia-snail--server-file))
+     ;; remote REPL
+     ((string-equal "ssh" remote-method)
+      (format "ssh -t -L %1$s:localhost:%2$s %3$s %4$s %5$s -L %6$s"
+              julia-snail-port
+              (or julia-snail-remote-port julia-snail-port)
+              (concat
+               (if remote-user (concat remote-user "@") "")
+               remote-host)
+              julia-snail-executable
+              extra-args
+              remote-dir-server-file))
+     ;; container REPL
+     ((string-equal "docker" remote-method)
+      (format "docker exec -it %s %s %s -L %s"
+	      remote-host
+	      julia-snail-executable
+	      extra-args
+	      remote-dir-server-file)))))
 
 (defun julia-snail--efn (path &optional starting-dir)
   "A variant of expand-file-name that (1) just does
@@ -441,6 +497,14 @@ returns \"/home/username/file.jl\"."
     (declare-function persp-add-buffer "persp-mode.el")
     (declare-function get-current-persp "persp-mode.el")
     (persp-add-buffer buf (get-current-persp) nil)))
+
+(defun julia-snail--mode-lighter (&optional extra)
+  (let ((snail-emoji (char-from-name "SNAIL")))
+    (if (and julia-snail-use-emoji-mode-lighter
+             snail-emoji
+             (char-displayable-p snail-emoji))
+        (format " %c%s" snail-emoji (if extra extra ""))
+      (format " Snail%s" (if extra extra "")))))
 
 
 ;;; --- connection management functions
@@ -492,7 +556,11 @@ returns \"/home/username/file.jl\"."
           (user-error "The vterm buffer is inactive; double-check julia-snail-executable path"))
         ;; now try to send the Snail startup command
         (julia-snail--send-to-repl
-          (format "JuliaSnail.start(%d); # please wait, time-to-first-plot..." (or julia-snail-remote-port julia-snail-port))
+         (format "JuliaSnail.start(%d%s) ; # please wait, time-to-first-plot..."
+		 (or julia-snail-remote-port julia-snail-port)
+		 (if (string-equal "docker" (file-remote-p (buffer-file-name julia-snail--repl-go-back-target) 'method))
+		     "; addr=\"0.0.0.0\""
+		   ""))
           :repl-buf repl-buf
           ;; wait a while in case dependencies need to be downloaded
           :polling-timeout (* 5 60 1000)
@@ -514,7 +582,10 @@ returns \"/home/username/file.jl\"."
                 ;; NB: buffer-local variable!
                 (setq julia-snail--process netstream)
                 (set-process-filter julia-snail--process #'julia-snail--server-response-filter)
-                (message "Snail connected to Julia. Happy hacking!")
+                ;; TODO: Implement a sanity check on the Julia environment. Not
+                ;; sure how. But a failed dependency load (like CSTParser) will
+                ;; leave Snail in a bad state.
+                (message "Successfully connected to Snail server in Julia REPL")
                 ;; Query base directory, and cache
                 (puthash process-buf (julia-snail--capture-basedir repl-buf)
                          julia-snail--cache-proc-basedir))
@@ -528,7 +599,20 @@ returns \"/home/username/file.jl\"."
                 "display_on()"
                 :repl-buf repl-buf
                 :async nil))
+            ;; activate extensions
+            (cl-loop for extname in julia-snail-extensions do
+                     ;; load the extension Elisp file (if necessary)
+                     (julia-snail--extension-load extname)
+                     ;; run extension initialization function
+                     (let ((init-fn (julia-snail--extension-init extname)))
+                       (message "Loading Snail extension %s..." extname)
+                       (when (functionp init-fn)
+                         (funcall init-fn repl-buf))))
+            (when (> (length julia-snail-extensions) 0)
+              (message "Finished loading Snail extensions"))
             ;; other initializations can go here
+            ;; all done!
+            (message "Snail initialization complete. Happy hacking!")
             ))))))
 
 (defun julia-snail--repl-disable ()
@@ -537,14 +621,25 @@ returns \"/home/username/file.jl\"."
 
 (defun julia-snail--enable ()
   "Source buffer minor mode initializer."
-  ;; placeholder
-  nil
+  ;; turn on extension minor modes
+  (hack-dir-local-variables-non-file-buffer) ; force .dir-locals.el to load
+  (cl-loop for extname in julia-snail-extensions do
+           ;; load the extension Elisp file (if necessary)
+           (julia-snail--extension-load extname)
+           (let ((minor-mode-fn (julia-snail--extension-mode extname)))
+             (when (functionp minor-mode-fn)
+               (funcall minor-mode-fn 1))))
+  ;; other minor mode initializations can go here
   )
 
 (defun julia-snail--disable ()
   "Source buffer minor mode cleanup."
-  ;; placeholder
-  nil
+  ;; turn off extension minor modes
+  (cl-loop for extname in julia-snail-extensions do
+           (let ((minor-mode-fn (julia-snail--extension-mode extname)))
+             (when (functionp minor-mode-fn)
+               (funcall minor-mode-fn -1))))
+  ;; other minor mode cleanup can go here
   )
 
 
@@ -554,6 +649,7 @@ returns \"/home/username/file.jl\"."
     (str
      &key
      (repl-buf (get-buffer julia-snail-repl-buffer))
+     (send-return t)
      (async t)
      (polling-interval 20)
      (polling-timeout julia-snail-async-timeout))
@@ -564,7 +660,7 @@ wait for the REPL prompt to return, otherwise return immediately."
     (user-error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
   (with-current-buffer repl-buf
     (vterm-send-string str)
-    (vterm-send-return))
+    (when send-return (vterm-send-return)))
   (unless async
     ;; wait for the inclusion to succeed (i.e., the prompt prints)
     (julia-snail--wait-while
@@ -738,7 +834,7 @@ evaluated in the context of MODULE."
            (throw 'julia-snail--server-filter-error err)))))))
 
 
- ;;; --- Snail server response handling functions
+;;; --- Snail server response handling functions
 
 (defun julia-snail--response-base (reqid)
   "Snail response handler for REQID, base function."
@@ -1047,6 +1143,8 @@ evaluated in the context of MODULE."
                         (generate-new-buffer-name mm-buf-name-base)))
          (mm-buf (get-buffer-create mm-buf-name))
          (decoded-img (base64-decode-string img)))
+    (with-current-buffer julia-snail--repl-go-back-target
+      (spinner-stop))
     (with-current-buffer mm-buf
       ;; allow directly-inserted images to be erased
       (fundamental-mode)
@@ -1101,6 +1199,29 @@ evaluated in the context of MODULE."
        :async nil))))
 
 
+;;; --- extension support
+
+(defun julia-snail--extension-symbol (extname)
+  (intern (format "julia-snail/%s" extname)))
+
+(defun julia-snail--extension-init (extname)
+  (intern (format "%s-init" (julia-snail--extension-symbol extname))))
+
+(defun julia-snail--extension-mode (extname)
+  (intern (format "%s-mode" (julia-snail--extension-symbol extname))))
+
+(defun julia-snail--extension-load (extname)
+  (let ((extsym (julia-snail--extension-symbol extname)))
+    (unless (featurep extsym)
+      (let* ((current-file (symbol-file 'julia-snail))
+             (extdir (concat (file-name-directory current-file)
+                             (file-name-as-directory "extensions")
+                             (file-name-as-directory (symbol-name extname))))
+             (load-path (append load-path (list extdir)))
+             (extfile (concat extdir (symbol-name extname) ".el")))
+        (require extsym extfile)))))
+
+
 ;;; --- commands
 
 ;;;###autoload
@@ -1120,11 +1241,14 @@ To create multiple REPLs, give these variables distinct values (e.g.:
           (pop-to-buffer repl-buf))
       ;; run Julia in a vterm and load the Snail server file
       (let ((vterm-shell (julia-snail--launch-command))
-            ;; XXX: Allocate a buffer for the vterm. Bind its default-directory
-            ;; to the user's home because if (1) a remote REPL is being started,
+            ;; XXX: Allocate a buffer for the vterm. When a remote REPL is being
+            ;; started, bind the vterm buffer's default-directory to the user's
+            ;; home because if (1) a remote REPL is being started,
             ;; default-directory may be remote, and (2) Tramp may notice this,
             ;; mess with the path, and run ssh incorrectly.
-            (vterm-buf (let ((default-directory (expand-file-name "~")))
+            (vterm-buf (let ((default-directory (if (file-remote-p default-directory)
+                                                    (expand-file-name "~")
+                                                  default-directory)))
                          (generate-new-buffer julia-snail-repl-buffer))))
         (pop-to-buffer vterm-buf)
         (with-current-buffer vterm-buf
@@ -1162,6 +1286,26 @@ This is not module-context aware."
   (if (buffer-live-p "*julia* error") (kill-buffer   "*julia* error") ))
   
 
+(defun julia-snail-send-code-cell (block-start block-end)
+  "Send the current code cell to the Julia REPL and run it in the context of the current module.
+Code cells is a notebook-style feature implemented with
+https://github.com/astoff/code-cells.el. code-cells-mode must be
+enabled for this to work, and something like this is required for
+activation:
+(add-to-list 'code-cells-eval-region-commands '(julia-snail-mode . julia-snail-send-code-cell))"
+  (let* ((text (buffer-substring-no-properties block-start block-end))
+         (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
+         (module (if current-prefix-arg :Main (julia-snail--module-at-point)))
+         (line-num (line-number-at-pos block-start)))
+    (julia-snail--send-to-server-via-tmp-file
+      module
+      text
+      filename
+      line-num
+      :callback-success (lambda (_request-info &optional data)
+                          (message "code cell evaluated: %s, module %s"
+                                   data
+                                   (julia-snail--construct-module-path module))))))
 
 (defun julia-snail-send-buffer-file ()
   "Send the current buffer's file into the Julia REPL, and include() it.
@@ -1358,7 +1502,7 @@ autocompletion aware of the available modules."
 (define-minor-mode julia-snail-mode
   "A minor mode for interactive Julia development. Should only be turned on in source buffers."
   :init-value nil
-  :lighter " Snail"
+  :lighter (:eval (julia-snail--mode-lighter))
   :keymap julia-snail-mode-map
   (when (eq 'julia-mode major-mode)
     (if julia-snail-mode
@@ -1385,7 +1529,7 @@ autocompletion aware of the available modules."
   "A minor mode for interactive Julia development. Should only be
 turned on in REPL buffers."
   :init-value nil
-  :lighter " Snail"
+  :lighter (:eval (julia-snail--mode-lighter))
   :keymap julia-snail-repl-mode-map
   (when (eq 'vterm-mode major-mode)
     (if julia-snail-repl-mode
@@ -1395,13 +1539,13 @@ turned on in REPL buffers."
 (define-minor-mode julia-snail-message-buffer-mode
   "A minor mode for displaying messages returned from the Julia REPL."
   :init-value nil
-  :lighter " Snail Message"
+  :lighter (:eval (julia-snail--mode-lighter " Message"))
   :keymap '(((kbd "q") . quit-window)))
 
 (define-minor-mode julia-snail-multimedia-buffer-mode
   "A minor mode for displaying Julia multimedia output an Emacs buffer."
   :init-value nil
-  :lighter " Snail MM"
+  :lighter (:eval (julia-snail--mode-lighter " MM"))
   :keymap '(((kbd "q") . quit-window)))
 
 
