@@ -158,10 +158,10 @@ is equivalent to
 Main.One.Two.Three.eval(:(x = 3 + 5))
 ```
 """
-function eval_in_module(fully_qualified_module_name::Array{Symbol}, expr::Expr)
+function eval_in_module(fully_qualified_module_name::Array{Symbol}, expr::Union{Symbol,Expr})
    # Work around Julia top-level loading requirements for certain forms; also:
    # https://github.com/gcv/julia-snail/pull/78
-   if expr.head == :block
+   if isa(expr,Expr) && expr.head == :block
       expr.head = :toplevel
    end
    # Retrieving the first module in the chain can be tricky. In general, using
