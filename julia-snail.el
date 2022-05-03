@@ -739,12 +739,14 @@ nil, wait for the result and return it."
                                   (unless async
                                     (setq res (or data :nothing)))
                                   (when callback-success
-                                    (funcall callback-success request-info data)))
+                                    (with-current-buffer originating-buf
+                                      (funcall callback-success request-info data))))
               :callback-failure (lambda (request-info)
                                   (unless async
                                     (setq res :nothing))
                                   (when callback-failure
-                                    (funcall callback-failure request-info))))
+                                    (with-current-buffer originating-buf
+                                      (funcall callback-failure request-info)))))
              julia-snail--requests)
     ;; return value logic:
     (if async
