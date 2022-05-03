@@ -815,15 +815,11 @@ evaluated in the context of MODULE."
                      :async t
                      :callback-success callback-success
                      :callback-failure callback-failure)))
-        (puthash reqid
-                 (make-julia-snail--request-tracker
-                  :repl-buf repl-buf
-                  :originating-buf (current-buffer)
-                  :callback-success callback-success
-                  :callback-failure callback-failure
-                  :tmpfile tmpfile
-                  :tmpfile-local-remote tmpfile-local-remote)
-                 julia-snail--requests)
+        ;; update the request info to include tmpfile tracking
+        (let ((reqtr (gethash reqid julia-snail--requests)))
+          (setf (julia-snail--request-tracker-tmpfile reqtr) tmpfile)
+          (setf (julia-snail--request-tracker-tmpfile-local-remote reqtr) tmpfile-local-remote))
+        ;; and return the reqid
         reqid))))
 
 (defun julia-snail--server-response-filter (proc str)
