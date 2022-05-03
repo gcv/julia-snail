@@ -135,6 +135,29 @@ function elexpr(arg::ElispKeyword)
 end
 
 
+### --- Emacs popup display helper
+
+module PopupDisplay
+
+struct Params
+   width::Int64
+   height::Int64
+end
+
+function format(obj, width, height)
+   io = IOBuffer()
+   show(IOContext(io,
+                  :compact => true,
+                  :displaysize => (width, height),
+                  :limit => true),
+        "text/plain",
+        obj)
+   String(take!(io))
+end
+
+end
+
+
 ### --- evaluation helpers for Julia code coming in from Emacs
 
 struct UndefinedModule <: Exception
@@ -221,7 +244,8 @@ modpath array and modify the parsed expression to refer to realfile (instead of
 tmpfile) line numbers. Used to evaluate a top-level form in a file while
 preserving the original filename and line numbers for xref and stack traces.
 """
-function eval_tmpfile(tmpfile, modpath, realfile, linenum)
+function eval_tmpfile(tmpfile, modpath, realfile, linenum,
+                      popup_params::Union{Nothing, PopupDisplay.Params}=nothing)
    realfilesym = Symbol(realfile)
    code = read(tmpfile, String)
    exprs = Meta.parse(code)
@@ -236,7 +260,14 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum)
    # displayed in the minibuffer. There should be a nicer way to show it on
    # the Emacs side (perhaps using overlays).
    #Main.JuliaSnail.elexpr(result)
-   Main.JuliaSnail.elexpr(true)
+   if popup_params == nothing
+      Main.JuliaSnail.elexpr(true)
+   else
+      Main.JuliaSnail.elexpr((
+         true,
+         Main.JuliaSnail.PopupDisplay.format(result, popup_params.width, popup_params.height)
+      ))
+   end
 end
 
 
