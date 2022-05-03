@@ -521,7 +521,10 @@ returns \"/home/username/file.jl\"."
 
 (defun julia-snail--spinner-print-around (fn &rest args)
   "Advice for `spinner-print` to add a leading space so the spinner looks nicer in the modeline."
-  (concat " " (apply fn args)))
+  (let ((fn-res (apply fn args)))
+    (if (> (length fn-res) 0)
+        (concat " " fn-res)
+      fn-res)))
 
 (defun julia-snail--mode-lighter (&optional extra)
   (let ((snail-emoji (char-from-name "SNAIL")))
