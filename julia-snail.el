@@ -507,6 +507,10 @@ returns \"/home/username/file.jl\"."
     (declare-function get-current-persp "persp-mode.el")
     (persp-add-buffer buf (get-current-persp) nil)))
 
+(defun julia-snail--spinner-print-around (fn &rest args)
+  "Advice for `spinner-print` to add a leading space so the spinner looks nicer in the modeline."
+  (concat " " (apply fn args)))
+
 (defun julia-snail--mode-lighter (&optional extra)
   (let ((snail-emoji (char-from-name "SNAIL")))
     (if (and julia-snail-use-emoji-mode-lighter
@@ -1523,6 +1527,7 @@ The following keys are set:
           (julia-snail--enable)
           (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t)
           (add-function :before-until (local 'eldoc-documentation-function) #'julia-snail-eldoc)
+          (advice-add 'spinner-print :around #'julia-snail--spinner-print-around)
           (if (and (featurep 'company)
                    julia-snail-company-doc-enable)
               (add-hook 'completion-at-point-functions #'julia-snail-company-capf nil t)
@@ -1532,6 +1537,7 @@ The following keys are set:
                julia-snail-company-doc-enable)
           (remove-hook 'completion-at-point-functions #'julia-snail-company-capf t)
         (remove-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point t))
+      (advice-remove 'spinner-print #'julia-snail--spinner-print-around)
       (remove-function (local 'eldoc-documentation-function) #'julia-snail-eldoc)
       (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
       (julia-snail--disable))))
