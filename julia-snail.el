@@ -562,6 +562,29 @@ returns \"/home/username/file.jl\"."
       (format " Snail%s" (if extra extra "")))))
 
 
+;;; --- color shifting utilities, adapted from mini-frame.el
+
+(cl-defun julia-snail--color-shift (from to &key (by 27))
+  "Move color FROM towards TO by BY. FROM and TO are 16-bit integer values."
+  (let ((f (ash from -8)))
+    (cond
+     ((> from to) (- f by))
+     ((< from to) (+ f by))
+     (t f))))
+
+(cl-defun julia-snail--color-shift-hex (from to &key (by 27))
+  "Move color FROM towards TO. FROM and TO are hex values."
+  (if (or (string-match-p "^unspecified" (format "%s" from))
+          (string-match-p "^unspecified" (format "%s" to)))
+      "unspecified"
+    (let* ((from (color-values from))
+           (to (color-values to)))
+      (format "#%02x%02x%02x"
+              (/color-shift (car from) (car to) :by by)
+              (/color-shift (cadr from) (cadr to) :by by)
+              (/color-shift (caddr from) (caddr to) :by by)))))
+
+
 ;;; --- connection management functions
 
 (defun julia-snail--clear-proc-caches (process-buf)
@@ -1163,7 +1186,7 @@ evaluated in the context of MODULE."
                         '(0 . 0)))
            (col (car col-row))
            (row (cdr col-row))
-           (width (- (window-width) col 2))
+           (width (- (window-width) col 3))
            (height (pcase julia-snail-popup-display
                      (:command (- (window-height) row 1))
                      (:change 1))))
@@ -1180,9 +1203,20 @@ evaluated in the context of MODULE."
           (cl-loop for popup in julia-snail--popups do
                    (when (= pt (popup-point popup))
                      (popup-delete popup)))
-          (let* ((display-str (concat (propertize " => " 'face `(:foreground "red"))
-                                      (format "%s" (cadr eval-data))))
-                 (popup (popup-tip display-str :point pt :around nil :nowait t :nostrip t)))
+          (let* ((lines-raw (cadr eval-data))
+                 (lines-split (s-split (rx "\n") lines-raw))
+                 (lines (cl-loop for line in lines-split collect
+                                 (concat (propertize " " 'face `(:background 'inherit))
+                                         line " \n")))
+                 (display-str (s-trim-right (apply #'concat lines)))
+                 (popup (popup-tip display-str
+                                   :point pt
+                                   :around nil
+                                   :face `(:background
+                                           ,(julia-snail--color-shift-hex (face-attribute 'default :background) (face-attribute 'default :foreground) :by 63)
+                                           :foreground ,(face-attribute 'default :foreground))
+                                   :nowait t
+                                   :nostrip t)))
             (add-to-list 'julia-snail--popups popup)
             (julia-snail--popup-add-cleanup-hooks)))))))
 
