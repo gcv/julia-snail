@@ -1164,7 +1164,9 @@ evaluated in the context of MODULE."
            (col (car col-row))
            (row (cdr col-row))
            (width (- (window-width) col 2))
-           (height (- (window-height) row 1)))
+           (height (pcase julia-snail-popup-display
+                     (:command (- (window-height) row 1))
+                     (:change 1))))
       (list width height))))
 
 (defun julia-snail--popup-display (pt data)

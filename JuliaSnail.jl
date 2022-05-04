@@ -148,7 +148,7 @@ function format(obj, width, height)
    io = IOBuffer()
    show(IOContext(io,
                   :compact => true,
-                  :displaysize => (width, height),
+                  :displaysize => (height, width),
                   :limit => true),
         "text/plain",
         obj)
