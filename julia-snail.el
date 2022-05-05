@@ -453,7 +453,23 @@ Returns nil if the poll timed out, t otherwise."
     (julia-snail--flash-region block-start block-end)
     (if (and allow-send-to-repl
              (consp current-prefix-arg) (> (car current-prefix-arg) 4))
-        (julia-snail--send-to-repl (s-trim text))
+        ;; copy directly to REPL
+        (let* ((_ (julia-snail--send-to-repl (s-trim text) :async nil))
+               (err (julia-snail--send-to-server
+                      :Main
+                      "Base.active_repl.waserror"
+                      :async nil))
+               (popup-params (julia-snail--popup-params block-end))
+               (str (if (equal err :nothing)
+                        (julia-snail--send-to-server
+                          :Main
+                          (format "JuliaSnail.PopupDisplay.format(ans, %s, %s)"
+                                  (car popup-params)
+                                  (cadr popup-params))
+                          :async nil)
+                      "error")))
+          (julia-snail--popup-display popup-block-end str :use-cleanup-kludge (eq :command julia-snail-popup-display)))
+      ;; evaluate through the Snail server:
       (julia-snail--send-to-server-via-tmp-file
         module
         text
@@ -461,7 +477,7 @@ Returns nil if the poll timed out, t otherwise."
         line-num
         :popup-display-params (julia-snail--popup-params block-end)
         :callback-success (lambda (_request-info &optional data)
-                            (julia-snail--popup-display popup-block-end data)
+                            (julia-snail--popup-display popup-block-end (julia-snail--popup-extract-string data))
                             (message "%s; module %s"
                                      message-prefix
                                      (julia-snail--construct-module-path module)))))))
@@ -1192,35 +1208,48 @@ evaluated in the context of MODULE."
                      (:change 1))))
       (list width height))))
 
-(defun julia-snail--popup-display (pt data)
+(defun julia-snail--popup-extract-string (data)
   (when julia-snail-popup-display
-    (ignore-errors
-      (let* ((read-data (read data))
-             ;; scary
-             (eval-data (eval read-data)))
-        (when (and (listp eval-data) (car eval-data))
-          ;; remove existing popup(s) in this location
-          (cl-loop for popup in julia-snail--popups do
-                   (when (= pt (popup-point popup))
-                     (popup-delete popup)))
-          (let* ((lines-raw (cadr eval-data))
-                 (lines-split (s-split (rx "\n") lines-raw))
-                 (lines (cl-loop for line in lines-split collect
-                                 (concat (propertize " " 'face `(:background 'inherit))
-                                         line " \n")))
-                 (display-str (s-trim-right (apply #'concat lines)))
-                 (popup (popup-tip display-str
-                                   :point pt
-                                   :around nil
-                                   :face `(:background
-                                           ,(julia-snail--color-shift-hex (face-attribute 'default :background) (face-attribute 'default :foreground) :by 63)
-                                           :foreground ,(face-attribute 'default :foreground))
-                                   :nowait t
-                                   :nostrip t)))
-            (add-to-list 'julia-snail--popups popup)
-            (julia-snail--popup-add-cleanup-hooks)))))))
+    (let* ((read-data (read data))
+           ;; scary
+           (eval-data (eval read-data)))
+      (when (and (listp eval-data) (car eval-data))
+        (cadr eval-data)))))
 
-(defun julia-snail--popup-cleanup (&rest _)
+(defvar julia-snail--popup-cleanup-skip-kludge nil)
+
+(cl-defun julia-snail--popup-display (pt str &key (use-cleanup-kludge nil))
+  (when julia-snail-popup-display
+    ;; remove existing popup(s) in this location
+    (cl-loop for popup in julia-snail--popups do
+             (when (= pt (popup-point popup))
+               (popup-delete popup)))
+    (let* ((lines-split (s-split (rx "\n") str))
+           (lines (cl-loop for line in lines-split collect
+                           (concat (propertize " " 'face `(:background 'inherit))
+                                   line " \n")))
+           (display-str (s-trim-right (apply #'concat lines)))
+           (popup (popup-tip display-str
+                             :point pt
+                             :around nil
+                             :face `(:background
+                                     ,(julia-snail--color-shift-hex (face-attribute 'default :background) (face-attribute 'default :foreground) :by 63)
+                                     :foreground ,(face-attribute 'default :foreground))
+                             :nowait t
+                             :nostrip t)))
+      (add-to-list 'julia-snail--popups popup)
+      (when use-cleanup-kludge
+        (setq julia-snail--popup-cleanup-skip-kludge t))
+      (julia-snail--popup-add-cleanup-hooks))))
+
+(cl-defun julia-snail--popup-cleanup (&rest _)
+  ;; XXX: Prevent this cleanup from happening too early when the
+  ;; post-command-hook is installed by the command which added the popup in the
+  ;; first place.
+  (when julia-snail--popup-cleanup-skip-kludge
+    (setq julia-snail--popup-cleanup-skip-kludge nil)
+    (cl-return-from julia-snail--popup-cleanup))
+  ;; cleanup:
   (cl-loop for popup in julia-snail--popups do
            (popup-delete popup))
   (setq julia-snail--popups (list))
@@ -1477,7 +1506,7 @@ Currently only works on blocks terminated with `end'."
         line-num
         :popup-display-params (julia-snail--popup-params block-end)
         :callback-success (lambda (_request-info &optional data)
-                            (julia-snail--popup-display block-end data)
+                            (julia-snail--popup-display block-end (julia-snail--popup-extract-string data))
                             (message "Top-level form evaluated: %s; module %s"
                                      (if top-level-form-name
                                          top-level-form-name
