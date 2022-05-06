@@ -124,6 +124,11 @@
                  (const :tag "Until next buffer change" :change)
                  (const :tag "Off" nil)))
 
+(defcustom julia-snail-popup-face nil
+  "Face used to display popups. If nil, try to make popups look reasonable."
+  :group 'julia-snail
+  :type 'face)
+
 (defcustom julia-snail-multimedia-buffer-autoswitch nil
   "If true, when an image is displayed inside Emacs, the
 multimedia buffer gets the focus (e.g., for zooming and panning).
@@ -1236,14 +1241,17 @@ evaluated in the context of MODULE."
                            (concat (propertize " " 'face `(:background 'inherit))
                                    line " \n")))
            (display-str (s-trim-right (apply #'concat lines)))
-           (popup (popup-tip display-str
-                             :point pt
-                             :around nil
-                             :face `(:background
-                                     ,(julia-snail--color-shift-hex (face-attribute 'default :background) (face-attribute 'default :foreground) :by 63)
-                                     :foreground ,(face-attribute 'default :foreground))
-                             :nowait t
-                             :nostrip t)))
+           (popup (let ((popup-tip-max-width (window-width)))
+                    (popup-tip display-str
+                               :point pt
+                               :around nil
+                               :face (if julia-snail-popup-face
+                                         julia-snail-popup-face
+                                       `(:background
+                                         ,(julia-snail--color-shift-hex (face-attribute 'default :background) (face-attribute 'default :foreground) :by 63)
+                                         :foreground ,(face-attribute 'default :foreground)))
+                               :nowait t
+                               :nostrip t))))
       (add-to-list 'julia-snail--popups popup)
       (when use-cleanup-kludge
         (setq julia-snail--popup-cleanup-skip-kludge t))
