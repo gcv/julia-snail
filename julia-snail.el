@@ -608,9 +608,9 @@ returns \"/home/username/file.jl\"."
     (let* ((from (color-values from))
            (to (color-values to)))
       (format "#%02x%02x%02x"
-              (/color-shift (car from) (car to) :by by)
-              (/color-shift (cadr from) (cadr to) :by by)
-              (/color-shift (caddr from) (caddr to) :by by)))))
+              (julia-snail--color-shift (car from) (car to) :by by)
+              (julia-snail--color-shift (cadr from) (cadr to) :by by)
+              (julia-snail--color-shift (caddr from) (caddr to) :by by)))))
 
 
 ;;; --- connection management functions
