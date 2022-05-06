@@ -115,20 +115,6 @@
   :type 'boolean)
 (make-variable-buffer-local 'julia-snail-multimedia-enable)
 
-(defcustom julia-snail-popup-display :command
-  "Control display of code evaluation results in source buffers."
-  :tag "Control display of code evaluation results in source buffers"
-  :group 'julia-snail
-  :safe (lambda (v) (memq v '(:command :change nil)))
-  :type '(choice (const :tag "Until next command" :command)
-                 (const :tag "Until next buffer change" :change)
-                 (const :tag "Off" nil)))
-
-(defcustom julia-snail-popup-face nil
-  "Face used to display popups. If nil, try to make popups look reasonable."
-  :group 'julia-snail
-  :type 'face)
-
 (defcustom julia-snail-multimedia-buffer-autoswitch nil
   "If true, when an image is displayed inside Emacs, the
 multimedia buffer gets the focus (e.g., for zooming and panning).
@@ -173,6 +159,20 @@ another."
   :group 'julia-snail
   :safe 'booleanp
   :type 'boolean)
+
+(defcustom julia-snail-popup-display-eval-results :command
+  "Control display of code evaluation results in source buffers."
+  :tag "Control display of code evaluation results in source buffers"
+  :group 'julia-snail
+  :safe (lambda (v) (memq v '(:command :change nil)))
+  :type '(choice (const :tag "Until next command" :command)
+                 (const :tag "Until next buffer change" :change)
+                 (const :tag "Off" nil)))
+
+(defcustom julia-snail-popup-display-face nil
+  "Face used to display popups. If nil, try to make popups look reasonable."
+  :group 'julia-snail
+  :type 'face)
 
 (defcustom julia-snail-extensions (list)
   "A list of enabled Snail extensions."
@@ -480,7 +480,7 @@ Returns nil if the poll timed out, t otherwise."
                                   (cadr popup-params))
                           :async nil)
                       "error")))
-          (julia-snail--popup-display popup-block-end str :use-cleanup-kludge (eq :command julia-snail-popup-display)))
+          (julia-snail--popup-display popup-block-end str :use-cleanup-kludge (eq :command julia-snail-popup-display-eval-results)))
       ;; evaluate through the Snail server:
       (julia-snail--send-to-server-via-tmp-file
         module
@@ -900,7 +900,7 @@ evaluated in the context of MODULE."
                              module-ns
                              filename
                              line-num
-                             (if (and julia-snail-popup-display popup-display-params)
+                             (if (and julia-snail-popup-display-eval-results popup-display-params)
                                  (format ", Main.JuliaSnail.PopupDisplay.Params(%d, %d)"
                                          (car popup-display-params)
                                          (cadr popup-display-params))
@@ -1209,19 +1209,19 @@ evaluated in the context of MODULE."
 ;;; --- popup display support
 
 (defun julia-snail--popup-params (pt)
-  (when julia-snail-popup-display
+  (when julia-snail-popup-display-eval-results
     (let* ((col-row (or (posn-actual-col-row (posn-at-point pt))
                         '(0 . 0)))
            (col (car col-row))
            (row (cdr col-row))
            (width (- (window-width) col 3))
-           (height (pcase julia-snail-popup-display
+           (height (pcase julia-snail-popup-display-eval-results
                      (:command (- (window-height) row 1))
                      (:change 1))))
       (list width height))))
 
 (defun julia-snail--popup-extract-string (data)
-  (when julia-snail-popup-display
+  (when julia-snail-popup-display-eval-results
     (let* ((read-data (read data))
            ;; scary
            (eval-data (eval read-data)))
@@ -1231,7 +1231,7 @@ evaluated in the context of MODULE."
 (defvar julia-snail--popup-cleanup-skip-kludge nil)
 
 (cl-defun julia-snail--popup-display (pt str &key (use-cleanup-kludge nil))
-  (when julia-snail-popup-display
+  (when julia-snail-popup-display-eval-results
     ;; remove existing popup(s) in this location
     (cl-loop for popup in julia-snail--popups do
              (when (= pt (popup-point popup))
@@ -1245,8 +1245,8 @@ evaluated in the context of MODULE."
                     (popup-tip display-str
                                :point pt
                                :around nil
-                               :face (if julia-snail-popup-face
-                                         julia-snail-popup-face
+                               :face (if julia-snail-popup-display-face
+                                         julia-snail-popup-display-face
                                        `(:background
                                          ,(julia-snail--color-shift-hex (face-attribute 'default :background) (face-attribute 'default :foreground) :by 63)
                                          :foreground ,(face-attribute 'default :foreground)))
@@ -1268,18 +1268,18 @@ evaluated in the context of MODULE."
   (cl-loop for popup in julia-snail--popups do
            (popup-delete popup))
   (setq julia-snail--popups (list))
-  (let ((hook (pcase julia-snail-popup-display
+  (let ((hook (pcase julia-snail-popup-display-eval-results
                 (:command 'post-command-hook)
                 (:change 'after-change-functions)
-                (_ (user-error "Invalid value of julia-snail-popup-display: %s" julia-snail-popup-display)))))
+                (_ (user-error "Invalid value of julia-snail-popup-display-eval-results: %s" julia-snail-popup-display-eval-results)))))
     (remove-hook hook #'julia-snail--popup-cleanup 'local)))
 
 (defun julia-snail--popup-add-cleanup-hooks ()
-  (when julia-snail-popup-display
-    (let ((hook (pcase julia-snail-popup-display
+  (when julia-snail-popup-display-eval-results
+    (let ((hook (pcase julia-snail-popup-display-eval-results
                   (:command 'post-command-hook)
                   (:change 'after-change-functions)
-                  (_ (user-error "Invalid value of julia-snail-popup-display: %s" julia-snail-popup-display)))))
+                  (_ (user-error "Invalid value of julia-snail-popup-display-eval-results: %s" julia-snail-popup-display-eval-results)))))
       (add-hook hook #'julia-snail--popup-cleanup nil 'local))))
 
 
