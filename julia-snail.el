@@ -1236,6 +1236,9 @@ evaluated in the context of MODULE."
     (cl-loop for popup in julia-snail--popups do
              (when (= pt (popup-point popup))
                (popup-delete popup)))
+    ;; empty string: display nothing
+    (when (string= "" (s-trim str))
+      (cl-return-from julia-snail--popup-display))
     (let* ((lines-split (s-split (rx "\n") str))
            (lines (cl-loop for line in lines-split collect
                            (concat (propertize " " 'face `(:background 'inherit))

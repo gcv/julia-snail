@@ -145,6 +145,9 @@ struct Params
 end
 
 function format(obj, width, height)
+   if obj == nothing
+      return ""
+   end
    io = IOBuffer()
    show(IOContext(io,
                   :compact => true,
@@ -252,7 +255,7 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum,
    # linenum - 1 accounts for the leading "begin" line in tmpfiles
    expr_change_lnn(exprs, realfilesym, linenum - 1)
    result = eval_in_module(modpath, exprs)
-   if Conf.repl_display_eval_results
+   if Conf.repl_display_eval_results && result != nothing
       println()
       @info "Module $modpath\n$result"
    end
