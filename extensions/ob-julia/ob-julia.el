@@ -65,9 +65,9 @@ to disable."
                        (if julia-snail/ob-julia-mirror-output-in-repl "true" "false"))))
     ;; This code was meant to startup julia-snail in the org buffer if it's not active, but caused an error
     ;; in org-mode on showing the first result of evalutation. Not sure why.
-    (unless (get-buffer julia-snail-repl-buffer)
-      (progn
-        (julia-snail) t))
+    ;; (unless (get-buffer julia-snail-repl-buffer)
+    ;;   (progn
+    ;;     (julia-snail) t))
     (julia-snail--send-to-server :Main text :async nil)))
 
 ;; This function was adapted from ob-julia-vterm by Shigeaki Nishina (GPL-v3)
