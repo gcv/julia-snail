@@ -135,6 +135,32 @@ function elexpr(arg::ElispKeyword)
 end
 
 
+### --- Emacs popup display helper
+
+module PopupDisplay
+
+struct Params
+   width::Int64
+   height::Int64
+end
+
+function format(obj, width, height)
+   if obj == nothing
+      return ""
+   end
+   io = IOBuffer()
+   show(IOContext(io,
+                  :compact => true,
+                  :displaysize => (height, width),
+                  :limit => true),
+        "text/plain",
+        obj)
+   String(take!(io))
+end
+
+end
+
+
 ### --- evaluation helpers for Julia code coming in from Emacs
 
 struct UndefinedModule <: Exception
@@ -158,10 +184,10 @@ is equivalent to
 Main.One.Two.Three.eval(:(x = 3 + 5))
 ```
 """
-function eval_in_module(fully_qualified_module_name::Array{Symbol}, expr::Expr)
+function eval_in_module(fully_qualified_module_name::Array{Symbol}, expr::Union{Symbol, Expr})
    # Work around Julia top-level loading requirements for certain forms; also:
    # https://github.com/gcv/julia-snail/pull/78
-   if expr.head == :block
+   if isa(expr, Expr) && expr.head == :block
       expr.head = :toplevel
    end
    # Retrieving the first module in the chain can be tricky. In general, using
@@ -221,14 +247,15 @@ modpath array and modify the parsed expression to refer to realfile (instead of
 tmpfile) line numbers. Used to evaluate a top-level form in a file while
 preserving the original filename and line numbers for xref and stack traces.
 """
-function eval_tmpfile(tmpfile, modpath, realfile, linenum)
+function eval_tmpfile(tmpfile, modpath, realfile, linenum,
+                      popup_params::Union{Nothing, PopupDisplay.Params}=nothing)
    realfilesym = Symbol(realfile)
    code = read(tmpfile, String)
    exprs = Meta.parse(code)
    # linenum - 1 accounts for the leading "begin" line in tmpfiles
    expr_change_lnn(exprs, realfilesym, linenum - 1)
    result = eval_in_module(modpath, exprs)
-   if Conf.repl_display_eval_results
+   if Conf.repl_display_eval_results && result != nothing
       println()
       @info "Module $modpath\n$result"
    end
@@ -236,7 +263,14 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum)
    # displayed in the minibuffer. There should be a nicer way to show it on
    # the Emacs side (perhaps using overlays).
    #Main.JuliaSnail.elexpr(result)
-   Main.JuliaSnail.elexpr(true)
+   if popup_params == nothing
+      Main.JuliaSnail.elexpr(true)
+   else
+      Main.JuliaSnail.elexpr((
+         true,
+         Main.JuliaSnail.PopupDisplay.format(result, popup_params.width, popup_params.height)
+      ))
+   end
 end
 
 

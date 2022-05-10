@@ -127,6 +127,7 @@ It is likely that most users will want the default REPL pop-up behavior to split
 
 - `julia-snail-use-emoji-mode-lighter` (default `t`) — attempt to use a 🐌 emoji in the Emacs modeline lighter if the display supports it. Set to `nil` to use the ASCII string `"Snail"` instead (a `:diminish` override in `use-package` should also work).
 - `julia-snail-repl-display-eval-results` (default `nil`) — print the result of evaluating code sent from Emacs to the REPL.
+- `julia-snail-popup-display-eval-results` (default `:command`) — show the result of evaluating code sent from Emacs to the REPL in the source buffer. Set to `nil` to deactivate, to `:command` to have the popup disappear at the next command, or to `:change` for when the buffer contents change. When set to `:change`, the popup display is limited to a single line.
 
 
 ## Usage
@@ -159,11 +160,11 @@ The `julia-snail-mode` minor mode provides a key binding map (`julia-snail-mode-
 | C-c C-z | julia-snail                     <br> _start a REPL; flip between REPL and source_                                  |
 | C-c C-a | julia-snail-package-activate    <br> _activate the project using `Project.toml`_                                   |
 | C-c C-d | julia-snail-doc-lookup          <br> _display the docstring of the identifier at point_                            |
+| C-c C-l | julia-snail-send-line           <br> _evaluate current line in the current module (or in `Main` with prefix arg; <br> or copy directly to REPL with two prefix args)_ |
+| C-c C-r | julia-snail-send-region         <br> _evaluate active region in the current module (or in `Main` with prefix arg; <br> or copy directly to REPL with two prefix args)_ |
+| C-c C-e | julia-snail-send-dwim           <br> _if region active, evaluate it in current module; <br> else if on top-level block, evaluate it in current module; <br> else evaluate current line_ |
 | C-c C-c | julia-snail-send-top-level-form <br> _evaluate `end`-terminated block around the point in the current module_      |
 | C-M-x   | julia-snail-send-top-level-form <br> _ditto_                                                                       |
-| C-c C-r | julia-snail-send-region         <br> _evaluate active region in the current module (or in `Main` with prefix arg)_ |
-| C-c C-l | julia-snail-send-line           <br> _copy current line directly to REPL_                                          |
-| C-c C-e | julia-snail-send-dwim           <br> _if region active, evaluate it in current module; <br> else if on top-level block, evaluate it in current module; <br> else copy line to REPL_ |
 | C-c C-k | julia-snail-send-buffer-file    <br> _`include()` the current buffer’s file_                                       |
 | C-c C-R | julia-snail-update-module-cache <br> _update module-nested `include` cache (mainly for Revise)_                    |
 

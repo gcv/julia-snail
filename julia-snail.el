@@ -2,7 +2,7 @@
 
 
 ;; URL: https://github.com/gcv/julia-snail
-;; Package-Requires: ((emacs "26.2") (dash "2.16.0") (julia-mode "0.3") (s "1.12.0") (spinner "1.7.3") (vterm "0.0.1"))
+;; Package-Requires: ((emacs "26.2") (dash "2.16.0") (julia-mode "0.3") (s "1.12.0") (spinner "1.7.3") (vterm "0.0.1") (popup "0.5.9"))
 ;; Version: 1.1.5
 ;; Created: 2019-10-27
 
@@ -33,6 +33,7 @@
 (require 'cl-lib)
 (require 'dash)
 (require 'json)
+(require 'popup)
 (require 'pulse)
 (require 'rx)
 (require 's)
@@ -159,6 +160,20 @@ another."
   :safe 'booleanp
   :type 'boolean)
 
+(defcustom julia-snail-popup-display-eval-results :command
+  "Control display of code evaluation results in source buffers."
+  :tag "Control display of code evaluation results in source buffers"
+  :group 'julia-snail
+  :safe (lambda (v) (memq v '(:command :change nil)))
+  :type '(choice (const :tag "Until next command" :command)
+                 (const :tag "Until next buffer change" :change)
+                 (const :tag "Off" nil)))
+
+(defcustom julia-snail-popup-display-face nil
+  "Face used to display popups. If nil, try to make popups look reasonable."
+  :group 'julia-snail
+  :type 'face)
+
 (defcustom julia-snail-extensions (list)
   "A list of enabled Snail extensions."
   :tag "Enabled Snail extensions"
@@ -234,6 +249,8 @@ another."
   (make-hash-table :test #'equal))
 
 (defvar-local julia-snail--repl-go-back-target nil)
+
+(defvar-local julia-snail--popups (list))
 
 (defvar julia-snail--compilation-regexp-alist
   '(;; matches "while loading /tmp/Foo.jl, in expression starting on line 2"
@@ -323,9 +340,16 @@ BASEDIR is used for resolving relative paths."
     (when basedir
       (setq-local compilation-search-path (list basedir)))))
 
-(defun julia-snail--flash-region (start end)
+(defun julia-snail--flash-region (start end &optional timeout)
   "Highlight the region outlined by START and END for TIMEOUT period."
-  (pulse-momentary-highlight-region start end 'highlight))
+  (if (display-graphic-p)
+      ;; this (sometimes?) does not seem to work in terminal Emacs (?!); the
+      ;; overlay does not go away like it does in GUI Emacs
+      (pulse-momentary-highlight-region start end 'highlight)
+    ;; borrowed from SLIME:
+    (let ((overlay (make-overlay start end)))
+      (overlay-put overlay 'face 'highlight)
+      (run-with-timer (or timeout 0.2) nil 'delete-overlay overlay))))
 
 (defun julia-snail--construct-module-path (module)
   "Return a Julia array representing the module path of MODULE as Julia symbols.
@@ -427,6 +451,49 @@ Returns nil if the poll timed out, t otherwise."
     (julia-snail--wait-while
      (gethash reqid julia-snail--requests) 50 10000)))
 
+(cl-defun julia-snail--send-helper
+    (block-start
+     block-end
+     &key
+     (allow-send-to-repl t)
+     (popup-block-end block-end)
+     (message-prefix "Evaluated"))
+  (let ((text (buffer-substring-no-properties block-start block-end))
+        (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
+        (module (if current-prefix-arg :Main (julia-snail--module-at-point)))
+        (line-num (line-number-at-pos block-start)))
+    (julia-snail--flash-region block-start block-end)
+    (if (and allow-send-to-repl
+             (consp current-prefix-arg) (> (car current-prefix-arg) 4))
+        ;; copy directly to REPL
+        (let* ((_ (julia-snail--send-to-repl (s-trim text) :async nil))
+               (err (julia-snail--send-to-server
+                      :Main
+                      "Base.active_repl.waserror"
+                      :async nil))
+               (popup-params (julia-snail--popup-params block-end))
+               (str (if (equal err :nothing)
+                        (julia-snail--send-to-server
+                          :Main
+                          (format "JuliaSnail.PopupDisplay.format(ans, %s, %s)"
+                                  (car popup-params)
+                                  (cadr popup-params))
+                          :async nil)
+                      "error")))
+          (julia-snail--popup-display popup-block-end str :use-cleanup-kludge (eq :command julia-snail-popup-display-eval-results)))
+      ;; evaluate through the Snail server:
+      (julia-snail--send-to-server-via-tmp-file
+        module
+        text
+        filename
+        line-num
+        :popup-display-params (julia-snail--popup-params block-end)
+        :callback-success (lambda (_request-info &optional data)
+                            (julia-snail--popup-display popup-block-end (julia-snail--popup-extract-string data))
+                            (message "%s; module %s"
+                                     message-prefix
+                                     (julia-snail--construct-module-path module)))))))
+
 (defun julia-snail--encode-base64 (&optional buf)
   (let ((s (with-current-buffer (or buf (current-buffer))
              (encode-coding-string (buffer-string)
@@ -507,6 +574,13 @@ returns \"/home/username/file.jl\"."
     (declare-function get-current-persp "persp-mode.el")
     (persp-add-buffer buf (get-current-persp) nil)))
 
+(defun julia-snail--spinner-print-around (fn &rest args)
+  "Advice for `spinner-print` to add a leading space so the spinner looks nicer in the modeline."
+  (let ((fn-res (apply fn args)))
+    (if (> (length fn-res) 0)
+        (concat " " fn-res)
+      fn-res)))
+
 (defun julia-snail--mode-lighter (&optional extra)
   (let ((snail-emoji (char-from-name "SNAIL")))
     (if (and julia-snail-use-emoji-mode-lighter
@@ -514,6 +588,29 @@ returns \"/home/username/file.jl\"."
              (char-displayable-p snail-emoji))
         (format " %c%s" snail-emoji (if extra extra ""))
       (format " Snail%s" (if extra extra "")))))
+
+
+;;; --- color shifting utilities, adapted from mini-frame.el
+
+(cl-defun julia-snail--color-shift (from to &key (by 27))
+  "Move color FROM towards TO by BY. FROM and TO are 16-bit integer values."
+  (let ((f (ash from -8)))
+    (cond
+     ((> from to) (- f by))
+     ((< from to) (+ f by))
+     (t f))))
+
+(cl-defun julia-snail--color-shift-hex (from to &key (by 27))
+  "Move color FROM towards TO. FROM and TO are hex values."
+  (if (or (string-match-p "^unspecified" (format "%s" from))
+          (string-match-p "^unspecified" (format "%s" to)))
+      "unspecified"
+    (let* ((from (color-values from))
+           (to (color-values to)))
+      (format "#%02x%02x%02x"
+              (julia-snail--color-shift (car from) (car to) :by by)
+              (julia-snail--color-shift (cadr from) (cadr to) :by by)
+              (julia-snail--color-shift (caddr from) (caddr to) :by by)))))
 
 
 ;;; --- connection management functions
@@ -735,12 +832,14 @@ nil, wait for the result and return it."
                                   (unless async
                                     (setq res (or data :nothing)))
                                   (when callback-success
-                                    (funcall callback-success request-info data)))
+                                    (with-current-buffer originating-buf
+                                      (funcall callback-success request-info data))))
               :callback-failure (lambda (request-info)
                                   (unless async
                                     (setq res :nothing))
                                   (when callback-failure
-                                    (funcall callback-failure request-info))))
+                                    (with-current-buffer originating-buf
+                                      (funcall callback-failure request-info)))))
              julia-snail--requests)
     ;; return value logic:
     (if async
@@ -775,6 +874,7 @@ nil, wait for the result and return it."
      line-num
      &key
      (repl-buf (get-buffer julia-snail-repl-buffer))
+     (popup-display-params nil)
      callback-success
      callback-failure)
   "Send STR to server by first writing it to a tmpfile, calling
@@ -795,11 +895,16 @@ evaluated in the context of MODULE."
         (insert text))
       (let ((reqid (julia-snail--send-to-server
                      :Main
-                     (format "Main.JuliaSnail.eval_tmpfile(\"%s\", %s, \"%s\", %s)"
+                     (format "Main.JuliaSnail.eval_tmpfile(\"%s\", %s, \"%s\", %s%s)"
                              (or tmpfile-local-remote tmpfile)
                              module-ns
                              filename
-                             line-num)
+                             line-num
+                             (if (and julia-snail-popup-display-eval-results popup-display-params)
+                                 (format ", Main.JuliaSnail.PopupDisplay.Params(%d, %d)"
+                                         (car popup-display-params)
+                                         (cadr popup-display-params))
+                               ""))
                      :repl-buf repl-buf
                      ;; TODO: Only async via-tmp-file evaluation is currently
                      ;; supported because we rely on getting the reqid back from
@@ -809,15 +914,11 @@ evaluated in the context of MODULE."
                      :async t
                      :callback-success callback-success
                      :callback-failure callback-failure)))
-        (puthash reqid
-                 (make-julia-snail--request-tracker
-                  :repl-buf repl-buf
-                  :originating-buf (current-buffer)
-                  :callback-success callback-success
-                  :callback-failure callback-failure
-                  :tmpfile tmpfile
-                  :tmpfile-local-remote tmpfile-local-remote)
-                 julia-snail--requests)
+        ;; update the request info to include tmpfile tracking
+        (let ((reqtr (gethash reqid julia-snail--requests)))
+          (setf (julia-snail--request-tracker-tmpfile reqtr) tmpfile)
+          (setf (julia-snail--request-tracker-tmpfile-local-remote reqtr) tmpfile-local-remote))
+        ;; and return the reqid
         reqid))))
 
 (defun julia-snail--server-response-filter (proc str)
@@ -1105,6 +1206,86 @@ evaluated in the context of MODULE."
             :exclusive 'no))))
 
 
+;;; --- popup display support
+
+(defun julia-snail--popup-params (pt)
+  (when julia-snail-popup-display-eval-results
+    (let* ((col-row (or (posn-actual-col-row (posn-at-point pt))
+                        '(0 . 0)))
+           (col (car col-row))
+           (row (cdr col-row))
+           (width (- (window-width) col 3))
+           (height (pcase julia-snail-popup-display-eval-results
+                     (:command (- (window-height) row 1))
+                     (:change 1))))
+      (list width height))))
+
+(defun julia-snail--popup-extract-string (data)
+  (when julia-snail-popup-display-eval-results
+    (let* ((read-data (read data))
+           ;; scary
+           (eval-data (eval read-data)))
+      (when (and (listp eval-data) (car eval-data))
+        (cadr eval-data)))))
+
+(defvar julia-snail--popup-cleanup-skip-kludge nil)
+
+(cl-defun julia-snail--popup-display (pt str &key (use-cleanup-kludge nil))
+  (when julia-snail-popup-display-eval-results
+    ;; remove existing popup(s) in this location
+    (cl-loop for popup in julia-snail--popups do
+             (when (= pt (popup-point popup))
+               (popup-delete popup)))
+    ;; empty string: display nothing
+    (when (string= "" (s-trim str))
+      (cl-return-from julia-snail--popup-display))
+    (let* ((lines-split (s-split (rx "\n") str))
+           (lines (cl-loop for line in lines-split collect
+                           (concat (propertize " " 'face `(:background 'inherit))
+                                   line " \n")))
+           (display-str (s-trim-right (apply #'concat lines)))
+           (popup (let ((popup-tip-max-width (window-width)))
+                    (popup-tip display-str
+                               :point pt
+                               :around nil
+                               :face (if julia-snail-popup-display-face
+                                         julia-snail-popup-display-face
+                                       `(:background
+                                         ,(julia-snail--color-shift-hex (face-attribute 'default :background) (face-attribute 'default :foreground) :by 63)
+                                         :foreground ,(face-attribute 'default :foreground)))
+                               :nowait t
+                               :nostrip t))))
+      (add-to-list 'julia-snail--popups popup)
+      (when use-cleanup-kludge
+        (setq julia-snail--popup-cleanup-skip-kludge t))
+      (julia-snail--popup-add-cleanup-hooks))))
+
+(cl-defun julia-snail--popup-cleanup (&rest _)
+  ;; XXX: Prevent this cleanup from happening too early when the
+  ;; post-command-hook is installed by the command which added the popup in the
+  ;; first place.
+  (when julia-snail--popup-cleanup-skip-kludge
+    (setq julia-snail--popup-cleanup-skip-kludge nil)
+    (cl-return-from julia-snail--popup-cleanup))
+  ;; cleanup:
+  (cl-loop for popup in julia-snail--popups do
+           (popup-delete popup))
+  (setq julia-snail--popups (list))
+  (let ((hook (pcase julia-snail-popup-display-eval-results
+                (:command 'post-command-hook)
+                (:change 'after-change-functions)
+                (_ (user-error "Invalid value of julia-snail-popup-display-eval-results: %s" julia-snail-popup-display-eval-results)))))
+    (remove-hook hook #'julia-snail--popup-cleanup 'local)))
+
+(defun julia-snail--popup-add-cleanup-hooks ()
+  (when julia-snail-popup-display-eval-results
+    (let ((hook (pcase julia-snail-popup-display-eval-results
+                  (:command 'post-command-hook)
+                  (:change 'after-change-functions)
+                  (_ (user-error "Invalid value of julia-snail-popup-display-eval-results: %s" julia-snail-popup-display-eval-results)))))
+      (add-hook hook #'julia-snail--popup-cleanup nil 'local))))
+
+
 ;;; --- company-mode support
 
 (defun julia-snail--company-doc-buffer (str)
@@ -1279,12 +1460,76 @@ To create multiple REPLs, give these variables distinct values (e.g.:
           (julia-snail-repl-mode))))))
 
 (defun julia-snail-send-line ()
-  "Copy the line at the current point into the REPL and run it.
-This is not module-context aware."
+  "Send the line at point to the Julia REPL and evaluate it.
+Without a prefix arg, evaluation occurs in the context of the current module.
+If one prefix arg is used (C-u), evaluation occurs in the context of the Main module.
+If two or more prefix args are used (C-u C-u), the code is instead copied directly into the REPL, and evaluation occurs in the context of the Main module."
   (interactive)
-  (let ((line (s-trim (thing-at-point 'line t))))
-    (julia-snail--send-to-repl line)
-    (julia-snail--flash-region (point-at-bol) (point-at-eol))))
+  (let ((block-start (point-at-bol))
+        (block-end (point-at-eol)))
+    (unless (eq block-start block-end)
+      (julia-snail--send-helper
+       block-start block-end
+       :message-prefix "Line evaluated"))))
+
+(defun julia-snail-send-region ()
+  "Send the region (requires transient-mark) to the Julia REPL and evaluate it.
+Without a prefix arg, evaluation occurs in the context of the current module.
+If one prefix arg is used (C-u), evaluation occurs in the context of the Main module.
+If two or more prefix args are used (C-u C-u), the code is instead copied directly into the REPL, and evaluation occurs in the context of the Main module."
+  (interactive)
+  (if (null (use-region-p))
+      (user-error "No region selected")
+    (let ((block-start (region-beginning))
+          (block-end (region-end)))
+      (julia-snail--send-helper
+       block-start block-end
+       :message-prefix "Selected region evaluated"))))
+
+(defun julia-snail-send-code-cell (block-start block-end)
+  "Send the current code cell to the Julia REPL and run it in the context of the current module.
+Code cells is a notebook-style feature implemented with
+https://github.com/astoff/code-cells.el. code-cells-mode must be
+enabled for this to work, and something like this is required for
+activation:
+(add-to-list 'code-cells-eval-region-commands '(julia-snail-mode . julia-snail-send-code-cell))"
+  (julia-snail--send-helper
+   block-start block-end
+   :allow-send-to-repl nil
+   :popup-block-end (- block-end 1)
+   :message-prefix "Code cell evaluated"))
+
+(defun julia-snail-send-top-level-form ()
+  "Send the top level form around the point to the Julia REPL and evaluate it.
+This occurs in the context of the current module.
+Currently only works on blocks terminated with `end'."
+  (interactive)
+  (let* ((q (julia-snail--cst-block-at (current-buffer) (point)))
+         (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
+         (module (julia-snail--module-at-point (-first-item q)))
+         (block-start (byte-to-position (or (-second-item q) -1)))
+         (block-end (byte-to-position (or (-third-item q) -1)))
+         (top-level-form-name (or (-fourth-item q) nil))
+         (line-num (line-number-at-pos block-start))
+         (text (condition-case nil
+                   (buffer-substring-no-properties block-start block-end)
+                 (error ""))))
+    (if (null q)
+        (user-error "No top-level form at point")
+      (julia-snail--flash-region block-start block-end)
+      (julia-snail--send-to-server-via-tmp-file
+        module
+        text
+        filename
+        line-num
+        :popup-display-params (julia-snail--popup-params block-end)
+        :callback-success (lambda (_request-info &optional data)
+                            (julia-snail--popup-display block-end (julia-snail--popup-extract-string data))
+                            (message "Top-level form evaluated: %s; module %s"
+                                     (if top-level-form-name
+                                         top-level-form-name
+                                       "unknown")
+                                     (julia-snail--construct-module-path module)))))))
 
 (defun julia-snail-send-dwim ()
   "Send region, block, or line to Julia REPL."
@@ -1295,27 +1540,6 @@ This is not module-context aware."
         (julia-snail-send-top-level-form)
       (user-error                       ; block fails, so send line
        (julia-snail-send-line)))))
-
-(defun julia-snail-send-code-cell (block-start block-end)
-  "Send the current code cell to the Julia REPL and run it in the context of the current module.
-Code cells is a notebook-style feature implemented with
-https://github.com/astoff/code-cells.el. code-cells-mode must be
-enabled for this to work, and something like this is required for
-activation:
-(add-to-list 'code-cells-eval-region-commands '(julia-snail-mode . julia-snail-send-code-cell))"
-  (let* ((text (buffer-substring-no-properties block-start block-end))
-         (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
-         (module (if current-prefix-arg :Main (julia-snail--module-at-point)))
-         (line-num (line-number-at-pos block-start)))
-    (julia-snail--send-to-server-via-tmp-file
-      module
-      text
-      filename
-      line-num
-      :callback-success (lambda (_request-info &optional data)
-                          (message "code cell evaluated: %s, module %s"
-                                   data
-                                   (julia-snail--construct-module-path module))))))
 
 (defun julia-snail-send-buffer-file ()
   "Send the current buffer's file into the Julia REPL, and include() it.
@@ -1360,59 +1584,6 @@ This will occur in the context of the Main module, just as it would at the REPL.
                                 (message "%s loaded: module %s"
                                          filename
                                          (julia-snail--construct-module-path module)))))))))
-
-(defun julia-snail-send-region ()
-  "Send the region (requires transient-mark) to the Julia REPL and evaluate it.
-Normally, this occurs in the context of the current module.
-If a prefix arg is used, this instead occurs in the context of Main."
-  (interactive)
-  (if (null (use-region-p))
-      (user-error "No region selected")
-    (let* ((block-start (region-beginning))
-           (block-end (region-end))
-           (text (buffer-substring-no-properties block-start block-end))
-           (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
-           (module (if current-prefix-arg :Main (julia-snail--module-at-point)))
-           (line-num (line-number-at-pos block-start)))
-      (julia-snail--send-to-server-via-tmp-file
-        module
-        text
-        filename
-        line-num
-        :callback-success (lambda (_request-info &optional data)
-                            (message "Selected region evaluated: %s, module %s"
-                                     data
-                                     (julia-snail--construct-module-path module)))))))
-
-(defun julia-snail-send-top-level-form ()
-  "Send the top level form around the point to the Julia REPL and evaluate it.
-This occurs in the context of the current module.
-Currently only works on blocks terminated with `end'."
-  (interactive)
-  (let* ((q (julia-snail--cst-block-at (current-buffer) (point)))
-         (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
-         (module (julia-snail--module-at-point (-first-item q)))
-         (block-start (byte-to-position (or (-second-item q) -1)))
-         (block-end (byte-to-position (or (-third-item q) -1)))
-         (top-level-form-name (or (-fourth-item q) nil))
-         (line-num (line-number-at-pos block-start))
-         (text (condition-case nil
-                   (buffer-substring-no-properties block-start block-end)
-                 (error ""))))
-    (if (null q)
-        (user-error "No top-level form at point")
-      (julia-snail--flash-region block-start block-end)
-      (julia-snail--send-to-server-via-tmp-file
-        module
-        text
-        filename
-        line-num
-        :callback-success (lambda (_request-info &optional _data)
-                            (message "Top-level form evaluated: %s, module %s"
-                                     (if top-level-form-name
-                                         top-level-form-name
-                                       "unknown")
-                                     (julia-snail--construct-module-path module)))))))
 
 (defun julia-snail-package-activate (dir)
   "Activate a Pkg project located in DIR in the Julia REPL."
@@ -1523,6 +1694,7 @@ The following keys are set:
           (julia-snail--enable)
           (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t)
           (add-function :before-until (local 'eldoc-documentation-function) #'julia-snail-eldoc)
+          (advice-add 'spinner-print :around #'julia-snail--spinner-print-around)
           (if (and (featurep 'company)
                    julia-snail-company-doc-enable)
               (add-hook 'completion-at-point-functions #'julia-snail-company-capf nil t)
@@ -1532,6 +1704,7 @@ The following keys are set:
                julia-snail-company-doc-enable)
           (remove-hook 'completion-at-point-functions #'julia-snail-company-capf t)
         (remove-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point t))
+      (advice-remove 'spinner-print #'julia-snail--spinner-print-around)
       (remove-function (local 'eldoc-documentation-function) #'julia-snail-eldoc)
       (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
       (julia-snail--disable))))
