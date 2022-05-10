@@ -48,6 +48,9 @@ to disable."
   :safe 'booleanp
   :type 'boolean)
 
+(defvar julia-snail/ob-julia--point-inits (make-hash-table))
+(defvar julia-snail/ob-julia--point-finals (make-hash-table))
+
 
 ;;; --- implementation
 
@@ -76,11 +79,6 @@ to disable."
                   (if maybe-module maybe-module "Main"))))
     (with-temp-file src-file (insert body))
     (julia-snail/ob-julia-evaluate module body src-file out-file)
-    ;; (let ((c 0))
-    ;;   (while (and (< c 1000) (= 0 (file-attribute-size (file-attributes out-file))))
-    ;;     (thread-yield)
-    ;;     (sit-for 0.1)
-    ;;     (setq c (1+ c))))
     (let ((out (with-temp-buffer
                  (insert-file-contents out-file)
                  (let ((bs (buffer-string)))
@@ -93,11 +91,6 @@ to disable."
       (puthash (current-thread) (copy-marker (point)) julia-snail/ob-julia--point-finals)
       (goto-char (gethash (current-thread) julia-snail/ob-julia--point-inits))
       out)))
-
-(defvar julia-snail/ob-julia--point-hash (make-hash-table))
-
-(defvar julia-snail/ob-julia--point-inits (make-hash-table))
-(defvar julia-snail/ob-julia--point-finals (make-hash-table))
 
 (defun julia-snail/ob-julia--in-julia-src-blockp ()
   (let ((info (org-babel-get-src-block-info)))
