@@ -54,10 +54,6 @@ function babel_run_and_store(mod::Module, src_file, out_file,
                 isnothing(result) || show(io, "text/plain", result)
             end
         end 
-        # redirect_stderr(io) do
-        #     redirect_stdout(io) do
-        #     end 
-        # end
     end
     if mirror_to_repl
         println()
