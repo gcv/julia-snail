@@ -4,4 +4,3 @@ authors = ["mason <mason.protter@icloud.com>"]
 version = "0.1.0"
 
 [deps]
-TeeStreams = "c24d529b-c83e-40e0-9fc3-05832c05a0ba"
