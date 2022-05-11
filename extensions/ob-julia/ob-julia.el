@@ -39,10 +39,7 @@
   :type 'boolean)
 
 (defcustom julia-snail/ob-julia-mirror-output-in-repl t
-  "If true, all output from code evaluated in ob-julia will also be shown in the julia REPL.
-Note that due to problem with async evaluation, trying to use emacs while julia code is running
-will cause your program's output to not be shown in org-mode, so this is currently a bad idea
-to disable."
+  "If true, all output from code evaluated in ob-julia will also be shown in the julia REPL."
   :tag "Control the display of code evaluation in the Julia REPL"
   :group 'julia-snail
   :safe 'booleanp
