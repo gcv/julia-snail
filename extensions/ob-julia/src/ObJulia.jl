@@ -13,10 +13,21 @@
 
 module ObJulia
 
-function babel_run_and_store(mod::Module, src_file, out_file, use_error_pane::Bool, mirror_to_repl::Bool)
+function maybe_redirect_stderr_stdout(f, io, flag)
+    if flag
+        redirect_stderr(() -> redirect_stdout(f, io), io)
+    else
+        f()
+    end 
+end 
+
+function babel_run_and_store(mod::Module, src_file, out_file,
+                             use_error_pane::Bool,
+                             mirror_to_repl::Bool,
+                             capture_io::Bool)
     open(out_file, "w+") do _io
         io = IOContext(_io, :limit => true, :module => mod, :color => true)
-        redirect_stdio(stdout=io, stderr=io) do
+        result = maybe_redirect_stderr_stdout(io, capture_io) do
             result = try
                 Core.include(mod, src_file)
             catch err;
@@ -27,6 +38,8 @@ function babel_run_and_store(mod::Module, src_file, out_file, use_error_pane::Bo
                     Base.display_error(io, err, Base.catch_backtrace())
                 end
             end
+        end
+        maybe_redirect_stderr_stdout(io, true) do
             Base.invokelatest() do
                 for (imgtype, ext) ∈ [("image/png", ".png"), ("image/svg+xml", ".svg")]
                     if showable(imgtype, result)
@@ -40,7 +53,11 @@ function babel_run_and_store(mod::Module, src_file, out_file, use_error_pane::Bo
                 end
                 isnothing(result) || show(io, "text/plain", result)
             end
-        end
+        end 
+        # redirect_stderr(io) do
+        #     redirect_stdout(io) do
+        #     end 
+        # end
     end
     if mirror_to_repl
         println()

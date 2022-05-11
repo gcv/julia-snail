@@ -48,6 +48,14 @@ to disable."
   :safe 'booleanp
   :type 'boolean)
 
+(defcustom julia-snail/ob-julia-capture-io t
+  "If true, all intermediate printing during evaluation will be captured by ob-julia and printed into
+your org notebook"
+  :tag "Control the display of code evaluation in the Org Notebook"
+  :group 'julia-snail
+  :safe 'booleanp
+  :type 'boolean)
+
 (defvar julia-snail/ob-julia--point-inits (make-hash-table))
 (defvar julia-snail/ob-julia--point-finals (make-hash-table))
 
@@ -57,12 +65,13 @@ to disable."
 (defun julia-snail/ob-julia-evaluate (module _body src-file out-file)
   (let* (;;(filename (julia-snail--efn (buffer-file-name (buffer-base-buffer)))) ; commented out to make byte-compiler happy
          ;;(line-num 0)                                                          ; commented out to make byte-compiler happy
-         (text (format "JuliaSnail.Extensions.ObJulia.babel_run_and_store(%s, \"%s\", \"%s\", %s, %s)"
+         (text (format "JuliaSnail.Extensions.ObJulia.babel_run_and_store(%s, \"%s\", \"%s\", %s, %s, %s)"
                        module
                        src-file
                        out-file
                        (if julia-snail/ob-julia-use-error-pane "true" "false")
-                       (if julia-snail/ob-julia-mirror-output-in-repl "true" "false"))))
+                       (if julia-snail/ob-julia-mirror-output-in-repl "true" "false")
+                       (if julia-snail/ob-julia-capture-io "true" "false"))))
     ;; This code was meant to startup julia-snail in the org buffer if it's not active, but caused an error
     ;; in org-mode on showing the first result of evalutation. Not sure why.
     ;; (unless (get-buffer julia-snail-repl-buffer)
@@ -108,7 +117,8 @@ to disable."
              
              (remhash (current-thread) julia-snail/ob-julia--point-inits)
              (remhash (current-thread) julia-snail/ob-julia--point-finals)
-             res))))
+             res))
+         ))
     (apply old arguments)))
 
 
@@ -169,7 +179,7 @@ to disable."
 (defun julia-snail/ob-julia-init (repl-buf)
   (julia-snail--send-to-server
     '("JuliaSnail" "Extensions")
-    "load([\"ob-julia\" \"ObJulia.jl\"])"
+    "load([\"ob-julia\" \"src/ObJulia.jl\"])"
     :repl-buf repl-buf
     :async nil)
   (add-hook 'org-mode-hook #'julia-snail/ob-julia-interaction-mode)
