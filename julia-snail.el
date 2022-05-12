@@ -228,6 +228,19 @@ another."
          julia-snail--julia-files-local))
 
 
+;;; --- supporting data structures
+
+(cl-defstruct julia-snail--request-tracker
+  "Snail protocol request tracking data structure."
+  repl-buf
+  originating-buf
+  (callback-success (lambda (&optional _data) (message "Snail command succeeded")))
+  (callback-failure (lambda () (message "Snail command failed")))
+  (display-error-buffer-on-failure? t)
+  tmpfile
+  tmpfile-local-remote)
+
+
 ;;; --- variables
 
 (defvar julia-snail-debug nil
@@ -268,18 +281,6 @@ Uses function `compilation-shell-minor-mode'.")
 
 (defvar julia-snail-mode)
 (defvar julia-snail-repl-mode)
-
-
-;;; --- Snail protocol request tracking data structure
-
-(cl-defstruct julia-snail--request-tracker
-  repl-buf
-  originating-buf
-  (callback-success (lambda (&optional _data) (message "Snail command succeeded")))
-  (callback-failure (lambda () (message "Snail command failed")))
-  (display-error-buffer-on-failure? t)
-  tmpfile
-  tmpfile-local-remote)
 
 
 ;;; --- supporting functions
