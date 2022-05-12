@@ -385,9 +385,7 @@ To use it, enable the `ob-julia` extension, either globally with `M-x customize-
 
 Then re-open the Org file (using `find-alternate-file` or a similar command. Note that other Snail configuration variables may also be set in this block. See the Emacs manual's section on [file-local variables](https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html) for syntax details.
 
-Once the extension is enabled, Org Babel commands should work on Julia code as expected, and the first time you execute a block, it'll automatically start a `julia-snail` session if no existing session is running. Completion support is available through the Emacs `completion-at-point` system. 
-
-Be default, executing a source block will lock emacs until the source block finishes running, however if instead of using the function `org-ctrl-c-ctrl-c` (bound to `C-c C-c` inside org-mode buffers), you use `julia-snail/ob-julia-ctrl-c-ctrl-c` (I recommend binding it to `C-c C-c`), then you can continue editing files while code runs.
+Once the extension is enabled, Org Babel commands should work on Julia code as expected. Completion support is available through the Emacs `completion-at-point` system. 
 
 Limitations: no `xref` support currently available.
 
