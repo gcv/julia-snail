@@ -527,24 +527,28 @@ function pathat(cst, offset, pos = 0, path = [(expr=cst, start=1, stop=cst.span+
 end
 
 """
-Debugging helper: example code for traversing the CST.
+Debugging helper: example code for traversing the CST and tracking the location of each node.
 """
-function print_cst(cst, offset = 0)
-   for a in cst
-      if a.args === nothing
-         val = CSTParser.valof(a)
-         # Unicode byte fix
-         if String == typeof(val)
-            diff = sizeof(val) - length(val)
-            a.span -= diff
-            a.fullspan -= diff
+function print_cst(cst)
+   offset = 0
+   helper = (node) -> begin
+      for a in node
+         if a.args === nothing
+            val = CSTParser.valof(a)
+            # Unicode byte fix
+            if String == typeof(val)
+               diff = sizeof(val) - length(val)
+               a.span -= diff
+               a.fullspan -= diff
+            end
+            println(offset, ":", offset+a.span, "\t", val)
+            offset += a.fullspan
+         else
+            helper(a)
          end
-         println(offset, ":", offset+a.span, "\t", val)
-         offset += a.fullspan
-      else
-         offset = print_cst(a, offset)
       end
    end
+   helper(cst)
    return offset
 end
 
@@ -594,6 +598,62 @@ function blockat(encodedbuf, byteloc)
    return isnothing(description) ?
       nothing :
       [:list; tuple(modules...); start; stop; description]
+end
+
+"""
+For a given buffer, return the overall tree structure of the code.
+
+Result structure: [
+  [type name location extra]
+]
+where type is :function, :macro, etc.; when type is :module, then extra is a
+nested resulted structure.
+"""
+function codetree(encodedbuf)
+   cst = parse(encodedbuf)
+   offset = 1
+   helper = (node, depth = 1) -> begin
+      res = []
+      for a in node
+         if a.args === nothing
+            val = CSTParser.valof(a)
+            # Unicode byte fix
+            if String == typeof(val)
+               diff = sizeof(val) - length(val)
+               a.span -= diff
+               a.fullspan -= diff
+            end
+            offset += a.fullspan
+         else
+            curroffset = offset
+            aname = CSTParser.valof(CSTParser.get_name(a))
+            helper_res = helper(a, depth + 1)
+            if aname !== nothing
+               if CSTParser.defines_module(a)
+                  push!(res, (:module, aname, curroffset, helper_res))
+               elseif CSTParser.defines_function(a)
+                  push!(res, (:function, aname, curroffset))
+               end
+            else
+               # XXX: Flatten on the fly. First, avoid empty entries. Second,
+               # res starts out empty when first recursing into a module
+               # subtree, so don't just use push!.
+               if length(helper_res) > 0
+                  if length(res) > 0
+                     push!(res, helper_res)
+                  else
+                     res = helper_res
+                  end
+               end
+            end
+         end
+      end
+      return res
+   end
+   tree = helper(cst)
+   return isempty(tree) ?
+      nothing :
+      [:list; tree]
 end
 
 """

@@ -174,6 +174,18 @@ another."
   :group 'julia-snail
   :type 'face)
 
+(defcustom julia-snail-imenu-style :flat
+  "Control how imenu should be structured.
+nil means disable Snail-specific imenu integration (fall back on julia-mode implementation).
+:flat means entries are prefixed by Julia module, e.g. 'MyModule.myfunction1()'
+:module-tree means entries use Julia modules to make subtrees, so 'myfunction1()' becomes an entry under 'MyModule'. This is useful with something like the imenu-list package."
+  :tag "Control imenu integration"
+  :group 'julia-snail
+  :safe (lambda (v) (memq v '(:flat :module-tree nil)))
+  :type '(choice (const :tag "Flat" :flat)
+                 (const :tag "Module-based tree structure" :module-tree)
+                 (const :tag "Use julia-mode" nil)))
+
 (defcustom julia-snail-extensions (list)
   "A list of enabled Snail extensions."
   :tag "Enabled Snail extensions"
@@ -240,6 +252,11 @@ another."
   tmpfile
   tmpfile-local-remote)
 
+(cl-defstruct julia-snail--imenu-cache-entry
+  timestamp
+  tick
+  value)
+
 
 ;;; --- variables
 
@@ -264,6 +281,8 @@ another."
 (defvar-local julia-snail--repl-go-back-target nil)
 
 (defvar-local julia-snail--popups (list))
+
+(defvar-local julia-snail--imenu-cache nil)
 
 (defvar julia-snail--compilation-regexp-alist
   '(;; matches "while loading /tmp/Foo.jl, in expression starting on line 2"
@@ -1033,6 +1052,14 @@ evaluated in the context of MODULE."
     ;; TODO: Maybe there's a situation in which returning :error is appropriate?
     includes))
 
+(defun julia-snail--cst-code-tree (buf)
+  (let* ((encoded (julia-snail--encode-base64 buf))
+         (res (julia-snail--send-to-server
+                :Main
+                (format "JuliaSnail.CST.codetree(\"%s\")" encoded)
+                :async nil)))
+    res))
+
 
 ;;; --- Julia module tracking implementation
 
@@ -1205,6 +1232,70 @@ evaluated in the context of MODULE."
             (completion-table-dynamic
              (lambda (_) (julia-snail--repl-completions (concat prefix identifier) module-finder)))
             :exclusive 'no))))
+
+
+;;; --- imenu enhancement
+
+(defun julia-snail--imenu-helper (tree modules)
+  (when tree
+    (let* ((first-node (car tree))
+           (first-node (if (eq 'quote (car first-node))
+                           (cadr first-node)
+                         first-node))
+           (first-node-type (nth 0 first-node))
+           (first-node-name (nth 1 first-node))
+           (first-node-location (byte-to-position (nth 2 first-node))))
+      (cons
+       (if (eq 'module (car first-node))
+           (cons
+            (if (eq :module-tree julia-snail-imenu-style)
+                first-node-name
+              (cons
+               (format "module %s" (s-join "." (append modules (list first-node-name))))
+               first-node-location))
+            (julia-snail--imenu-helper
+             (nth 3 first-node)
+             (append modules (list first-node-name))))
+         (cons
+          (if (eq :module-tree julia-snail-imenu-style)
+              (format "%s %s" first-node-type first-node-name)
+            (format "%s %s" first-node-type
+                    (s-join "." (append modules (list first-node-name)))))
+          first-node-location))
+       (julia-snail--imenu-helper (cdr tree) modules)))))
+
+(cl-defun julia-snail-imenu ()
+  ;; exit early if unused
+  (unless julia-snail-imenu-style
+    (cl-return-from julia-snail-imenu
+      (imenu-default-create-index-function)))
+
+  ;; check the cache and debounce
+  (when julia-snail--imenu-cache
+    (when (or
+           ;; unmodified buffer
+           (= (julia-snail--imenu-cache-entry-tick julia-snail--imenu-cache)
+              (buffer-modified-tick))
+           ;; it hasn't been long enough since the last modification (5 seconds)
+           (< (- (float-time) (julia-snail--imenu-cache-entry-timestamp julia-snail--imenu-cache))
+              5.0))
+      (cl-return-from julia-snail-imenu
+        (julia-snail--imenu-cache-entry-value julia-snail--imenu-cache))))
+
+  ;; cache miss: ask Julia to parse the file and return the imenu index
+  (let* ((code-tree (julia-snail--cst-code-tree (current-buffer)))
+         (imenu-index-raw (julia-snail--imenu-helper code-tree (list)))
+         (imenu-index (if (eq :flat julia-snail-imenu-style)
+                          (-flatten imenu-index-raw)
+                        imenu-index-raw)))
+    ;; update the cache
+    (setq julia-snail--imenu-cache
+          (make-julia-snail--imenu-cache-entry
+           :timestamp (float-time)
+           :tick (buffer-modified-tick)
+           :value imenu-index))
+    ;; return the result
+    imenu-index))
 
 
 ;;; --- popup display support
@@ -1696,6 +1787,7 @@ The following keys are set:
           (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t)
           (add-function :before-until (local 'eldoc-documentation-function) #'julia-snail-eldoc)
           (advice-add 'spinner-print :around #'julia-snail--spinner-print-around)
+          (setq imenu-create-index-function 'julia-snail-imenu)
           (if (and (featurep 'company)
                    julia-snail-company-doc-enable)
               (add-hook 'completion-at-point-functions #'julia-snail-company-capf nil t)
@@ -1705,6 +1797,7 @@ The following keys are set:
                julia-snail-company-doc-enable)
           (remove-hook 'completion-at-point-functions #'julia-snail-company-capf t)
         (remove-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point t))
+      (setq imenu-create-index-function 'imenu-default-create-index-function)
       (advice-remove 'spinner-print #'julia-snail--spinner-print-around)
       (remove-function (local 'eldoc-documentation-function) #'julia-snail-eldoc)
       (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
