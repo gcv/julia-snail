@@ -18,8 +18,8 @@ function maybe_redirect_stderr_stdout(f, io, flag)
         redirect_stderr(() -> redirect_stdout(f, io), io)
     else
         f()
-    end 
-end 
+    end
+end
 
 function babel_run_and_store(mod::Module, src_file, out_file,
                              use_error_pane::Bool,
@@ -53,7 +53,7 @@ function babel_run_and_store(mod::Module, src_file, out_file,
                 end
                 isnothing(result) || show(io, "text/plain", result)
             end
-        end 
+        end
     end
     if mirror_to_repl
         println()

@@ -111,11 +111,9 @@ your org notebook"
            (puthash (current-thread) pt-init julia-snail/ob-julia--point-finals)
            (let ((res (apply old arguments)))
              (goto-char (gethash (current-thread) julia-snail/ob-julia--point-finals))
-             
              (remhash (current-thread) julia-snail/ob-julia--point-inits)
              (remhash (current-thread) julia-snail/ob-julia--point-finals)
-             res))
-         ))
+             res))))
     (apply old arguments)))
 
 

@@ -385,7 +385,7 @@ To use it, enable the `ob-julia` extension, either globally with `M-x customize-
 
 Then re-open the Org file (using `find-alternate-file` or a similar command. Note that other Snail configuration variables may also be set in this block. See the Emacs manual's section on [file-local variables](https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html) for syntax details.
 
-Once the extension is enabled, Org Babel commands should work on Julia code as expected. Completion support is available through the Emacs `completion-at-point` system. 
+Once the extension is enabled, Org Babel commands should work on Julia code as expected. Completion support is available through the Emacs `completion-at-point` system.
 
 Limitations: no `xref` support currently available.
 
