@@ -259,10 +259,6 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum,
       println()
       @info "Module $modpath\n$result"
    end
-   # TODO: Returning the result of the expression can be really ugly if it's
-   # displayed in the minibuffer. There should be a nicer way to show it on
-   # the Emacs side (perhaps using overlays).
-   #Main.JuliaSnail.elexpr(result)
    if popup_params == nothing
       Main.JuliaSnail.elexpr(true)
    else
