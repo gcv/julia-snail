@@ -141,6 +141,8 @@ Once Snail is properly installed, open a Julia source file. If `julia-mode-hook`
 
 Start a Julia REPL using `M-x julia-snail` or `C-c C-z`. This will load all the Julia-side supporting code Snail requires, and start a server. The server runs on a TCP port (10011 by default) on localhost. You will see `JuliaSnail.start(<port>)` execute on the REPL.
 
+**NB:** If the REPL does not start successfully, this means the `julia` binary invocation failed. A common reason for this is failure to find the `julia` binary. Check that `julia-snail-executable` is on your Emacs `exec-path` or set to an absolute path. It may be useful to do this in a `.dir-locals.el` so it can be set per-project. It may also happen that Snail bootstrapping fails, in which case the error buffer may flash too quickly to see. To debug this problem, switch to the command line and run `/path/to/julia -L /path/to/julia-snail/JuliaSnail.jl`, which should show the error.
+
 The REPL buffer uses `libvterm` mode, and `libvterm` configuration and key bindings will affect it.
 
 If the Julia program uses Pkg, then run `M-x julia-snail-package-activate` or `C-c C-a` to enable it. (Doing this using REPL commands like `]` also works as normal.)
