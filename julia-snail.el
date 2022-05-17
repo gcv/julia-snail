@@ -182,6 +182,12 @@ nil means disable Snail-specific imenu integration (fall back on julia-mode impl
   :tag "Control imenu integration"
   :group 'julia-snail
   :safe (lambda (v) (memq v '(:flat :module-tree nil)))
+  :set (lambda (symbol value)
+         (set-default symbol value)
+         ;; invalidate the cache in all buffers
+         (cl-loop for buf in (buffer-list) do
+                  (with-current-buffer buf
+                    (setq julia-snail--imenu-cache nil))))
   :type '(choice (const :tag "Flat" :flat)
                  (const :tag "Module-based tree structure" :module-tree)
                  (const :tag "Use julia-mode" nil)))
@@ -277,6 +283,8 @@ nil means disable Snail-specific imenu integration (fall back on julia-mode impl
 
 (defvar julia-snail--cache-proc-basedir
   (make-hash-table :test #'equal))
+
+(defvar julia-snail--imenu-fallback-index-function nil)
 
 (defvar-local julia-snail--repl-go-back-target nil)
 
@@ -1265,10 +1273,10 @@ evaluated in the context of MODULE."
        (julia-snail--imenu-helper (cdr tree) modules)))))
 
 (cl-defun julia-snail-imenu ()
-  ;; exit early if unused
-  (unless julia-snail-imenu-style
+  ;; exit early if Snail's imenu integration is turned off, or no Snail session is running
+  (unless (and julia-snail-imenu-style (get-buffer julia-snail-repl-buffer))
     (cl-return-from julia-snail-imenu
-      (imenu-default-create-index-function)))
+      (funcall julia-snail--imenu-fallback-index-function)))
 
   ;; check the cache and debounce
   (when julia-snail--imenu-cache
@@ -1787,6 +1795,7 @@ The following keys are set:
           (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t)
           (add-function :before-until (local 'eldoc-documentation-function) #'julia-snail-eldoc)
           (advice-add 'spinner-print :around #'julia-snail--spinner-print-around)
+          (setq julia-snail--imenu-fallback-index-function imenu-create-index-function)
           (setq imenu-create-index-function 'julia-snail-imenu)
           (if (and (featurep 'company)
                    julia-snail-company-doc-enable)
@@ -1797,7 +1806,8 @@ The following keys are set:
                julia-snail-company-doc-enable)
           (remove-hook 'completion-at-point-functions #'julia-snail-company-capf t)
         (remove-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point t))
-      (setq imenu-create-index-function 'imenu-default-create-index-function)
+      (setq imenu-create-index-function julia-snail--imenu-fallback-index-function)
+      (setq julia-snail--imenu-fallback-index-function nil)
       (advice-remove 'spinner-print #'julia-snail--spinner-print-around)
       (remove-function (local 'eldoc-documentation-function) #'julia-snail-eldoc)
       (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
