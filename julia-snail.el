@@ -1277,7 +1277,6 @@ evaluated in the context of MODULE."
   (unless (and julia-snail-imenu-style (get-buffer julia-snail-repl-buffer))
     (cl-return-from julia-snail-imenu
       (funcall julia-snail--imenu-fallback-index-function)))
-
   ;; check the cache and debounce
   (when julia-snail--imenu-cache
     (when (or
@@ -1289,7 +1288,6 @@ evaluated in the context of MODULE."
               5.0))
       (cl-return-from julia-snail-imenu
         (julia-snail--imenu-cache-entry-value julia-snail--imenu-cache))))
-
   ;; cache miss: ask Julia to parse the file and return the imenu index
   (let* ((code-tree (julia-snail--cst-code-tree (current-buffer)))
          (imenu-index-raw (julia-snail--imenu-helper code-tree (list)))

@@ -597,6 +597,30 @@ function blockat(encodedbuf, byteloc)
 end
 
 """
+Internal: assemble a human-readable function signature from a CSTParser node.
+"""
+function fnsig_helper(node)
+   fnsig = ""
+   reassemble = (n) -> begin
+      for x in n
+         if x.args === nothing
+            candidate = CSTParser.valof(CSTParser.get_name(x))
+            if candidate !== nothing && length(candidate) > 0
+               if "," == candidate
+                  candidate *= " "
+               end
+               fnsig *= candidate
+            end
+         else
+            reassemble(x)
+         end
+      end
+   end
+   reassemble(node)
+   return fnsig
+end
+
+"""
 For a given buffer, return the overall tree structure of the code.
 
 Result structure: [
@@ -628,18 +652,14 @@ function codetree(encodedbuf)
                if CSTParser.defines_module(a)
                   push!(res, (:module, aname, curroffset, helper_res))
                elseif CSTParser.defines_function(a)
-                  push!(res, (:function, aname, curroffset))
+                  fnsig = fnsig_helper(a.args[1])
+                  push!(res, (:function, fnsig, curroffset))
                end
             else
                # XXX: Flatten on the fly. First, avoid empty entries. Second,
-               # res starts out empty when first recursing into a module
-               # subtree, so don't just use push!.
+               # use append! since only modules should generate nesting.
                if length(helper_res) > 0
-                  if length(res) > 0
-                     push!(res, helper_res)
-                  else
-                     res = helper_res
-                  end
+                  append!(res, helper_res)
                end
             end
          end
