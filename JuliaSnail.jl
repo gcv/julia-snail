@@ -654,6 +654,12 @@ function codetree(encodedbuf)
                elseif CSTParser.defines_function(a)
                   fnsig = fnsig_helper(a.args[1])
                   push!(res, (:function, fnsig, curroffset))
+               elseif CSTParser.defines_struct(a) || CSTParser.defines_mutable(a)
+                  push!(res, (:struct, aname, curroffset))
+               elseif CSTParser.defines_abstract(a) || CSTParser.defines_datatype(a) || CSTParser.defines_primitive(a)
+                  push!(res, (:type, aname, curroffset))
+               elseif CSTParser.defines_macro(a)
+                  push!(res, (:macro, aname, curroffset))
                end
             else
                # XXX: Flatten on the fly. First, avoid empty entries. Second,
