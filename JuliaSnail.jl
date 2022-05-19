@@ -637,12 +637,9 @@ function codetree(encodedbuf)
       for a in node
          if a.args === nothing
             val = CSTParser.valof(a)
-            # Unicode byte fix
-            if String == typeof(val)
-               diff = sizeof(val) - length(val)
-               a.span -= diff
-               a.fullspan -= diff
-            end
+            # XXX: We want bytes here because we convert back to position
+            # numbers on the Emacs side. So we do not apply the Unicode byte fix
+            # from print_cst.
             offset += a.fullspan
          else
             curroffset = offset
