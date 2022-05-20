@@ -1272,6 +1272,25 @@ evaluated in the context of MODULE."
           first-node-location))
        (julia-snail--imenu-helper (cdr tree) modules)))))
 
+(defun julia-snail--imenu-included-module-helper (normal-tree)
+  ;; XXX: This fugly kludge transforms imenu trees in a way that injects modules
+  ;; cached through include()ed files at the root:
+  ;;
+  ;; if included-modules is ("Alpha" "Bravo")
+  ;; and normal-tree is ((function "f1" ...))
+  ;; then this returns (("Alpha" ("Bravo" (function "f1" ...))))
+  ;;
+  ;; There must be a cleaner way to implement this logic.
+  (let ((included-modules (julia-snail--module-for-file (buffer-file-name (buffer-base-buffer)))))
+    (cl-labels ((some-helper
+                 (incls norms first-time)
+                 (if (null incls)
+                     norms
+                   (let* ((next (some-helper (cdr incls) norms nil))
+                          (tail (cons (car incls) (if first-time(list next) next))))
+                     (if first-time (list tail) tail)))))
+      (some-helper included-modules normal-tree t))))
+
 (cl-defun julia-snail-imenu ()
   ;; exit early if Snail's imenu integration is turned off, or no Snail session is running
   (unless (and julia-snail-imenu-style (get-buffer julia-snail-repl-buffer))
@@ -1290,7 +1309,7 @@ evaluated in the context of MODULE."
         (julia-snail--imenu-cache-entry-value julia-snail--imenu-cache))))
   ;; cache miss: ask Julia to parse the file and return the imenu index
   (let* ((code-tree (julia-snail--cst-code-tree (current-buffer)))
-         (imenu-index-raw (julia-snail--imenu-helper code-tree (list)))
+         (imenu-index-raw (julia-snail--imenu-included-module-helper (julia-snail--imenu-helper code-tree (list))))
          (imenu-index (if (eq :flat julia-snail-imenu-style)
                           (-flatten imenu-index-raw)
                         imenu-index-raw)))
