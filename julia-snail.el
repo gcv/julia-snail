@@ -1244,6 +1244,9 @@ evaluated in the context of MODULE."
 
 ;;; --- imenu enhancement
 
+;; TODO: Add marginalia metadata. Use completion-extra-properties
+;; :annotation-function for this? How, exactly?
+
 (defun julia-snail--imenu-helper (tree modules)
   (when tree
     (let* ((first-node (car tree))
