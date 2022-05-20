@@ -174,7 +174,7 @@ another."
   :group 'julia-snail
   :type 'face)
 
-(defcustom julia-snail-imenu-style :flat
+(defcustom julia-snail-imenu-style :module-tree
   "Control how imenu should be structured.
 nil means disable Snail-specific imenu integration (fall back on julia-mode implementation).
 :flat means entries are prefixed by Julia module, e.g. 'MyModule.myfunction1()'
