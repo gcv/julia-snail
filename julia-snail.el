@@ -230,8 +230,7 @@ nil means disable Snail-specific imenu integration (fall back on julia-mode impl
                    result)))
     ;; actually put together the list
     (append
-     (list "JuliaSnail.jl" "Manifest.toml" "Project.toml"
-           "extensions")
+     (list "JuliaSnail.jl" "Project.toml" "extensions")
      (let ((default-directory (file-name-directory (or load-file-name (buffer-file-name)))))
        (list-extension-files)))))
 

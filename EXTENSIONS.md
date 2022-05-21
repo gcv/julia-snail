@@ -20,6 +20,6 @@ Snail makes it fairly easy to write code that makes Emacs and Julia talk to each
 
 ## Julia
 
-- Extensions with external Julia library dependencies must provide their own `Project.toml` and `Manifest.toml` files. This is done to keep all module dependencies isolated and keep all extensions strictly opt-in. A user who does not wish to use a particular extension must never be forced to install its Julia-side dependencies or spend time waiting for time-to-first-plot related to that unused extension.
+- Extensions with external Julia library dependencies must provide their own `Project.toml` files. This is done to keep all module dependencies isolated and keep all extensions strictly opt-in. A user who does not wish to use a particular extension must never be forced to install its Julia-side dependencies or spend time waiting for time-to-first-plot related to that unused extension.
 - Use the `JuliaSnail.@with_pkg_env` macro to force extension dependencies to load. The first argument should be `(@__DIR__)` (the parentheses around it matter), and the second a block which contains dependency `import` statements. Dependencies will install if needed, and will be attached to the extension's Pkg environment.
 - Extensions will be placed in the `JuliaSnail.Extensions` module. They should be inside their own individual modules, e.g., `JuliaSnail.Extensions.REPLHistory`.
