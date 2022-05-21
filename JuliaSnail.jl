@@ -627,7 +627,7 @@ Result structure: [
   [type name location extra]
 ]
 where type is :function, :macro, etc.; when type is :module, then extra is a
-nested resulted structure.
+nested resulting structure.
 """
 function codetree(encodedbuf)
    cst = parse(encodedbuf)
