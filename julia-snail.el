@@ -139,7 +139,7 @@ another."
                  (const :tag "Append images to buffer" :multi)))
 (make-variable-buffer-local 'julia-snail-multimedia-buffer-style)
 
-(defcustom julia-snail-company-doc-enable t
+(defcustom julia-snail-completions-doc-enable t
   "If company-mode is installed, this flag determines if its documentation integration should be enabled."
   :tag "Control company-mode documentation integration"
   :group 'julia-snail
@@ -1405,9 +1405,9 @@ evaluated in the context of MODULE."
       (add-hook hook #'julia-snail--popup-cleanup nil 'local))))
 
 
-;;; --- company-mode support
+;;; --- support for completion modes' auxiliary doc modes (company-quickhelp and corfu-doc)
 
-(defun julia-snail--company-doc-buffer (str)
+(defun julia-snail--completions-doc-buffer (str)
   (let* ((module (julia-snail--module-at-point))
          (name (s-concat (s-join "." module) "." str))
          (doc (julia-snail--send-to-server
@@ -1421,17 +1421,17 @@ evaluated in the context of MODULE."
                 (if (eq :nothing doc)
                     "Documentation not found!\nDouble-check your package activation and imports."
                   doc)
-                :markdown nil)))
+                :markdown t)))
       (with-current-buffer buf
         (julia-snail--add-to-perspective buf)
         (font-lock-ensure))
       buf)))
 
-(defun julia-snail-company-capf ()
+(defun julia-snail-completions-doc-capf ()
   (interactive)
   (let* ((comp (julia-snail-repl-completion-at-point))
          (doc (list :company-doc-buffer
-                    #'julia-snail--company-doc-buffer)))
+                    #'julia-snail--completions-doc-buffer)))
     (cl-concatenate 'list comp doc)))
 
 
@@ -1816,15 +1816,14 @@ The following keys are set:
           (advice-add 'spinner-print :around #'julia-snail--spinner-print-around)
           (setq julia-snail--imenu-fallback-index-function imenu-create-index-function)
           (setq imenu-create-index-function 'julia-snail-imenu)
-          (if (and (featurep 'company)
-                   julia-snail-company-doc-enable)
-              (add-hook 'completion-at-point-functions #'julia-snail-company-capf nil t)
+          (if (and (or (package-installed-p 'company-quickhelp)
+                       (package-installed-p 'corfu-doc))
+                   julia-snail-completions-doc-enable)
+              (add-hook 'completion-at-point-functions #'julia-snail-completions-doc-capf nil t)
             (add-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point nil t)))
       ;; deactivate
-      (if (and (featurep 'company)
-               julia-snail-company-doc-enable)
-          (remove-hook 'completion-at-point-functions #'julia-snail-company-capf t)
-        (remove-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point t))
+      (remove-hook 'completion-at-point-functions #'julia-snail-completions-doc-capf t)
+      (remove-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point t)
       (setq imenu-create-index-function julia-snail--imenu-fallback-index-function)
       (setq julia-snail--imenu-fallback-index-function nil)
       (advice-remove 'spinner-print #'julia-snail--spinner-print-around)

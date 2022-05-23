@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking change:** `julia-snail-send-line` no longer just copies the line at point to the REPL ignoring module context. It evaluates the line in the module context instead. This makes it consistent with `julia-snail-send-region` and `julia-snail-send-top-level-form`. The old behavior is still available with two prefix arguments (i.e.: `C-u C-u M-x julia-snail-send-line` or `C-u C-u C-c C-l`).
 - `julia-snail-send-region` now supports using two prefix arguments to _copy_ the region to the REPL and evaluate it, ignoring module context (i.e.: `C-u C-u M-x julia-snail-send-region` or `C-u C-u C-c C-r`).
+* Breaking change: `julia-snail-company-doc-enable` setting renamed to `julia-snail-completions-doc-enable`. It now supports [`corfu-doc`](https://github.com/galeo/corfu-doc) in addition to [`company-quickhelp`](https://www.github.com/expez/company-quickhelp).
 
 
 ## [1.1.5] — 2022-02-17
