@@ -1795,11 +1795,12 @@ autocompletion aware of the available modules."
     (define-key map (kbd "C-k") #'julia-snail-repl-vterm-kill-line)
     map))
 
+
 ;;; --- mode menu
 
 (easy-menu-define julia-snail-mode-menu julia-snail-mode-map
   "Julia-Snail mode menu."
-  '("Julia-Snail"
+  '("Snail"
     ["Switch to REPL" julia-snail]
     ["Activate package" julia-snail-package-activate]
     ["Lookup documentation" julia-snail-doc-lookup]
@@ -1812,8 +1813,9 @@ autocompletion aware of the available modules."
 
 (easy-menu-define julia-snail-repl-mode-menu julia-snail-repl-mode-map
   "Julia-Snail REPL mode menu."
-  '("Julia-Snail"
+  '("Snail REPL"
     ["Switch to source" julia-snail-repl-go-back]))
+
 
 ;;; --- mode definitions
 
