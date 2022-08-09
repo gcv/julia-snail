@@ -56,7 +56,7 @@ https://user-images.githubusercontent.com/10327/128589405-7368bb50-0ef3-4003-b5d
 
 ## Installation
 
-Julia versions >1.0 should all work with Snail.
+Julia versions >1.2.0 should all work with Snail.
 
 Snail’s Julia-side dependencies will automatically be installed when it starts, and will stay out of your way using Julia’s [`LOAD_PATH` mechanism](https://docs.julialang.org/en/v1/base/constants/#Base.LOAD_PATH).
 
@@ -128,6 +128,7 @@ It is likely that most users will want the default REPL pop-up behavior to split
 - `julia-snail-use-emoji-mode-lighter` (default `t`) — attempt to use a 🐌 emoji in the Emacs modeline lighter if the display supports it. Set to `nil` to use the ASCII string `"Snail"` instead (a `:diminish` override in `use-package` should also work).
 - `julia-snail-repl-display-eval-results` (default `nil`) — print the result of evaluating code sent from Emacs to the REPL.
 - `julia-snail-popup-display-eval-results` (default `:command`) — show the result of evaluating code sent from Emacs to the REPL in the source buffer. Set to `nil` to deactivate, to `:command` to have the popup disappear at the next command, or to `:change` for when the buffer contents change. When set to `:change`, the popup display is limited to a single line.
+- `julia-snail-imenu-style` (default `:module-tree`) — control Imenu integration, especially module detection handling. When set to `:module-tree`, the Imenu is a tree with modules as nodes and functions, macros, and types as the leaves. This works well with modern Imenu display commands like `consult-imenu` and `helm-imenu`, and allows the [`imenu-list`](https://github.com/bmag/imenu-list) package to show a nice tree. However, this may interfere with the simpler `imenu` Emacs built-in command as it forces hierarchical navigation to reach leaves. The `:flat` setting disables Imenu hierarchies and instead puts the full module path in the identifier. To disable Snail's Imenu integration completely and fall back to the `julia-mode` regexp-based default, set `julia-snail-imenu-style` to `nil`.
 
 
 ## Usage
@@ -140,6 +141,8 @@ The following describes basic Snail functionality. Refer to the [Snail project w
 Once Snail is properly installed, open a Julia source file. If `julia-mode-hook` has been correctly configured, `julia-snail-mode` should be enabled in the buffer (look for the Snail lighter in the modeline).
 
 Start a Julia REPL using `M-x julia-snail` or `C-c C-z`. This will load all the Julia-side supporting code Snail requires, and start a server. The server runs on a TCP port (10011 by default) on localhost. You will see `JuliaSnail.start(<port>)` execute on the REPL.
+
+**NB:** If the REPL does not start successfully, this means the `julia` binary invocation failed. A common reason for this is failure to find the `julia` binary. Check that `julia-snail-executable` is on your Emacs `exec-path` or set to an absolute path. It may be useful to do this in a `.dir-locals.el` so it can be set per-project. It may also happen that Snail bootstrapping fails, in which case the error buffer may flash too quickly to see. To debug this problem, switch to the command line and run `/path/to/julia -L /path/to/julia-snail/JuliaSnail.jl`, which should show the error.
 
 The REPL buffer uses `libvterm` mode, and `libvterm` configuration and key bindings will affect it.
 
@@ -317,12 +320,18 @@ The following variables control multimedia integration. It is best to set these 
 - `julia-snail-multimedia-buffer-autoswitch`: Controls whether Emacs should automatically switch to the image buffer after a plotting command, or if it should only display it. Defaults to `nil` (off).
 - `julia-snail-multimedia-buffer-style`: Controls how the multimedia display buffer works. When `:single-reuse` (default), it uses one buffer, and overwrites it with new images as they come in from Julia. When set to `:single-new`, Snail will open a new buffer for each plot. When set to `:multi`, Snail uses a single buffer but appends new images to it rather than overwriting them. Note that `:multi` inserts image objects, but does not enable `image-mode` in the buffer, thus limiting zoom capabilities.
 
-As a simple example, activate Emacs plotting and try this code:
+As a simple example, activate Emacs plotting and try run this code in the REPL:
 
 ```julia
 Pkg.add("Gadfly")
 import Gadfly
 Gadfly.plot(sin, 0, 2π)
+```
+
+**NB:** One complication to keep in mind: calls to `Gadfly.plot` and `Plots.plot` will _return_ plot objects instead of displaying them when called across the Emacs-Julia bridge using commands such as `julia-snail-send-line` (but _not_ when called directly in the REPL). In this case, explicitly call `display` on the plot object:
+
+```julia
+display(Gadfly.plot(cos, 0, 2π))
 ```
 
 

@@ -259,10 +259,6 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum,
       println()
       @info "Module $modpath\n$result"
    end
-   # TODO: Returning the result of the expression can be really ugly if it's
-   # displayed in the minibuffer. There should be a nicer way to show it on
-   # the Emacs side (perhaps using overlays).
-   #Main.JuliaSnail.elexpr(result)
    if popup_params == nothing
       Main.JuliaSnail.elexpr(true)
    else
@@ -527,24 +523,28 @@ function pathat(cst, offset, pos = 0, path = [(expr=cst, start=1, stop=cst.span+
 end
 
 """
-Debugging helper: example code for traversing the CST.
+Debugging helper: example code for traversing the CST and tracking the location of each node.
 """
-function print_cst(cst, offset = 0)
-   for a in cst
-      if a.args === nothing
-         val = CSTParser.valof(a)
-         # Unicode byte fix
-         if String == typeof(val)
-            diff = sizeof(val) - length(val)
-            a.span -= diff
-            a.fullspan -= diff
+function print_cst(cst)
+   offset = 0
+   helper = (node) -> begin
+      for a in node
+         if a.args === nothing
+            val = CSTParser.valof(a)
+            # Unicode byte fix
+            if String == typeof(val)
+               diff = sizeof(val) - length(val)
+               a.span -= diff
+               a.fullspan -= diff
+            end
+            println(offset, ":", offset+a.span, "\t", val)
+            offset += a.fullspan
+         else
+            helper(a)
          end
-         println(offset, ":", offset+a.span, "\t", val)
-         offset += a.fullspan
-      else
-         offset = print_cst(a, offset)
       end
    end
+   helper(cst)
    return offset
 end
 
@@ -594,6 +594,85 @@ function blockat(encodedbuf, byteloc)
    return isnothing(description) ?
       nothing :
       [:list; tuple(modules...); start; stop; description]
+end
+
+"""
+Internal: assemble a human-readable function signature from a CSTParser node.
+"""
+function fnsig_helper(node)
+   fnsig = ""
+   reassemble = (n) -> begin
+      for x in n
+         if x.args === nothing
+            candidate = CSTParser.valof(CSTParser.get_name(x))
+            if candidate !== nothing && length(candidate) > 0
+               if "," == candidate
+                  candidate *= " "
+               end
+               fnsig *= candidate
+            end
+         else
+            reassemble(x)
+         end
+      end
+   end
+   reassemble(node)
+   return fnsig
+end
+
+"""
+For a given buffer, return the overall tree structure of the code.
+
+Result structure: [
+  [type name location extra]
+]
+where type is :function, :macro, etc.; when type is :module, then extra is a
+nested resulting structure.
+"""
+function codetree(encodedbuf)
+   cst = parse(encodedbuf)
+   offset = 1
+   helper = (node, depth = 1) -> begin
+      res = []
+      for a in node
+         if a.args === nothing
+            val = CSTParser.valof(a)
+            # XXX: We want bytes here because we convert back to position
+            # numbers on the Emacs side. So we do not apply the Unicode byte fix
+            # from print_cst.
+            offset += a.fullspan
+         else
+            curroffset = offset
+            aname = CSTParser.valof(CSTParser.get_name(a))
+            helper_res = helper(a, depth + 1)
+            if aname !== nothing
+               if CSTParser.defines_module(a)
+                  push!(res, (:module, aname, curroffset, helper_res))
+               elseif CSTParser.defines_function(a)
+                  fnsig = fnsig_helper(a.args[1])
+                  push!(res, (:function, fnsig, curroffset))
+               elseif CSTParser.defines_struct(a) || CSTParser.defines_mutable(a)
+                  push!(res, (:struct, aname, curroffset))
+               elseif CSTParser.defines_abstract(a) || CSTParser.defines_datatype(a) || CSTParser.defines_primitive(a)
+                  push!(res, (:type, aname, curroffset))
+               elseif CSTParser.defines_macro(a)
+                  push!(res, (:macro, aname, curroffset))
+               end
+            else
+               # XXX: Flatten on the fly. First, avoid empty entries. Second,
+               # use append! since only modules should generate nesting.
+               if length(helper_res) > 0
+                  append!(res, helper_res)
+               end
+            end
+         end
+      end
+      return res
+   end
+   tree = helper(cst)
+   return isempty(tree) ?
+      nothing :
+      [:list; tree]
 end
 
 """
