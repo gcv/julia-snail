@@ -32,6 +32,7 @@
 
 (require 'cl-lib)
 (require 'dash)
+(require 'easymenu)
 (require 'json)
 (require 'popup)
 (require 'pulse)
@@ -1795,11 +1796,33 @@ autocompletion aware of the available modules."
     map))
 
 
+;;; --- mode menu
+
+(easy-menu-define julia-snail-mode-menu julia-snail-mode-map
+  "Julia-Snail mode menu."
+  '("Snail"
+    ["Switch to REPL" julia-snail]
+    ["Activate package" julia-snail-package-activate]
+    ["Lookup documentation" julia-snail-doc-lookup]
+    ["Update module cache" julia-snail-update-module-cache]
+    "---"
+    ["Evaluate line" julia-snail-send-line]
+    ["Evaluate top-level form" julia-snail-send-top-level-form]
+    ["Evaluate region" julia-snail-send-region :active (region-active-p)]
+    ["Evaluate file" julia-snail-send-buffer-file]))
+
+(easy-menu-define julia-snail-repl-mode-menu julia-snail-repl-mode-map
+  "Julia-Snail REPL mode menu."
+  '("Snail REPL"
+    ["Switch to source" julia-snail-repl-go-back]))
+
+
 ;;; --- mode definitions
 
 ;;;###autoload
 (define-minor-mode julia-snail-mode
-  "A minor mode for interactive Julia development. Should only be turned on in source buffers.
+  "A minor mode for interactive Julia development.
+Should only be turned on in source buffers.
 
 The following keys are set:
 \\{julia-snail-mode-map}"
@@ -1833,8 +1856,11 @@ The following keys are set:
 
 ;;;###autoload
 (define-minor-mode julia-snail-repl-mode
-  "A minor mode for interactive Julia development. Should only be
-turned on in REPL buffers."
+  "A minor mode for interactive Julia development.
+Should only be turned on in REPL buffers.
+
+The following keys are set:
+\\{julia-snail-repl-mode-map}"
   :init-value nil
   :lighter (:eval (julia-snail--mode-lighter))
   :keymap julia-snail-repl-mode-map

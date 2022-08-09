@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New extension: `ob-julia`, which adds Julia support to Org Babel.
 - Results of running code from source buffers are now shown inline using overlays. See `julia-snail-popup-display-eval-results` for details.
 - Improved support for Imenu integration. See documentation for `julia-snail-imenu-style`.
+- Menu bar entries for main Snail mode and Snail REPL mode.
 
 
 ### Changed
