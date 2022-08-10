@@ -77,7 +77,7 @@ your org notebook"
     (julia-snail--send-to-server :Main text :async nil)))
 
 (defun julia-snail/ob-julia--maybe-goto-char (char)
-  (if char
+  (when char
       (goto-char char)))
 
 ;; This function was adapted from ob-julia-vterm by Shigeaki Nishina (GPL-v3)
