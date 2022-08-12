@@ -76,6 +76,10 @@ your org notebook"
     ;;     (julia-snail) t))
     (julia-snail--send-to-server :Main text :async nil)))
 
+(defun julia-snail/ob-julia--maybe-goto-char (char)
+  (when char
+      (goto-char char)))
+
 ;; This function was adapted from ob-julia-vterm by Shigeaki Nishina (GPL-v3)
 ;; https://github.com/shg/ob-julia-vterm.el as of April 14, 2022
 (defun org-babel-execute:julia (body params)
@@ -95,7 +99,7 @@ your org notebook"
                        "Output suppressed (line too long)"
                      bs)))))
       (puthash (current-thread) (copy-marker (point)) julia-snail/ob-julia--point-finals)
-      (goto-char (gethash (current-thread) julia-snail/ob-julia--point-inits))
+      (julia-snail/ob-julia--maybe-goto-char (gethash (current-thread) julia-snail/ob-julia--point-inits))
       out)))
 
 (defun julia-snail/ob-julia--in-julia-src-blockp ()
@@ -110,11 +114,11 @@ your org notebook"
            (puthash (current-thread) pt-init julia-snail/ob-julia--point-inits)
            (puthash (current-thread) pt-init julia-snail/ob-julia--point-finals)
            (let ((res (apply old arguments)))
-             (goto-char (gethash (current-thread) julia-snail/ob-julia--point-finals))
+             (julia-snail/ob-julia--maybe-goto-char (gethash (current-thread) julia-snail/ob-julia--point-finals))
              (remhash (current-thread) julia-snail/ob-julia--point-inits)
              (remhash (current-thread) julia-snail/ob-julia--point-finals)
              res))))
-    (apply old arguments)))
+  (apply old arguments)))
 
 
 ;; Deal with colour ANSI escape colour codes
