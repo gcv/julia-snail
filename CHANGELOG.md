@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - A problem where certain Julia forms were not correctly evaluated as top-level.
+- Bug with direct-to-REPL evaluation with `julia-snail-repl-display-eval-results` turned off.
 
 
 ### Added

@@ -501,12 +501,13 @@ Returns nil if the poll timed out, t otherwise."
                       :async nil))
                (popup-params (julia-snail--popup-params block-end))
                (str (if (equal err :nothing)
-                        (julia-snail--send-to-server
-                          :Main
-                          (format "JuliaSnail.PopupDisplay.format(ans, %s, %s)"
-                                  (car popup-params)
-                                  (cadr popup-params))
-                          :async nil)
+                        (when julia-snail-popup-display-eval-results
+                          (julia-snail--send-to-server
+                            :Main
+                            (format "JuliaSnail.PopupDisplay.format(ans, %s, %s)"
+                                    (car popup-params)
+                                    (cadr popup-params))
+                            :async nil))
                       "error")))
           (julia-snail--popup-display popup-block-end str :use-cleanup-kludge (eq :command julia-snail-popup-display-eval-results)))
       ;; evaluate through the Snail server:
