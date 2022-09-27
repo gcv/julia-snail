@@ -1482,7 +1482,7 @@ evaluated in the context of MODULE."
         ;; check buffer size and insert separator as needed
         (when (> (buffer-size) 0)
           (goto-char (point-max))
-          (insert "\n"))
+          (insert "\n\n"))
         (if (image-type-available-p 'imagemagick)
             (let ((shortest (car
                              (-sort
@@ -1493,8 +1493,7 @@ evaluated in the context of MODULE."
               (if shortest
                   (insert-image (create-image decoded-img 'imagemagick t :height (round (* 0.80 (window-pixel-height shortest)))))
                 (insert-image (create-image decoded-img 'imagemagick t))))
-          (insert-image (create-image decoded-img nil t)))
-        (insert "\n"))
+          (insert-image (create-image decoded-img nil t))))
       (dolist (win (get-buffer-window-list mm-buf))
         (set-window-point win (point-max)))
       (read-only-mode 1)
