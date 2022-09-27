@@ -1366,16 +1366,24 @@ evaluated in the context of MODULE."
                                    line " \n")))
            (display-str (s-trim-right (apply #'concat lines)))
            (popup (let ((popup-tip-max-width (window-width)))
-                    (popup-tip display-str
-                               :point pt
-                               :around nil
-                               :face (if julia-snail-popup-display-face
-                                         julia-snail-popup-display-face
-                                       `(:background
-                                         ,(julia-snail--color-shift-hex (face-attribute 'default :background) (face-attribute 'default :foreground) :by 63)
-                                         :foreground ,(face-attribute 'default :foreground)))
-                               :nowait t
-                               :nostrip t))))
+                    ;; XXX: Dirty workaround for #110. popup-tip calls
+                    ;; popup-replace-displayable which is SLOW (as of
+                    ;; 2022-09-26). So just bypass it until popup.el releases a
+                    ;; fixed version, and then adjust the Snail dependency
+                    ;; version.
+                    (declare-function popup-replace-displayable "popup.el")
+                    (cl-letf (((symbol-function 'popup-replace-displayable)
+                               (lambda (str &optional _rep) str)))
+                      (popup-tip display-str
+                                 :point pt
+                                 :around nil
+                                 :face (if julia-snail-popup-display-face
+                                           julia-snail-popup-display-face
+                                         `(:background
+                                           ,(julia-snail--color-shift-hex (face-attribute 'default :background) (face-attribute 'default :foreground) :by 63)
+                                           :foreground ,(face-attribute 'default :foreground)))
+                                 :nowait t
+                                 :nostrip t)))))
       (add-to-list 'julia-snail--popups popup)
       (when use-cleanup-kludge
         (setq julia-snail--popup-cleanup-skip-kludge t))
