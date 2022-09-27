@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A problem where certain Julia forms were not correctly evaluated as top-level.
 - Bug with direct-to-REPL evaluation with `julia-snail-repl-display-eval-results` turned off.
+- Scrolling display bug with multimedia images (plots) with `julia-snail-multimedia-buffer-style` set to `:multi` ([#112](https://github.com/gcv/julia-snail/issues/112)).
 
 
 ### Added
