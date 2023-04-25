@@ -866,7 +866,7 @@ function start(port=10011; addr="127.0.0.1")
       while running
          client = Sockets.accept(server_socket)
          push!(client_sockets, client)
-         @async while Sockets.isopen(client)
+         @async while Sockets.isopen(client) && !eof(client)
             command = readline(client, keep=true)
             input = nothing
             try
@@ -890,16 +890,13 @@ function start(port=10011; addr="127.0.0.1")
                   ])
                   send_to_client(resp, client)
                catch err2
-                  if isa(err2, ArgumentError)
-                     println("JuliaSnail: ", err2.msg)
-                     # client connection was probably closed, clean it up
-                     deleteat!(client_sockets, findall(x -> x == client, client_sockets))
-                  else
-                     println("JuliaSnail: something broke: ", sprint(showerror, err2))
-                  end
+                  # internal Snail error or unexpected IO behavior..?
+                  println("JuliaSnail: something broke: ", sprint(showerror, err2))
                end
             end
-         end
+         end # async while loop for client connection
+         # client connection was probably closed at this point; clean it up
+         deleteat!(client_sockets, findall(x -> x == client, client_sockets))
       end
       close(server_socket)
    end
