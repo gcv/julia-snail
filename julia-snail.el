@@ -564,7 +564,9 @@ Returns nil if the poll timed out, t otherwise."
      ((equal nil remote-method)
       (format "%s %s -L %s" julia-snail-executable extra-args julia-snail--server-file))
      ;; remote REPL
-     ((string-equal "ssh" remote-method)
+     ((or (string-equal "ssh" remote-method)
+          (string-equal "scp" remote-method)
+          (string-equal "scpx" remote-method))
       (format "ssh -t -L %1$s:localhost:%2$s %3$s %4$s %5$s -L %6$s"
               julia-snail-port
               (or julia-snail-remote-port julia-snail-port)
@@ -580,7 +582,10 @@ Returns nil if the poll timed out, t otherwise."
 	      remote-host
 	      julia-snail-executable
 	      extra-args
-	      remote-dir-server-file)))))
+	      remote-dir-server-file))
+     ;; unsupported method
+     (t
+      (user-error "Unsupported Tramp method %s" remote-method)))))
 
 (defun julia-snail--efn (path &optional starting-dir)
   "A variant of expand-file-name that (1) just does
