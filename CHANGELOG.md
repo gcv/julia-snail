@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.2.1] — 2023-05-02
+
+### Fixed
+
+- A networking bug which sometimes caused infinte loops connecting to remote REPLs ([#54](https://github.com/gcv/julia-snail/issues/54#issuecomment-1518170908), [#120](https://github.com/gcv/julia-snail/issues/120)).
+
+
+### Added
+
+- Support for using Tramp methods `scp` and `scpx` in addition to the existing `ssh` method for remote REPLs ([#120](https://github.com/gcv/julia-snail/issues/120)).
+
+
 ## [1.2.0] — 2023-03-31
 
 ### Fixed
