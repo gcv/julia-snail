@@ -895,8 +895,6 @@ function start(port=10011; addr="127.0.0.1")
                end
             end
          end # async while loop for client connection
-         # client connection was probably closed at this point; clean it up
-         deleteat!(client_sockets, findall(x -> x == client, client_sockets))
       end
       close(server_socket)
    end
@@ -949,6 +947,9 @@ function send_to_client(expr, client_socket=nothing)
          # automatically if it is set. Clean up default_client_variable on
          # disconnect.
       end
+   end
+   if !isopen(client_socket)
+      throw("Something broke: client socket is already closed")
    end
    println(client_socket, expr)
 end
