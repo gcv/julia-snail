@@ -42,8 +42,26 @@
 (require 'spinner)
 (require 'subr-x)
 (require 'thingatpt)
-(require 'vterm)
 (require 'xref)
+
+(when (locate-library "vterm")
+  (require 'vterm))
+(declare-function vterm-end-of-line "vterm.el")
+(declare-function vterm-mode "vterm.el")
+(declare-function vterm-send-key "vterm.el")
+(declare-function vterm-send-return "vterm.el")
+(declare-function vterm-send-string "vterm.el")
+(defvar vterm-shell)
+
+;; XXX: eat is not added to the Package-Requires header because it requires
+;; Emacs 28.1, whereas Snail itself (with its historical vterm dependency)
+;; only requires 26. Therefore Eat must be added as an optional dependency.
+(when (locate-library "eat")
+  (require 'eat))
+(declare-function eat--send-string "eat.el")
+(declare-function eat-self-input "eat.el")
+(declare-function eat-term-parameter "eat.el")
+(defvar eat--terminal)
 
 
 ;;; --- customizations
@@ -94,6 +112,16 @@
   :safe 'stringp
   :type 'string)
 (make-variable-buffer-local 'julia-snail-repl-buffer)
+
+(defcustom julia-snail-terminal-type :vterm
+  "Which Emacs terminal emulator to use for the Julia REPL."
+  :tag "Terminal type"
+  :group 'julia-snail
+  :options '(:eat :vterm)
+  :safe (lambda (v) (memq v '(:eat :vterm)))
+  :type '(choice (const :tag "Eat" :eat)
+                 (const :tag "vterm" :vterm)))
+;;(make-variable-buffer-local 'julia-snail-terminal-type) ; XXX: Let's not make this a buffer-local switch. Too messy.
 
 (defcustom julia-snail-show-error-window t
   "When t: show compilation errors in separate window. When nil: display errors in the minibuffer."
@@ -188,6 +216,7 @@ nil means disable Snail-specific imenu integration (fall back on julia-mode impl
          ;; invalidate the cache in all buffers
          (cl-loop for buf in (buffer-list) do
                   (with-current-buffer buf
+                    (defvar julia-snail--imenu-cache)
                     (setq julia-snail--imenu-cache nil))))
   :type '(choice (const :tag "Flat" :flat)
                  (const :tag "Module-based tree structure" :module-tree)
@@ -587,6 +616,48 @@ Returns nil if the poll timed out, t otherwise."
      (t
       (user-error "Unsupported Tramp method %s" remote-method)))))
 
+(defun julia-snail--start (source-buf)
+  "Underlying command for julia-snail invocation.
+Supports multiple terminal implementations."
+  (let* ((launch-command (julia-snail--launch-command))
+         ;; XXX: Set the error color to red to work around breakage relating to
+         ;; some color themes and terminal combinations, see
+         ;; https://github.com/gcv/julia-snail/issues/11
+         (process-environment (append '("JULIA_ERROR_COLOR=red") process-environment))
+         ;; XXX: When a remote REPL is being started, bind the terminal buffer's
+         ;; default-directory to the user's home because if (1) a remote REPL is
+         ;; being started, default-directory may be remote, and (2) Tramp may
+         ;; notice this, mess with the path, and run ssh incorrectly.
+         (default-directory (if (file-remote-p default-directory)
+                                (expand-file-name "~")
+                              default-directory)))
+    (let ((terml-buf
+           ;; first, start a REPL process in a new buffer
+           (cond
+            ;; vterm
+            ((eq :vterm julia-snail-terminal-type)
+             (let ((vterm-shell launch-command)
+                   (terml-buf (generate-new-buffer julia-snail-repl-buffer)))
+               (pop-to-buffer terml-buf)
+               (with-current-buffer terml-buf
+                 (vterm-mode))
+               terml-buf))
+            ;; eat
+            ((eq :eat julia-snail-terminal-type)
+             (let ((terml-buf (eat launch-command)))
+               (with-current-buffer terml-buf
+                 (rename-buffer julia-snail-repl-buffer))
+               terml-buf))
+            ;; unsupported value
+            (t
+             (user-error "unsupported value for julia-snail-terminal-type: %s" julia-snail-terminal-type)))))
+      ;; then deal with some setup on that buffer
+      (with-current-buffer terml-buf
+        (when source-buf
+          (julia-snail--copy-buffer-local-vars source-buf)
+          (setq julia-snail--repl-go-back-target source-buf))
+        (julia-snail-repl-mode)))))
+
 (defun julia-snail--efn (path &optional starting-dir)
   "A variant of expand-file-name that (1) just does
 expand-file-name on local files, and (2) returns the expanded
@@ -691,9 +762,9 @@ returns \"/home/username/file.jl\"."
             (julia-snail--wait-while
              (not (string-equal "julia>" (current-word)))
              100
-             2000)))
+             3000)))
         (unless (buffer-live-p repl-buf)
-          (user-error "The vterm buffer is inactive; double-check julia-snail-executable path"))
+          (user-error "The REPL terminal buffer is inactive; double-check julia-snail-executable path"))
         ;; now try to send the Snail startup command
         (julia-snail--send-to-repl
          (format "JuliaSnail.start(%d%s) ; # please wait, time-to-first-plot..."
@@ -705,13 +776,12 @@ returns \"/home/username/file.jl\"."
           ;; wait a while in case dependencies need to be downloaded
           :polling-timeout (* 5 60 1000)
           :async nil)
-        ;; connect to the server
         (let ((netstream (let ((attempt 0)
-                               (max-attempts 5)
+                               (max-attempts 15)
                                (stream nil))
                            (while (and (< attempt max-attempts) (null stream))
                              (cl-incf attempt)
-                             (message "Snail connecting to Julia process, attempt %d/5..." attempt)
+                             (message "Snail connecting to Julia process, attempt %d/%d..." attempt max-attempts)
                              (condition-case nil
                                  (setq stream (open-network-stream "julia-process" process-buf "localhost" julia-snail-port))
                                (error (when (< attempt max-attempts)
@@ -790,6 +860,34 @@ returns \"/home/username/file.jl\"."
   )
 
 
+;;; --- terminal emulator compatibility wrappers
+
+(defun julia-snail--terminal-send-string (str)
+  (cond
+   ;; Eat
+   ((eq 'eat-mode major-mode)
+    ;; TODO: This needs to use a public API (https://codeberg.org/akib/emacs-eat/issues/73).
+    (eat--send-string (eat-term-parameter eat--terminal 'eat--process) str))
+   ;; vterm
+   ((eq 'vterm-mode major-mode)
+    (vterm-send-string str))
+   ;; error and debugging
+   (t
+    (error "function called out of context; (with-current-buffer repl-buf ...) required"))))
+
+(defun julia-snail--terminal-send-return ()
+  (cond
+   ;; Eat
+   ((eq 'eat-mode major-mode)
+    (eat--send-string (eat-term-parameter eat--terminal 'eat--process) "\n"))
+   ;; vterm
+   ((eq 'vterm-mode major-mode)
+    (vterm-send-return))
+   ;; error and debugging
+   (t
+    (error "function called out of context; (with-current-buffer repl-buf ...) required"))))
+
+
 ;;; --- Julia REPL and Snail server interaction functions
 
 (cl-defun julia-snail--send-to-repl
@@ -805,16 +903,20 @@ wait for the REPL prompt to return, otherwise return immediately."
   (declare (indent defun))
   (unless repl-buf
     (user-error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
-  (with-current-buffer repl-buf
-    (vterm-send-string str)
-    (when send-return (vterm-send-return)))
-  (unless async
-    ;; wait for the inclusion to succeed (i.e., the prompt prints)
-    (julia-snail--wait-while
-     (with-current-buffer repl-buf
-       (not (string-equal "julia>" (current-word))))
-     polling-interval
-     polling-timeout)))
+  (let ((pre-write-size (buffer-size repl-buf)))
+    (with-current-buffer repl-buf
+      (julia-snail--terminal-send-string str)
+      (when send-return (julia-snail--terminal-send-return)))
+    (unless async
+      ;; wait for the buffer to accept the new input, or a race condition may
+      ;; occur with non-async prompt check below
+      (julia-snail--wait-while (= pre-write-size (buffer-size repl-buf)) polling-interval polling-timeout)
+      ;; wait for the inclusion to succeed (i.e., the prompt prints)
+      (julia-snail--wait-while
+       (with-current-buffer repl-buf
+         (not (string-equal "julia>" (current-word))))
+       polling-interval
+       polling-timeout))))
 
 (cl-defun julia-snail--send-to-server
     (module
@@ -1566,31 +1668,12 @@ To create multiple REPLs, give these variables distinct values (e.g.:
   (let ((source-buf (current-buffer))
         (repl-buf (get-buffer julia-snail-repl-buffer)))
     (if repl-buf
+        ;; Julia session exists
         (progn
           (setf (buffer-local-value 'julia-snail--repl-go-back-target repl-buf) source-buf)
           (pop-to-buffer repl-buf))
-      ;; run Julia in a vterm and load the Snail server file
-      (let ((vterm-shell (julia-snail--launch-command))
-            ;; XXX: Allocate a buffer for the vterm. When a remote REPL is being
-            ;; started, bind the vterm buffer's default-directory to the user's
-            ;; home because if (1) a remote REPL is being started,
-            ;; default-directory may be remote, and (2) Tramp may notice this,
-            ;; mess with the path, and run ssh incorrectly.
-            (vterm-buf (let ((default-directory (if (file-remote-p default-directory)
-                                                    (expand-file-name "~")
-                                                  default-directory)))
-                         (generate-new-buffer julia-snail-repl-buffer))))
-        (pop-to-buffer vterm-buf)
-        (with-current-buffer vterm-buf
-          ;; XXX: Set the error color to red to work around breakage relating to
-          ;; some color themes and terminal combinations, see
-          ;; https://github.com/gcv/julia-snail/issues/11
-          (let ((process-environment (append '("JULIA_ERROR_COLOR=red") process-environment)))
-            (vterm-mode))
-          (when source-buf
-            (julia-snail--copy-buffer-local-vars source-buf)
-            (setq julia-snail--repl-go-back-target source-buf))
-          (julia-snail-repl-mode))))))
+      ;; run a new Julia REPL in a terminal and load the Snail server file
+      (julia-snail--start source-buf))))
 
 (defun julia-snail-send-line ()
   "Send the line at point to the Julia REPL and evaluate it.
@@ -1754,11 +1837,22 @@ This will occur in the context of the Main module, just as it would at the REPL.
   (when (bound-and-true-p julia-snail--repl-go-back-target)
     (pop-to-buffer julia-snail--repl-go-back-target)))
 
-(defun julia-snail-repl-vterm-kill-line ()
+(defun julia-snail-repl-terminal-kill-line ()
   "Make kill-line (C-k by default) save content to the kill ring."
   (interactive)
-  (kill-ring-save (point) (vterm-end-of-line))
-  (vterm-send-key "k" nil nil t))
+  (cond
+   ;; Eat
+   ((eq 'eat-mode major-mode)
+    (kill-ring-save (point) (line-end-position))
+    (eat-self-input 1 ?\C-k)
+    )
+   ;; vterm
+   ((eq 'vterm-mode major-mode)
+    (kill-ring-save (point) (vterm-end-of-line))
+    (vterm-send-key "k" nil nil t))
+   ;; error and debugging
+   (t
+    (error "function called out of context; (with-current-buffer repl-buf ...) required"))))
 
 (defun julia-snail-clear-caches ()
   "Clear connection-specific internal Snail xref, completion, and module caches.
@@ -1805,7 +1899,7 @@ autocompletion aware of the available modules."
 (defvar julia-snail-repl-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c C-z") #'julia-snail-repl-go-back)
-    (define-key map (kbd "C-k") #'julia-snail-repl-vterm-kill-line)
+    (define-key map (kbd "C-k") #'julia-snail-repl-terminal-kill-line)
     map))
 
 
@@ -1879,7 +1973,7 @@ The following keys are set:
   :init-value nil
   :lighter (:eval (julia-snail--mode-lighter))
   :keymap julia-snail-repl-mode-map
-  (when (eq 'vterm-mode major-mode)
+  (when (or (eq 'vterm-mode major-mode) (eq 'eat-mode major-mode))
     (if julia-snail-repl-mode
         (julia-snail--repl-enable)
       (julia-snail--repl-disable))))
