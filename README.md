@@ -4,7 +4,7 @@
 
 Snail is a development environment and REPL interaction package for Julia in the spirit of Common Lisp’s [SLIME](https://common-lisp.net/project/slime/) and Clojure’s [CIDER](https://cider.mx). It enables convenient and dynamic REPL-driven development.
 
-Snail works on platforms which support [libvterm](https://github.com/neovim/libvterm), which currently means Unix-like systems. It should also work on Windows using [WSL](https://docs.microsoft.com/en-us/windows/wsl/about).
+Snail works on platforms which support [libvterm](https://github.com/neovim/libvterm) or [Eat](https://codeberg.org/akib/emacs-eat), which currently means Unix-like systems. It should also work on Windows using [WSL](https://docs.microsoft.com/en-us/windows/wsl/about).
 
 Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELOG.md) for release notes.
 
@@ -12,6 +12,10 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
 - [Features](#features)
 - [Demo](#demo)
 - [Installation](#installation)
+    - [`vterm`](#vterm)
+    - [Eat](#eat)
+    - [Snail](#snail)
+    - [Other considerations](#other-considerations)
 - [Configuration](#configuration)
     - [`use-package` setup](#use-package-setup)
     - [Manual setup](#manual-setup)
@@ -24,6 +28,7 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
     - [Remote REPLs](#remote-repls)
         - [`julia-snail-executable` and the remote shell path](#julia-snail-executable-and-the-remote-shell-path)
         - [Remote environment setup](#remote-environment-setup)
+        - [Errors mentioning `No file notification program found`](#errors-mentioning-no-file-notification-program-found)
     - [Docker container REPLs](#docker-container-repls)
     - [Extra Julia command-line arguments](#extra-julia-command-line-arguments)
     - [Module-nested `include`s](#module-nested-includes)
@@ -40,7 +45,7 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
 
 ## Features
 
-- **REPL display:** Snail uses [libvterm](https://github.com/neovim/libvterm) with [Emacs bindings](https://github.com/akermu/emacs-libvterm) to display Julia’s native REPL in a good terminal emulator. As a result, the REPL has good performance and far fewer display glitches than attempting to run the REPL in an Emacs-native `term.el` buffer.
+- **REPL display:** Snail uses advanced terminal emulators ([libvterm](https://github.com/neovim/libvterm) with [Emacs bindings](https://github.com/akermu/emacs-libvterm) or [Eat](https://codeberg.org/akib/emacs-eat)) to display Julia’s native REPL. As a result, the REPL has good performance and far fewer display glitches than attempting to run the REPL in an Emacs-native `term.el` buffer.
 - **REPL interaction:** Snail provides a bridge between Julia code and a Julia process running in a REPL. The bridge allows Emacs to interact with and introspect the Julia image. Among other things, this allows loading entire files and individual functions into running Julia processes.
 - **Remote REPLs:** Julia sessions on remote machines work transparently with Snail using SSH and Emacs Tramp.
 - **Multimedia and plotting:** Snail can display Julia graphics in graphical Emacs instances using packages like [Plots](http://juliaplots.org) and [Gadfly](http://gadflyjl.org).
@@ -60,13 +65,42 @@ Julia versions >1.2.0 should all work with Snail.
 
 Snail’s Julia-side dependencies will automatically be installed when it starts, and will stay out of your way using Julia’s [`LOAD_PATH` mechanism](https://docs.julialang.org/en/v1/base/constants/#Base.LOAD_PATH).
 
-On the Emacs side:
+On the Emacs side, you must install one of the supported high-performance terminal emulators to use with the Julia REPL: either `vterm` or [Eat](https://codeberg.org/akib/emacs-eat).
+
+
+### `vterm`
 
 1. Make sure you have Emacs 26.2 or later, compiled with module support (`--with-modules`). Check the value of `module-file-suffix`: it should be non-nil. (This is currently a default compile-time option Emacs distributed with [Homebrew](https://formulae.brew.sh/formula/emacs).)
 2. Install [libvterm](https://github.com/neovim/libvterm). It is available in [Homebrew](https://formulae.brew.sh/formula/libvterm) and [Ubuntu 19.10](https://packages.ubuntu.com/eoan/libvterm-dev), and in source form on other systems.
 3. Install [emacs-libvterm](https://github.com/akermu/emacs-libvterm) using your Emacs package manager. It is available from [MELPA](https://melpa.org/#/vterm) as `vterm`, so use something like `(package-install 'vterm)` or `(use-package vterm :ensure t)`. **It is important to do this step separately from the `julia-snail` installation, as you may run into problems with the Emacs package manager and byte-compiler!**
 4. Verify that `vterm` works by running `M-x vterm` to start a shell. It should display a nice terminal buffer. You may find it useful to customize and configure `vterm`.
-5. Install `julia-snail` using your Emacs package manager (see below for a sample `use-package` invocation). It is available on [MELPA](https://melpa.org/#/julia-snail) and [MELPA Stable](https://stable.melpa.org/#/julia-snail).
+
+
+### Eat
+
+Eat requires Emacs 28.1 or later. Install and configure it. The following `use-package` example should help:
+
+```elisp
+(add-to-list 'package-archives '("nongnu" . "https://elpa.nongnu.org/nongnu/") t)
+
+(use-package eat
+  :pin nongnu
+  :custom
+  (eat-kill-buffer-on-exit t)
+  :config
+  (delete [?\C-u] eat-semi-char-non-bound-keys) ; make C-u work in Eat terminals like in normal terminals
+  (delete [?\C-g] eat-semi-char-non-bound-keys) ; ditto for C-g
+  (eat-update-semi-char-mode-map)
+  (eat-reload))
+```
+
+
+### Snail
+
+Install `julia-snail` using your Emacs package manager (see below for a sample `use-package` invocation). It is available on [MELPA](https://melpa.org/#/julia-snail) and [MELPA Stable](https://stable.melpa.org/#/julia-snail).
+
+
+### Other considerations
 
 Optionally, install [markdown-mode](https://github.com/jrblevin/markdown-mode) to improve documentation buffer display.
 
@@ -77,7 +111,7 @@ Because Julia supports Unicode identifiers and uses them for mathematical symbol
 
 ### `use-package` setup
 
-**Make sure to install vterm first!** (See the [Installation](#installation) section.) This (unfortunately) means that the order of `use-package` invocations below matters:
+If you plan to use `vterm`, then **make sure to install `vterm` first!** (See the [Installation](#installation) section.) This (unfortunately) means that the order of `use-package` invocations below matters:
 
 ```elisp
 (use-package vterm
@@ -87,6 +121,17 @@ Because Julia supports Unicode identifiers and uses them for mathematical symbol
 (use-package julia-snail
   :ensure t
   :hook (julia-mode . julia-snail-mode))
+```
+
+To use Eat instead of `vterm`, set `julia-snail-terminal-type` to `:eat`:
+
+```elisp
+(use-package julia-snail
+  :ensure t
+  :custom
+  (julia-snail-terminal-type :eat)
+  :hook
+  (julia-mode . julia-snail-mode))
 ```
 
 
@@ -144,7 +189,7 @@ Start a Julia REPL using `M-x julia-snail` or `C-c C-z`. This will load all the 
 
 **NB:** If the REPL does not start successfully, this means the `julia` binary invocation failed. A common reason for this is failure to find the `julia` binary. Check that `julia-snail-executable` is on your Emacs `exec-path` or set to an absolute path. It may be useful to do this in a `.dir-locals.el` so it can be set per-project. It may also happen that Snail bootstrapping fails, in which case the error buffer may flash too quickly to see. To debug this problem, switch to the command line and run `/path/to/julia -L /path/to/julia-snail/JuliaSnail.jl`, which should show the error.
 
-The REPL buffer uses `libvterm` mode, and `libvterm` configuration and key bindings will affect it.
+If the REPL buffer is set to use `libvterm` mode (the default), then `libvterm` configuration and key bindings will affect it. If the REPL buffer is set to use Eat, then Eat configuration and key bindings will also take effect.
 
 If the Julia program uses Pkg, then run `M-x julia-snail-package-activate` or `C-c C-a` to enable it. (Doing this using REPL commands like `]` also works as normal.)
 
@@ -248,6 +293,11 @@ You may encounter a situation in which your remote host’s shell is configured 
 # zsh (replace /etc/profile in both places with the file you need):
 [[ ! -o login && ! -o interactive && -f /etc/profile ]] && . /etc/profile
 ```
+
+
+#### Errors mentioning `No file notification program found`
+
+A remote REPL may fail to start with a `File notification error`. Fixing this Tramp-related error requires (1) installing `inotifywait` on the remote host (on Debian-derived systems, the `inotify-tools` package should help), and (2) forcing Tramp to cleanup its cache using `M-x tramp-cleanup-all-connections`. Restarting the Tramp session may be needed afterwards (delete all buffers prefixed `*tramp`).
 
 
 ### Docker container REPLs
@@ -406,7 +456,7 @@ Customization variables:
 
 ## Future improvements
 
--  The `libvterm` dependency forces the use of recent Emacs releases, forces Emacs to be build with module support, complicates support for Windows, and is generally quite gnarly. It would be much better to re-implement the REPL in Elisp.
+-  The `libvterm` dependency forces the use of recent Emacs releases, forces Emacs to be build with module support, complicates support for Windows, and is generally quite gnarly. The Eat alternative requires Emacs 28. It would be much better to re-implement the REPL in Elisp and make sure it works on older Emacs versions.
 - Completion does not pick up local variables.
 - A real eldoc implementation would be great, but difficult to do with Julia’s generic functions.
 - A debugger would be great.
