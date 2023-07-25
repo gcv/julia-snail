@@ -44,7 +44,9 @@
 (require 'thingatpt)
 (require 'xref)
 
-(when (locate-library "vterm")
+(when (and (locate-library "vterm")
+           (or (not (boundp 'julia-snail-terminal-type))
+               (eq :vterm julia-snail-terminal-type)))
   (require 'vterm))
 (declare-function vterm-end-of-line "vterm.el")
 (declare-function vterm-mode "vterm.el")
