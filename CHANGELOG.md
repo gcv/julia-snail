@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for Eat as an alternative to vterm.
 
 
+### Changed
+
+- Removed `vterm` from list of automatic dependencies. Since installing it never worked automatically anyway, this should not be a breaking change.
+
+
+
 ## [1.2.3] — 2023-05-30
 
 ### Fixed
