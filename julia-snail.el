@@ -2,7 +2,7 @@
 
 
 ;; URL: https://github.com/gcv/julia-snail
-;; Package-Requires: ((emacs "26.2") (dash "2.16.0") (julia-mode "0.3") (s "1.12.0") (spinner "1.7.3") (vterm "0.0.1") (popup "0.5.9"))
+;; Package-Requires: ((emacs "26.2") (dash "2.16.0") (julia-mode "0.3") (s "1.12.0") (spinner "1.7.3") (popup "0.5.9"))
 ;; Version: 1.2.3
 ;; Created: 2019-10-27
 
@@ -44,6 +44,17 @@
 (require 'thingatpt)
 (require 'xref)
 
+;; XXX: One of vterm or eat must be manually installed before Snail starts.
+;; Picking one or the other involves tradeoffs best left to the user, and
+;; therefore neither is added to the Package-Requires header. Briefly, vterm
+;; supports older versions of Emacs (down to 26) but has more complicated module
+;; compilation needs. Eat is a simpler dependency, but requires Emacs 28. The
+;; two emulate terminals differently, and so one may be preferable to the other
+;; for other reasons.
+(when (not (or (locate-library "vterm")
+               (locate-library "eat")))
+  (user-error "Neither vterm nor eat dependencies detected; please install one or the other"))
+
 (when (locate-library "vterm")
   (require 'vterm))
 (declare-function vterm-end-of-line "vterm.el")
@@ -53,9 +64,6 @@
 (declare-function vterm-send-string "vterm.el")
 (defvar vterm-shell)
 
-;; XXX: eat is not added to the Package-Requires header because it requires
-;; Emacs 28.1, whereas Snail itself (with its historical vterm dependency)
-;; only requires 26. Therefore Eat must be added as an optional dependency.
 (when (locate-library "eat")
   (require 'eat))
 (declare-function eat--send-string "eat.el")
@@ -113,7 +121,8 @@
   :type 'string)
 (make-variable-buffer-local 'julia-snail-repl-buffer)
 
-(defcustom julia-snail-terminal-type :vterm
+(defcustom julia-snail-terminal-type
+  (if (locate-library "vterm") :vterm :eat) ; default to :vterm for historical compatibility
   "Which Emacs terminal emulator to use for the Julia REPL."
   :tag "Terminal type"
   :group 'julia-snail
