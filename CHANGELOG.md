@@ -8,9 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Looking up completions now works even if there is a running computational task in the REPL ([#123](https://github.com/gcv/julia-snail/issues/123)).
+
+
 ### Added
 
 - Support for Eat as an alternative to vterm.
+- `julia-snail-interrupt-task`: a new interface function which allows interrupting a running computational task in the Julia REPL ([#104](https://github.com/gcv/julia-snail/issues/104)).
 
 
 ### Changed

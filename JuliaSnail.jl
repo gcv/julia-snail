@@ -815,6 +815,28 @@ end
 end
 
 
+### --- task handling code
+
+module Tasks
+
+import Printf
+
+active_tasks_lock = ReentrantLock()
+active_tasks = Dict{String, Task}()
+
+function interrupt(reqid)
+   if haskey(active_tasks, reqid)
+      task = active_tasks[reqid]
+      schedule(task, InterruptException(), error=true)
+      return Printf.@sprintf("Interrupt scheduled for Julia reqid %s", reqid)
+   else
+      return Printf.@sprintf("Unknown reqid %s on the Julia side", reqid)
+   end
+end
+
+end
+
+
 ### --- server code
 
 running = false
@@ -869,31 +891,64 @@ function start(port=10011; addr="127.0.0.1")
          @async while Sockets.isopen(client) && !eof(client)
             command = readline(client, keep=true)
             input = nothing
+            expr = nothing
+            current_reqid = nothing
             try
                input = eval(Meta.parse(command))
                expr = Meta.parse(input.code)
-               result = eval_in_module(input.ns, expr)
-               # report successful evaluation back to client
+               current_reqid = input.reqid
+            catch err
+               # probably a parsing error
                resp = elexpr([
-                  Symbol("julia-snail--response-success"),
+                  Symbol("julia-snail--response-failure"),
                   input.reqid,
-                  result
+                  sprint(showerror, err),
+                  tuple(string.(stacktrace(catch_backtrace()))...)
                ])
                send_to_client(resp, client)
-            catch err
+               continue
+            end
+            active_task = @task begin # process input
                try
+                  result = eval_in_module(input.ns, expr)
+                  # report successful evaluation back to client
                   resp = elexpr([
-                     Symbol("julia-snail--response-failure"),
+                     Symbol("julia-snail--response-success"),
                      input.reqid,
-                     sprint(showerror, err),
-                     tuple(string.(stacktrace(catch_backtrace()))...)
+                     result
                   ])
                   send_to_client(resp, client)
-               catch err2
-                  # internal Snail error or unexpected IO behavior..?
-                  println("JuliaSnail: something broke: ", sprint(showerror, err2))
-               end
+               catch err
+                  if isa(err, InterruptException)
+                     resp = elexpr([
+                        Symbol("julia-snail--response-interrupt"),
+                        input.reqid
+                     ])
+                     send_to_client(resp, client)
+                  else
+                     try
+                        resp = elexpr([
+                           Symbol("julia-snail--response-failure"),
+                           input.reqid,
+                           sprint(showerror, err),
+                           tuple(string.(stacktrace(catch_backtrace()))...)
+                        ])
+                        send_to_client(resp, client)
+                     catch err2
+                        # internal Snail error or unexpected IO behavior..?
+                        println(stderr, "JuliaSnail: something broke in reqid: ", input.reqid, "; ", sprint(showerror, err2))
+                     end
+                  end
+               finally
+                  lock(Tasks.active_tasks_lock) do
+                     delete!(Tasks.active_tasks, current_reqid)
+                  end
+               end # process input
             end
+            lock(Tasks.active_tasks_lock) do
+               Tasks.active_tasks[current_reqid] = active_task
+            end
+            schedule(active_task)
          end # async while loop for client connection
       end
       close(server_socket)

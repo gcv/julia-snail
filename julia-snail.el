@@ -1139,6 +1139,10 @@ evaluated in the context of MODULE."
         (funcall callback-failure request-info))))
   (julia-snail--response-base reqid))
 
+(defun julia-snail--response-interrupt (reqid)
+  "Snail task interruption response handler for REQID."
+  (julia-snail--response-base reqid))
+
 
 ;;; --- CST parser interface
 
@@ -1888,6 +1892,31 @@ autocompletion aware of the available modules."
     (julia-snail--module-merge-includes filename includes)
     (message "Caches updated: parent module %s"
              (julia-snail--construct-module-path module))))
+
+(defun julia-snail-interrupt-task ()
+  "Try to interrupt a Julia computation task which was started on the Emacs side."
+  (interactive)
+  (let* ((running-reqids (hash-table-keys julia-snail--requests))
+         ;; TODO: Filter these reqids for valid ones (e.g. ones with valid REPL buffers?)
+         (reqid (cond ((= 0 (length running-reqids))
+                       (message "No Julia tasks currently running (that the Emacs side knows about)")
+                       nil)
+                      ((= 1 (length running-reqids))
+                       (-first-item running-reqids))
+                      (t
+                       (completing-read "Select id of Julia request to interrupt"
+                                        ;; TODO: This needs to include metadata and annotations for what
+                                        ;; computational task each reqid corresponds to (like a line number
+                                        ;; or the actual code).
+                                        running-reqids)))))
+    (when reqid
+      (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
+        (message
+         (julia-snail--send-to-server
+           '("JuliaSnail" "Tasks")
+           (format "interrupt(\"%s\")" reqid)
+           :repl-buf repl-buf
+           :async nil))))))
 
 
 ;;; --- keymaps

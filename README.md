@@ -61,7 +61,7 @@ https://user-images.githubusercontent.com/10327/128589405-7368bb50-0ef3-4003-b5d
 
 ## Installation
 
-Julia versions >1.2.0 should all work with Snail.
+Julia versions >1.6.0 should all work with Snail.
 
 Snail’s Julia-side dependencies will automatically be installed when it starts, and will stay out of your way using Julia’s [`LOAD_PATH` mechanism](https://docs.julialang.org/en/v1/base/constants/#Base.LOAD_PATH).
 
@@ -228,6 +228,8 @@ Several commands include the note “in the current module”. This means the Ju
 In addition, most `xref` commands are available (except `xref-find-references`). `xref-find-definitions`, by default bound to `M-.`, does a decent job of jumping to function and macro definitions. Cross-reference commands are current-module aware where it makes sense.
 
 Completion also works. Emacs built-in completion features, as well as `company-complete`, will do a reasonable job of finding the right completions in the context of the current module (though will not pick up local variables). Completion is current-module aware.
+
+**Experimental feature:** To interrupt a Julia task started from the Emacs side (e.g. a long-running computation started with `julia-snail-send-line`), use `julia-snail-interrupt-task`. When only one task is running, Snail will simply try to terminate it. With multiple tasks, the user will be prompted for a request ID. _This is currently an opaque identifier, and the interface will be improved in the future._
 
 
 ### Multiple Julia versions
