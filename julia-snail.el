@@ -1684,7 +1684,8 @@ To create multiple REPLs, give these variables distinct values (e.g.:
     (if repl-buf
         ;; Julia session exists
         (progn
-          (setf (buffer-local-value 'julia-snail--repl-go-back-target repl-buf) source-buf)
+          (with-current-buffer repl-buf
+            (setq julia-snail--repl-go-back-target source-buf))
           (pop-to-buffer repl-buf))
       ;; run a new Julia REPL in a terminal and load the Snail server file
       (julia-snail--start source-buf))))
