@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Looking up completions now works even if there is a running computational task in the REPL ([#123](https://github.com/gcv/julia-snail/issues/123)).
+- Byte-compiler warning in Emacs 29 ([#129](https://github.com/gcv/julia-snail/pull/129)).
 
 
 ### Added
