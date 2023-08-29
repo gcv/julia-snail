@@ -1911,13 +1911,17 @@ autocompletion aware of the available modules."
                                         ;; or the actual code).
                                         running-reqids)))))
     (when reqid
-      (let ((repl-buf (get-buffer julia-snail-repl-buffer)))
-        (message
-         (julia-snail--send-to-server
-           '("JuliaSnail" "Tasks")
-           (format "interrupt(\"%s\")" reqid)
-           :repl-buf repl-buf
-           :async nil))))))
+      (let* ((repl-buf (get-buffer julia-snail-repl-buffer))
+             (resp (julia-snail--send-to-server
+                     '("JuliaSnail" "Tasks")
+                     (format "interrupt(\"%s\")" reqid)
+                     :repl-buf repl-buf
+                     :async nil))
+             (res (car resp)))
+        (if res
+            (message "Interrupt scheduled for Julia reqid %s" reqid)
+          (message "Unknown reqid %s on the Julia side" reqid)
+          (remhash reqid julia-snail--requests))))))
 
 
 ;;; --- keymaps

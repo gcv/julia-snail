@@ -828,9 +828,9 @@ function interrupt(reqid)
    if haskey(active_tasks, reqid)
       task = active_tasks[reqid]
       schedule(task, InterruptException(), error=true)
-      return Printf.@sprintf("Interrupt scheduled for Julia reqid %s", reqid)
+      return [:list, true]
    else
-      return Printf.@sprintf("Unknown reqid %s on the Julia side", reqid)
+      return [:list, false]
    end
 end
 
