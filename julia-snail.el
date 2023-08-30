@@ -86,7 +86,7 @@
   :type 'string)
 (make-variable-buffer-local 'julia-snail-executable)
 
-(defcustom julia-snail-extra-args nil
+(defcustom julia-snail-extra-args "--threads=auto"
   "Extra arguments to pass to the Julia binary, e.g. '--sysimage /path/to/image'."
   :tag "Extra arguments (string or list of strings)"
   :group 'julia-snail
@@ -131,6 +131,12 @@
   :type '(choice (const :tag "Eat" :eat)
                  (const :tag "vterm" :vterm)))
 ;;(make-variable-buffer-local 'julia-snail-terminal-type) ; XXX: Let's not make this a buffer-local switch. Too messy.
+
+(defcustom julia-snail-skip-nthreads-check nil
+  "Skip checking if Threads.nthreads() returns >1 at startup."
+  :tag "Suppress Threads.nthreads() == 1 warning"
+  :group 'julia-snail
+  :type 'boolean)
 
 (defcustom julia-snail-show-error-window t
   "When t: show compilation errors in separate window. When nil: display errors in the minibuffer."
@@ -835,6 +841,13 @@ returns \"/home/username/file.jl\"."
               (julia-snail--send-to-server
                 '("JuliaSnail" "Conf")
                 "set!(:repl_display_eval_results, true)"
+                :repl-buf repl-buf
+                :async nil))
+            ;; check for nthreads
+            (unless julia-snail-skip-nthreads-check
+              (julia-snail--send-to-server
+                '("JuliaSnail" "Tasks")
+                "checknthreads()"
                 :repl-buf repl-buf
                 :async nil))
             ;; other initializations can go here

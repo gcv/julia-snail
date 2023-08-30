@@ -824,6 +824,7 @@ import Printf
 active_tasks_lock = ReentrantLock()
 active_tasks = Dict{String, Task}()
 
+# FIXME: This does not work reliably. Some things can be interrupted, other things cause an exception.
 function interrupt(reqid)
    if haskey(active_tasks, reqid)
       task = active_tasks[reqid]
@@ -831,6 +832,15 @@ function interrupt(reqid)
       return [:list, true]
    else
       return [:list, false]
+   end
+end
+
+function checknthreads()
+   if Threads.nthreads() <= 1
+      @warn """Julia has started with only one thread available. This may affect
+Snail's interactivity, and it's probably not what you want. To resolve this, make
+sure `julia-snail-extra-args' includes "--threads=auto". To suppress this warning,
+set `julia-snail-skip-nthreads-check' to `t' in Emacs."""
    end
 end
 
@@ -842,6 +852,7 @@ end
 running = false
 server_socket = nothing
 client_sockets = []
+client_socket_locks = Dict()
 
 """
 Start the Snail server.
@@ -888,7 +899,8 @@ function start(port=10011; addr="127.0.0.1")
       while running
          client = Sockets.accept(server_socket)
          push!(client_sockets, client)
-         @async while Sockets.isopen(client) && !eof(client)
+         client_socket_locks[client] = ReentrantLock()
+         Threads.@spawn while Sockets.isopen(client) && !eof(client)
             command = readline(client, keep=true)
             input = nothing
             expr = nothing
@@ -908,7 +920,7 @@ function start(port=10011; addr="127.0.0.1")
                send_to_client(resp, client)
                continue
             end
-            active_task = @task begin # process input
+            active_task = Threads.@spawn begin # process input
                try
                   result = eval_in_module(input.ns, expr)
                   # report successful evaluation back to client
@@ -948,7 +960,6 @@ function start(port=10011; addr="127.0.0.1")
             lock(Tasks.active_tasks_lock) do
                Tasks.active_tasks[current_reqid] = active_task
             end
-            schedule(active_task)
          end # async while loop for client connection
       end
       close(server_socket)
@@ -963,6 +974,7 @@ function stop()
    close(server_socket)
    for _ in client_sockets
       client = pop!(client_sockets)
+      delete!(client_socket_locks, client)
       close(client)
    end
 end
@@ -980,6 +992,8 @@ has multiple entries, send_to_client will prompt the user at the REPL to select
 which client should receive the message.
 """
 function send_to_client(expr, client_socket=nothing)
+   global client_sockets
+   global client_socket_locks
    if client_socket == nothing
       if isempty(client_sockets)
          throw("No client connections available")
@@ -1006,7 +1020,9 @@ function send_to_client(expr, client_socket=nothing)
    if !isopen(client_socket)
       throw("Something broke: client socket is already closed")
    end
-   println(client_socket, expr)
+   lock(client_socket_locks[client_socket]) do
+      println(client_socket, expr)
+   end
 end
 
 
