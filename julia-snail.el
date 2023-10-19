@@ -66,10 +66,11 @@
 
 (when (locate-library "eat")
   (require 'eat))
-(declare-function eat--send-string "eat.el")
+(declare-function eat-term-send-string "eat.el")
 (declare-function eat-self-input "eat.el")
-(declare-function eat-term-parameter "eat.el")
-(defvar eat--terminal)
+;; TODO: Remove this call when https://codeberg.org/akib/emacs-eat/issues/100 is fixed.
+(declare-function eat--process-input-queue "eat.el")
+(defvar eat-terminal)
 
 
 ;;; --- customizations
@@ -876,8 +877,9 @@ returns \"/home/username/file.jl\"."
   (cond
    ;; Eat
    ((eq 'eat-mode major-mode)
-    ;; TODO: This needs to use a public API (https://codeberg.org/akib/emacs-eat/issues/73).
-    (eat--send-string (eat-term-parameter eat--terminal 'eat--process) str))
+    (eat-term-send-string eat-terminal str)
+    ;; TODO: Remove this call when https://codeberg.org/akib/emacs-eat/issues/100 is fixed.
+    (eat--process-input-queue (current-buffer)))
    ;; vterm
    ((eq 'vterm-mode major-mode)
     (vterm-send-string str))
@@ -889,7 +891,9 @@ returns \"/home/username/file.jl\"."
   (cond
    ;; Eat
    ((eq 'eat-mode major-mode)
-    (eat--send-string (eat-term-parameter eat--terminal 'eat--process) "\n"))
+    (eat-term-send-string eat-terminal "\n")
+    ;; TODO: Remove this call when https://codeberg.org/akib/emacs-eat/issues/100 is fixed.
+    (eat--process-input-queue (current-buffer)))
    ;; vterm
    ((eq 'vterm-mode major-mode)
     (vterm-send-return))
