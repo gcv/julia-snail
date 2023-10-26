@@ -68,8 +68,6 @@
   (require 'eat))
 (declare-function eat-term-send-string "eat.el")
 (declare-function eat-self-input "eat.el")
-;; TODO: Remove this call when https://codeberg.org/akib/emacs-eat/issues/100 is fixed.
-(declare-function eat--process-input-queue "eat.el")
 (defvar eat-terminal)
 
 
@@ -879,7 +877,9 @@ returns \"/home/username/file.jl\"."
    ((eq 'eat-mode major-mode)
     (eat-term-send-string eat-terminal str)
     ;; TODO: Remove this call when https://codeberg.org/akib/emacs-eat/issues/100 is fixed.
-    (eat--process-input-queue (current-buffer)))
+    (when (fboundp 'eat--process-input-queue)
+      (declare-function eat--process-input-queue "eat.el")
+      (eat--process-input-queue (current-buffer))))
    ;; vterm
    ((eq 'vterm-mode major-mode)
     (vterm-send-string str))
@@ -893,7 +893,9 @@ returns \"/home/username/file.jl\"."
    ((eq 'eat-mode major-mode)
     (eat-term-send-string eat-terminal "\n")
     ;; TODO: Remove this call when https://codeberg.org/akib/emacs-eat/issues/100 is fixed.
-    (eat--process-input-queue (current-buffer)))
+    (when (fboundp 'eat--process-input-queue)
+      (declare-function eat--process-input-queue "eat.el")
+      (eat--process-input-queue (current-buffer))))
    ;; vterm
    ((eq 'vterm-mode major-mode)
     (vterm-send-return))
