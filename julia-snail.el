@@ -1700,8 +1700,8 @@ Without a prefix arg, evaluation occurs in the context of the current module.
 If one prefix arg is used (C-u), evaluation occurs in the context of the Main module.
 If two or more prefix args are used (C-u C-u), the code is instead copied directly into the REPL, and evaluation occurs in the context of the Main module."
   (interactive)
-  (let ((block-start (point-at-bol))
-        (block-end (point-at-eol)))
+  (let ((block-start (line-beginning-position))
+        (block-end (line-end-position)))
     (unless (eq block-start block-end)
       (julia-snail--send-helper
        block-start block-end
