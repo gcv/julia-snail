@@ -654,8 +654,10 @@ Supports multiple terminal implementations."
             ;; eat
             ((eq :eat julia-snail-terminal-type)
              (let ((terml-buf (eat launch-command t)))
-               (with-current-buffer terml-buf
-                 (rename-buffer julia-snail-repl-buffer))
+               (with-current-buffer source-buf
+                 (let ((repl-buffer-name julia-snail-repl-buffer))
+                   (with-current-buffer terml-buf
+                     (rename-buffer repl-buffer-name))))
                terml-buf))
             ;; unsupported value
             (t
