@@ -653,7 +653,7 @@ Supports multiple terminal implementations."
                terml-buf))
             ;; eat
             ((eq :eat julia-snail-terminal-type)
-             (let ((terml-buf (eat launch-command)))
+             (let ((terml-buf (eat launch-command t)))
                (with-current-buffer terml-buf
                  (rename-buffer julia-snail-repl-buffer))
                terml-buf))
