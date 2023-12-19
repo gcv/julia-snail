@@ -44,8 +44,10 @@
 (defun julia-snail/formatter--format-text (txt)
   (julia-snail--send-to-server
     '("JuliaSnail" "Extensions" "Formatter")
-    (let ((ubs (string-as-unibyte txt)))
-      (format "format_data(\"%s\")" (base64-encode-string ubs)))
+    (let* ((ubs (string-as-unibyte txt))
+           (estr (base64-encode-string ubs))
+           (pathstr (base64-encode-string (buffer-file-name))))
+      (format "format_data(\"%s\", \"%s\")" estr  pathstr))
     :async nil))
 
 
