@@ -1987,32 +1987,31 @@ The following keys are set:
   :init-value nil
   :lighter (:eval (julia-snail--mode-lighter))
   :keymap julia-snail-mode-map
-  (when (eq 'julia-mode major-mode)
-    (if julia-snail-mode
-        ;; activate
-        (progn
-          (julia-snail--enable)
-          (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t)
-          (add-function :before-until (local 'eldoc-documentation-function) #'julia-snail-eldoc)
-          (advice-add 'spinner-print :around #'julia-snail--spinner-print-around)
-          (setq julia-snail--imenu-fallback-index-function imenu-create-index-function)
-          (setq imenu-create-index-function 'julia-snail-imenu)
-          (if (and (or (locate-library "company-quickhelp")
-                       (locate-library "corfu-doc") ; deprecated; keeping around for backwards compatibility
-                       ;; TODO / FIXME: Implement a clean check for corfu-popupinfo, the Corfu documentation display system
-                       )
-                   julia-snail-completions-doc-enable)
-              (add-hook 'completion-at-point-functions #'julia-snail-completions-doc-capf nil t)
-            (add-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point nil t)))
-      ;; deactivate
-      (remove-hook 'completion-at-point-functions #'julia-snail-completions-doc-capf t)
-      (remove-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point t)
-      (setq imenu-create-index-function julia-snail--imenu-fallback-index-function)
-      (setq julia-snail--imenu-fallback-index-function nil)
-      (advice-remove 'spinner-print #'julia-snail--spinner-print-around)
-      (remove-function (local 'eldoc-documentation-function) #'julia-snail-eldoc)
-      (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
-      (julia-snail--disable))))
+  (if julia-snail-mode
+      ;; activate
+      (progn
+        (julia-snail--enable)
+        (add-hook 'xref-backend-functions #'julia-snail-xref-backend nil t)
+        (add-function :before-until (local 'eldoc-documentation-function) #'julia-snail-eldoc)
+        (advice-add 'spinner-print :around #'julia-snail--spinner-print-around)
+        (setq julia-snail--imenu-fallback-index-function imenu-create-index-function)
+        (setq imenu-create-index-function 'julia-snail-imenu)
+        (if (and (or (locate-library "company-quickhelp")
+                     (locate-library "corfu-doc") ; deprecated; keeping around for backwards compatibility
+                     ;; TODO / FIXME: Implement a clean check for corfu-popupinfo, the Corfu documentation display system
+                     )
+                 julia-snail-completions-doc-enable)
+            (add-hook 'completion-at-point-functions #'julia-snail-completions-doc-capf nil t)
+          (add-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point nil t)))
+    ;; deactivate
+    (remove-hook 'completion-at-point-functions #'julia-snail-completions-doc-capf t)
+    (remove-hook 'completion-at-point-functions #'julia-snail-repl-completion-at-point t)
+    (setq imenu-create-index-function julia-snail--imenu-fallback-index-function)
+    (setq julia-snail--imenu-fallback-index-function nil)
+    (advice-remove 'spinner-print #'julia-snail--spinner-print-around)
+    (remove-function (local 'eldoc-documentation-function) #'julia-snail-eldoc)
+    (remove-hook 'xref-backend-functions #'julia-snail-xref-backend t)
+    (julia-snail--disable)))
 
 ;;;###autoload
 (define-minor-mode julia-snail-repl-mode
