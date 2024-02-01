@@ -1345,10 +1345,11 @@ evaluated in the context of MODULE."
   "Implementation for Emacs `completion-at-point' system using REPL.REPLCompletions as the provider."
   (let ((identifier (julia-snail--identifier-at-point))
         (bounds (julia-snail--identifier-at-point-bounds))
+        (repl-buf (get-buffer julia-snail-repl-buffer))
         (split-on "\\.")
         (prefix "")
         start)
-    (when bounds
+    (when (and bounds repl-buf)
       ;; If identifier starts with a backslash we need to add an extra "\\" to
       ;; make sure that the string which arrives to the completion provider on the server starts with "\\".
       (when (s-equals-p (substring identifier 0 1) "\\")
