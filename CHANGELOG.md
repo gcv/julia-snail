@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+### Fixed
+
+- Make `julia-snail-repl-completion-at-point` try to work even when not connected to Snail ([#142](https://github.com/gcv/julia-snail/pull/142)).
+
+
 ## [1.3.1] — 2024-01-17
 
 ### Fixed
