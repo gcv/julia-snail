@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Make `julia-snail-repl-completion-at-point` try to work even when not connected to Snail ([#142](https://github.com/gcv/julia-snail/pull/142)).
+- Fix returning `missing` values ([#143](https://github.com/gcv/julia-snail/issues/143)).
 
 
 ## [1.3.1] — 2024-01-17

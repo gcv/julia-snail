@@ -145,7 +145,7 @@ struct Params
 end
 
 function format(obj, width, height)
-   if obj == nothing
+   if isnothing(obj)
       return ""
    end
    io = IOBuffer()
@@ -255,11 +255,11 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum,
    # linenum - 1 accounts for the leading "begin" line in tmpfiles
    expr_change_lnn(exprs, realfilesym, linenum - 1)
    result = eval_in_module(modpath, exprs)
-   if Conf.repl_display_eval_results && result != nothing
+   if Conf.repl_display_eval_results && !isnothing(result)
       println()
       @info "Module $modpath\n$result"
    end
-   if popup_params == nothing
+   if isnothing(popup_params)
       Main.JuliaSnail.elexpr(true)
    else
       Main.JuliaSnail.elexpr((
@@ -304,7 +304,7 @@ Return a name split into its module and identifier components.
 Example: given a string like "Base.Math.acos", return [Base.Math, "acos"].
 """
 function split_name(name::String, ns::Module=Main)
-   if match(r"\.", name) == nothing
+   if isnothing(match(r"\.", name))
       return [ns, name]
    end
    components = match(r"(.*?)\.(.*)", name)
@@ -431,7 +431,7 @@ function apropos(ns, pattern)
    names = lsnames(ns, all=true, imported=true, include_modules=false, recursive=true, pattern=pattern)
    # lazy load Base
    global apropos_cached_base
-   if apropos_cached_base == nothing
+   if isnothing(apropos_cached_base)
       apropos_cached_base = lsnames(Main.Base, all=false, imported=true, include_modules=true, recursive=true, prepend_ns=true)
    end
    base_filtered = filter(
@@ -440,7 +440,7 @@ function apropos(ns, pattern)
    append!(names, base_filtered)
    # lazy load Core
    global apropos_cached_core
-   if apropos_cached_core == nothing
+   if isnothing(apropos_cached_core)
       apropos_cached_core = lsnames(Main.Core, all=false, imported=true, include_modules=true, recursive=true, prepend_ns=true)
    end
    core_filtered = filter(
@@ -980,7 +980,7 @@ has multiple entries, send_to_client will prompt the user at the REPL to select
 which client should receive the message.
 """
 function send_to_client(expr, client_socket=nothing)
-   if client_socket == nothing
+   if isnothing(client_socket)
       if isempty(client_sockets)
          throw("No client connections available")
       elseif 1 == length(client_sockets)
