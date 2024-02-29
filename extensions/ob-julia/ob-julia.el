@@ -53,7 +53,7 @@ your org notebook"
   :safe 'booleanp
   :type 'boolean)
 
-(defcustom org-babel-julia-snail-resource-directory "./.ob-julia-snail/"
+(defcustom julia-snail/ob-julia-resource-directory "./.ob-julia-snail/"
   "Directory used to store automatically generated image files for display in org buffers."
   :group 'julia-snail
   :type 'string)
@@ -71,7 +71,7 @@ your org notebook"
                        module
                        src-file
                        out-file
-                       org-babel-julia-snail-resource-directory
+                       julia-snail/ob-julia-resource-directory
                        (if julia-snail/ob-julia-use-error-pane "true" "false")
                        (if julia-snail/ob-julia-mirror-output-in-repl "true" "false")
                        (if julia-snail/ob-julia-capture-io "true" "false"))))

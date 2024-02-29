@@ -461,7 +461,7 @@ Customization variables:
 - `julia-snail/ob-julia-use-error-pane t` : If true, use julia-snail's popup error pane. Otherwise, display errors inline
 - `julia-snail/ob-julia-mirror-output-in-repl t` : If true, all output from code evaluated in ob-julia will also be shown in the julia REPL.
 - `julia-snail/ob-julia-capture-io t` : If true, all intermediate printing during evaluation will be captured by ob-julia and printed into your org notebook
-- `org-babel-julia-snail-resource-directory "./.ob-julia-snail/"`: Directory used to store automatically generated image files for display in org buffers. By default this is a local hidden directory, but it can be changed to e.g. `/tmp/` if you don't want to keep the image files around.
+- `julia-snail/ob-julia-resource-directory "./.ob-julia-snail/"`: Directory used to store automatically generated image files for display in org buffers. By default this is a local hidden directory, but it can be changed to e.g. `/tmp/` if you don't want to keep the image files around.
 
 
 ## Future improvements
