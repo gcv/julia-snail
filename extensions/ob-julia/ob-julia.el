@@ -53,6 +53,11 @@ your org notebook"
   :safe 'booleanp
   :type 'boolean)
 
+(defcustom org-babel-julia-snail-resource-directory "./.ob-julia-snail/"
+  "Directory used to store automatically generated image files for display in org buffers."
+  :group 'julia-snail
+  :type 'string)
+
 (defvar julia-snail/ob-julia--point-inits (make-hash-table))
 (defvar julia-snail/ob-julia--point-finals (make-hash-table))
 
@@ -62,10 +67,11 @@ your org notebook"
 (defun julia-snail/ob-julia-evaluate (module _body src-file out-file)
   (let* (;;(filename (julia-snail--efn (buffer-file-name (buffer-base-buffer)))) ; commented out to make byte-compiler happy
          ;;(line-num 0)                                                          ; commented out to make byte-compiler happy
-         (text (format "JuliaSnail.Extensions.ObJulia.babel_run_and_store(%s, \"%s\", \"%s\", %s, %s, %s)"
+         (text (format "JuliaSnail.Extensions.ObJulia.babel_run_and_store(%s, \"%s\", \"%s\", \"%s\", %s, %s, %s)"
                        module
                        src-file
                        out-file
+                       org-babel-julia-snail-resource-directory
                        (if julia-snail/ob-julia-use-error-pane "true" "false")
                        (if julia-snail/ob-julia-mirror-output-in-repl "true" "false")
                        (if julia-snail/ob-julia-capture-io "true" "false"))))
