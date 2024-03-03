@@ -21,7 +21,7 @@ function maybe_redirect_stderr_stdout(f, io, flag)
     end
 end
 
-function babel_run_and_store(mod::Module, src_file, out_file,
+function babel_run_and_store(mod::Module, src_file, out_file, resource_directory,
                              use_error_pane::Bool,
                              mirror_to_repl::Bool,
                              capture_io::Bool)
@@ -43,7 +43,7 @@ function babel_run_and_store(mod::Module, src_file, out_file,
             Base.invokelatest() do
                 for (imgtype, ext) ∈ [("image/png", ".png"), ("image/svg+xml", ".svg")]
                     if showable(imgtype, result)
-                        tmp = tempname() * ext
+                        tmp = tempname(mkpath(resource_directory); cleanup=false) * ext
                         open(tmp, "w+") do io
                             show(io, imgtype, result) # Save the image to disk
                         end
