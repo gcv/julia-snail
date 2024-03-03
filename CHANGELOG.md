@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ob-julia` extension: new configuration option: `julia-snail/ob-julia-resource-directory` ([#146](https://github.com/gcv/julia-snail/pull/146)).
 
 
+### Changed
+
+- Standardized on using `locate-library` to locate Snail's installation ([#147](https://github.com/gcv/julia-snail/issues/147)).
+
+
 ## [1.3.2] — 2024-02-27
 
 ### Fixed

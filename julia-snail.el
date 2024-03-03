@@ -579,7 +579,7 @@ Returns nil if the poll timed out, t otherwise."
                                    (concat "julia-snail-" checksum "/"))))
     (unless (file-exists-p snail-remote-dir)
       (make-directory snail-remote-dir)
-      (let ((default-directory (file-name-directory (symbol-file 'julia-snail))))
+      (let ((default-directory (file-name-directory (locate-library "julia-snail"))))
         (cl-loop for f in julia-snail--julia-files do
                  (if (file-directory-p f)
                      (make-directory (concat snail-remote-dir f))
@@ -1667,7 +1667,7 @@ evaluated in the context of MODULE."
 (defun julia-snail--extension-load (extname)
   (let ((extsym (julia-snail--extension-symbol extname)))
     (unless (featurep extsym)
-      (let* ((current-file (symbol-file 'julia-snail))
+      (let* ((current-file (locate-library "julia-snail"))
              (extdir (concat (file-name-directory current-file)
                              (file-name-as-directory "extensions")
                              (file-name-as-directory (symbol-name extname))))
