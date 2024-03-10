@@ -151,9 +151,11 @@ your org notebook"
          (end (org-element-property :end context))
          (contents (buffer-substring beg end))
          (pt (- (point) beg))
+         (jsrb-save julia-snail-repl-buffer) ; julia-snail-repl-buffer is buffer local, so we need to preserve it!
          (inner-module (with-temp-buffer
-                         (insert contents)
-                         (julia-snail--cst-module-at (current-buffer) pt))))
+                         (let* ((julia-snail-repl-buffer jsrb-save))
+                           (insert contents)
+                           (julia-snail--cst-module-at (current-buffer) pt)))))
     (if inner-module
         (append src-module inner-module)
       src-module)))
