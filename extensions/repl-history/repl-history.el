@@ -84,7 +84,7 @@ to search through."
   (let* ((hst (julia-snail/repl-history--fetch n))
          (res (completing-read "Julia REPL history search: " hst)))
     (if (symbol-value julia-snail-repl-mode)
-        (vterm-insert res)
+        (julia-snail--terminal-send-string res)
       (insert res))))
 
 (cl-defun julia-snail/repl-history-buffer (&optional (n julia-snail/repl-history-default-size))
