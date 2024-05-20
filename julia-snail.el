@@ -1334,7 +1334,7 @@ evaluated in the context of MODULE."
          (res (julia-snail--send-to-server
                 :Main
                 (format "try; JuliaSnail.replcompletion(\"%1$s\", %2$s); catch; JuliaSnail.replcompletion(\"%1$s\", Main); end"
-                        identifier
+                        (regexp-quote identifier)
                         (s-join "." module))
                 :async nil)))
     (if (eq :nothing res)
@@ -1350,13 +1350,6 @@ evaluated in the context of MODULE."
         (prefix "")
         start)
     (when (and bounds repl-buf)
-      ;; check if identifier at point is inside a string and attach the opening quotes so
-      ;; we get path completion.
-      (when-let (prev (char-before (car bounds)))
-        (when (char-equal prev ?\")
-          (setq identifier (concat "\\\"" identifier))
-          ;; TODO: add support for Windows paths (splitting on "\\" when appropriate)
-          (setq split-on "/")))
       ;; If identifier is not a string, we split on "." so that completions of
       ;; the form Module.f -> Module.func work (since
       ;; `julia-snail--repl-completions' will return only "func" in this case)
