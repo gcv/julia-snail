@@ -1334,7 +1334,7 @@ evaluated in the context of MODULE."
          (res (julia-snail--send-to-server
                 :Main
                 (format "try; JuliaSnail.replcompletion(\"%1$s\", %2$s); catch; JuliaSnail.replcompletion(\"%1$s\", Main); end"
-                        (regexp-quote identifier)
+                        identifier
                         (s-join "." module))
                 :async nil)))
     (if (eq :nothing res)
@@ -1350,6 +1350,10 @@ evaluated in the context of MODULE."
         (prefix "")
         start)
     (when (and bounds repl-buf)
+      ;; If identifier starts with a backslash we need to add an extra "\\" to
+      ;; make sure that the string which arrives to the completion provider on the server starts with "\\".
+      (when (s-equals-p (substring identifier 0 1) "\\")
+        (setq prefix "\\"))
       ;; If identifier is not a string, we split on "." so that completions of
       ;; the form Module.f -> Module.func work (since
       ;; `julia-snail--repl-completions' will return only "func" in this case)
