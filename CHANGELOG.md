@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `ob-julia` extension: new configuration option: `julia-snail/ob-julia-resource-directory` ([#146](https://github.com/gcv/julia-snail/pull/146)).
+- Update the REPL's `ans` variable after evaluating something through Snail.
 
 
 ### Changed

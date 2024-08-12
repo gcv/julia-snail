@@ -259,6 +259,7 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum,
       println()
       @info "Module $modpath\n$result"
    end
+   Base.MainInclude.ans = result # update the REPL's magic `ans` variable
    if isnothing(popup_params)
       Main.JuliaSnail.elexpr(true)
    else
