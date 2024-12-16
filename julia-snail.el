@@ -1817,6 +1817,32 @@ This will occur in the context of the Main module, just as it would at the REPL.
                                          filename
                                          (julia-snail--construct-module-path module)))))))))
 
+;; Trimmed down version of julia-snail-send-buffer-file which only analyzes the "include" statements without running the code
+(defun julia-snail-analyze-includes ()
+  "Analyze the current buffer's file for include statements"
+  (interactive)
+  (let* ((filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
+         (includes (julia-snail--cst-includes (current-buffer))))
+    (when (or (not (buffer-modified-p))
+              (y-or-n-p (format "'%s' is not saved, analyze in Julia anyway? " filename)))
+      (if (eq :error includes)
+          (let ((error-buffer
+                 (julia-snail--message-buffer
+                  repl-buf
+                  "error"
+                  (concat filename
+                          " analyzed in Julia, but the Snail parser failed.\n\n"
+                          "Please report this as a parser bug:\n\n"
+                          "https://github.com/gcv/julia-snail/issues\n\n"
+                          "Please try to narrow down the code which Snail fails to parse.\n"
+                          "The easiest way of doing this is to bisect the failing source file by\n"
+                          "commenting out successive halves.\n"
+                          "The more information about code which Snail cannot parse you include in the bug\n"
+                          "report, the easier it will be to fix."))))
+            (pop-to-buffer error-buffer))
+        ;; successful load
+        (julia-snail--module-merge-includes filename includes)))))
+
 (defun julia-snail-package-activate (dir)
   "Activate a Pkg project located in DIR in the Julia REPL."
   (interactive "DProject directory: ")
