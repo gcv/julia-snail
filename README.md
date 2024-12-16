@@ -463,11 +463,23 @@ Customization variables:
 - `julia-snail/ob-julia-capture-io t` : If true, all intermediate printing during evaluation will be captured by ob-julia and printed into your org notebook
 - `julia-snail/ob-julia-resource-directory "./.ob-julia-snail/"`: Directory used to store automatically generated image files for display in org buffers. By default this is a local hidden directory, but it can be changed to e.g. `/tmp/` if you don't want to keep the image files around.
 
+### Debug
+
+This extension uses [DebugAdapter.jl](https://github.com/julia-vscode/DebugAdapter.jl) and [dape](https://github.com/svaante/dape) to allow debugging inside the REPL.
+
+Use one of the following macros to initiate the debug session from the REPL:
+- `@run` pause on first breakpoint.
+- `@enter` pause on entry.
+
+```julia
+using .JuliaSnail.Extensions.Debug
+
+@enter(println("hello world"))
+```
 
 ## Future improvements
 
 -  The `libvterm` dependency forces the use of recent Emacs releases, forces Emacs to be build with module support, complicates support for Windows, and is generally quite gnarly. The Eat alternative requires Emacs 28. It would be much better to re-implement the REPL in Elisp and make sure it works on older Emacs versions.
 - Completion does not pick up local variables.
 - A real eldoc implementation would be great, but difficult to do with Julia’s generic functions.
-- A debugger would be great.
 - A real test suite which fully drives both Julia and Emacs and runs in a CI environment (like GitHub Actions) wouldn’t hurt, either.
