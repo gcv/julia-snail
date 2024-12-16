@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `ob-julia` extension: new configuration option: `julia-snail/ob-julia-resource-directory` ([#146](https://github.com/gcv/julia-snail/pull/146)).
 - Update the REPL's `ans` variable after evaluating something through Snail.
+- `debug` extension added, which integrates `DebugAdapter` and `dape` for REPL debugging.
+- `julia-snail-analyze-includes`: a new approach for handling nested modules.
 
 
 ### Changed
