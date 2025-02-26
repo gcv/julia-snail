@@ -614,8 +614,60 @@ function codetree(encodedbuf)
       [:list; tree_result]
 end
 
+"""
+For a given buffer, return the files `include()`d in each nested module.
+
+Result structure: {
+  filename -> [module names]
+}
+
+Uses JuliaSyntax to parse the code and find include statements within modules.
+"""
 function includesin(encodedbuf, path="")
-   # FIXME: Write this.
+    tree = parse(encodedbuf)
+    results = Dict{String,Vector{Symbol}}()
+
+    helper = (node, modules = Symbol[]) -> begin
+        for child in JS.children(node)
+            kind = JS.kind(child)
+
+            # Check for include calls
+            if kind == JS.K"call" && length(JS.children(child)) >= 2
+                call_name = JS.children(child)[1]
+                if String(JS.sourcetext(call_name)) == "include"
+                    # Get filename from the first argument
+                    filename_node = JS.children(child)[2]
+                    filename = String(JS.sourcetext(filename_node))
+                    # Remove quotes
+                    filename = replace(filename, r"^\"(.*)\"$" => s"\1")
+                    full_path = joinpath(path, filename)
+                    results[full_path] = copy(modules)
+                end
+            # Track module context
+            elseif kind == JS.K"module"
+                name = nodename(child)
+                if name !== nothing
+                    helper(child, [modules; Symbol(name)])
+                end
+            end
+
+            # Recurse into other nodes that may contain includes
+            if JS.haschildren(child)
+                helper(child, modules)
+            end
+        end
+    end
+
+    helper(tree)
+
+    # Convert to plist for Emacs
+    reslist = []
+    for (file, modules) in results
+        push!(reslist, file)
+        push!(reslist, [:list; modules])
+    end
+
+    return isempty(reslist) ? nothing : [:list; reslist]
 end
 
 end
