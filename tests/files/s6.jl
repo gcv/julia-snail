@@ -18,13 +18,20 @@ struct S10
    y
 end
 
-# Abstract type
-abstract type AbstractPoint end
+# Abstract types
+abstract type AbstractPoint1 end
+abstract type AbstractPoint2 <: Number end
 
-# Primitive type
+# Primitive types
 primitive type Point24 24 end
+primitive type Int8 <: Integer 8 end
 
 # Multiple definitions
 function overloaded() 1 end
 function overloaded(x) x end
 function overloaded(x,y) x+y end
+
+# Macro definition
+macro sayhello(name)
+   return :( println("Hello, ", $name) )
+end

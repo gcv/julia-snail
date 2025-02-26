@@ -524,13 +524,25 @@ function nodename(node::JS.SyntaxNode)
       end
 
    elseif kind == JS.K"primitive"
-      if length(children) >= 2
-         return string(children[2])  # First child is "type" keyword
+      # Support both these cases:
+      # primitive type Point24 24 end
+      # primitive type Int8 <: Integer 8 end
+      grandchildren = JS.children(children[1])
+      if length(grandchildren) > 0
+         return string(grandchildren[1])
+      else
+         return string(children[1])
       end
 
    elseif kind == JS.K"abstract"
-      if length(children) >= 2
-         return string(children[2])  # First child is "type" keyword
+      # Support both these cases:
+      # abstract type AbstractPoint1 end
+      # abstract type AbstractPoint2 <: Number end
+      grandchildren = JS.children(children[1])
+      if length(grandchildren) > 0
+         return string(grandchildren[1])
+      else
+         return string(children[1])
       end
 
    elseif kind == JS.K"macro"
@@ -569,11 +581,9 @@ function blockat(encodedbuf, byteloc)
          description = nothing
          push!(modules, nodename(node.expr))
       elseif isnothing(description)
-         if JS.kind(node.expr) ∈ [JS.K"abstract", JS.K"function", JS.K"macro"]
-            description = nodename(node.expr)
-            start = node.start
-            stop = node.stop + 1
-         elseif JS.kind(node.expr) ∈ [JS.K"struct", JS.K"primitive"]
+         if JS.kind(node.expr) ∈ [JS.K"function", JS.K"macro",
+                                  JS.K"struct",
+                                  JS.K"abstract", JS.K"primitive"]
             description = nodename(node.expr)
             start = node.start
             stop = node.stop + 1

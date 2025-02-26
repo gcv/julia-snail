@@ -68,15 +68,20 @@ import Base64
       @test [:list, (), 178, 202, "S10"] == JuliaSnail.JStx.blockat(s6, 190)
 
       # Test abstract type
-      @test [:list, (), 205, 235, "AbstractPoint"] == JuliaSnail.JStx.blockat(s6, 220)
+      @test [:list, (), 221, 253, "AbstractPoint1"] == JuliaSnail.JStx.blockat(s6, 235)
+      @test [:list, (), 254, 296, "AbstractPoint2"] == JuliaSnail.JStx.blockat(s6, 268)
 
-      # Test primitive type  
-      @test [:list, (), 238, 267, "Point24"] == JuliaSnail.JStx.blockat(s6, 250)
+      # Test primitive types
+      @test [:list, (), 316, 345, "Point24"] == JuliaSnail.JStx.blockat(s6, 331)
+      @test [:list, (), 346, 382, "Int8"] == JuliaSnail.JStx.blockat(s6, 361)
 
       # Test multiple definitions
-      @test [:list, (), 270, 299, "overloaded"] == JuliaSnail.JStx.blockat(s6, 280)
-      @test [:list, (), 300, 328, "overloaded"] == JuliaSnail.JStx.blockat(s6, 310)
-      @test [:list, (), 329, 361, "overloaded"] == JuliaSnail.JStx.blockat(s6, 340)
+      @test [:list, (), 407, 434, "overloaded"] == JuliaSnail.JStx.blockat(s6, 416)
+      @test [:list, (), 435, 463, "overloaded"] == JuliaSnail.JStx.blockat(s6, 444)
+      @test [:list, (), 464, 496, "overloaded"] == JuliaSnail.JStx.blockat(s6, 473)
+
+      # Test macro
+      @test [:list, (), 517, 582, "sayhello"] == JuliaSnail.JStx.blockat(s6, 523)
    end
 
 end
