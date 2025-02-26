@@ -574,7 +574,44 @@ function blockat(encodedbuf, byteloc)
 end
 
 function codetree(encodedbuf)
-   # FIXME: Write this.
+   tree = parse(encodedbuf)
+   helper = (node, depth = 1) -> begin
+      res = []
+      for child in JS.children(node)
+         kind = JS.kind(child)
+         name = nodename(child)
+         if name !== nothing
+            if kind == JS.K"module"
+               push!(res, (:module, name, JS.first_byte(child), helper(child, depth + 1)))
+            elseif kind == JS.K"function"
+               # Reconstruct function signature from the call node
+               if JS.haschildren(child) && JS.kind(JS.children(child)[1]) == JS.K"call"
+                  call_node = JS.children(child)[1]
+                  sig = String(JS.sourcetext(call_node))
+                  push!(res, (:function, sig, JS.first_byte(child)))
+               else
+                  push!(res, (:function, name * "()", JS.first_byte(child)))
+               end
+            elseif kind ∈ (JS.K"struct", JS.K"mutable")
+               push!(res, (:struct, name, JS.first_byte(child)))
+            elseif kind ∈ (JS.K"abstract", JS.K"primitive")
+               push!(res, (:type, name, JS.first_byte(child)))
+            elseif kind == JS.K"macro"
+               push!(res, (:macro, name, JS.first_byte(child)))
+            end
+         else
+            # Flatten results from nested nodes that aren't modules
+            if JS.haschildren(child)
+               append!(res, helper(child, depth + 1))
+            end
+         end
+      end
+      return res
+   end
+   tree_result = helper(tree)
+   return isempty(tree_result) ?
+      nothing :
+      [:list; tree_result]
 end
 
 function includesin(encodedbuf, path="")
