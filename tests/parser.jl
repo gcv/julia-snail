@@ -8,6 +8,7 @@ import Base64
    s3 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s3.jl"), String))
    s4 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s4.jl"), String))
    s5 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s5.jl"), String))
+   s6 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s6.jl"), String))
 
    @testset "module detection" begin
       @test [:list] == JuliaSnail.JStx.moduleat(s1, 0)
@@ -56,18 +57,26 @@ import Base64
    end
 
    @testset "Special syntax cases" begin
-      s6 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s6.jl"), String))
-      
       # Test nested function (only outer)
+      @test [:list, (), 20, 97, "outer"] == JuliaSnail.JStx.blockat(s6, 70)
       @test [:list, (), 20, 97, "outer"] == JuliaSnail.JStx.blockat(s6, 85)
-      
-      # Test type with parameters  
-      @test [:list, (), 20, 97, "GenericPoint"] == JuliaSnail.JStx.blockat(s6, 150)
-      
+
+      # Test struct with parameters
+      @test [:list, (), 117, 161, "GenericPoint"] == JuliaSnail.JStx.blockat(s6, 150)
+
+      # Test plain struct
+      @test [:list, (), 178, 202, "S10"] == JuliaSnail.JStx.blockat(s6, 190)
+
+      # Test abstract type
+      @test [:list, (), 205, 235, "AbstractPoint"] == JuliaSnail.JStx.blockat(s6, 220)
+
+      # Test primitive type  
+      @test [:list, (), 238, 267, "Point24"] == JuliaSnail.JStx.blockat(s6, 250)
+
       # Test multiple definitions
-      @test [:list, (), 161, 184, "overloaded"] == JuliaSnail.JStx.blockat(s6, 170)
-      @test [:list, (), 185, 210, "overloaded"] == JuliaSnail.JStx.blockat(s6, 195)
-      @test [:list, (), 211, 241, "overloaded"] == JuliaSnail.JStx.blockat(s6, 220)
+      @test [:list, (), 270, 297, "overloaded"] == JuliaSnail.JStx.blockat(s6, 280)
+      @test [:list, (), 298, 326, "overloaded"] == JuliaSnail.JStx.blockat(s6, 310)
+      @test [:list, (), 327, 359, "overloaded"] == JuliaSnail.JStx.blockat(s6, 340)
    end
 
 end
