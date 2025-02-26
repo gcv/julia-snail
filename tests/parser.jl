@@ -1,51 +1,13 @@
 import Base64
-using Test
-
-
-include("../JuliaSnail.jl")
 
 
 @testset "parser interface" begin
 
-   # TODO: Move these samples into supporting files:
-
-   s1 = Base64.base64encode("""
-function f1(); end
-""")
-
-   s2 = Base64.base64encode("""
-module Alpha
-function f1(); end
-end
-function f2(); end
-module Bravo
-module Charlie
-function f3(); end
-end
-end
-""")
-
-   s3 = Base64.base64encode("""
-module Geometry
-area_circle(radius) = π * r^2
-end
-f1() = "f1"
-""")
-
-   s4 = Base64.base64encode("""
-module Alpha
-include("a1.jl")
-include("a2.jl")
-end
-""")
-
-   s5 = Base64.base64encode("""
-module Alpha
-module Bravo
-include("a1.jl")
-end
-end
-""")
+   s1 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s1.jl"), String))
+   s2 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s2.jl"), String))
+   s3 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s3.jl"), String))
+   s4 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s4.jl"), String))
+   s5 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s5.jl"), String))
 
    @testset "module detection" begin
       @test [:list] == JuliaSnail.CST.moduleat(s1, 0)
@@ -65,6 +27,18 @@ end
       @test [:list, (), 37, 55, "f2"] == JuliaSnail.CST.blockat(s2, 50)
       @test [:list, ("Bravo", "Charlie"), 84, 102, "f3"] == JuliaSnail.CST.blockat(s2, 97)
       @test [:list, tuple("Geometry"), 17, 47, "area_circle"] == JuliaSnail.CST.blockat(s3, 25)
+   end
+
+   @testset "code tree" begin
+      buf = Base64.base64encode(read(joinpath(@__DIR__, "files", "codetree.jl"), String))
+      @test Any[:list,
+                (:module, "Alpha", 1, Any[
+                   (:module, "Bravo", 15, Any[
+                      (:function, "f1(x)", 29),
+                      (:module, "Charlie", 54, Any[])]),
+                   (:module, "Delta", 80, Any[])]),
+                (:module, "Echo", 104, Any[])] ==
+         JuliaSnail.CST.codetree(buf)
    end
 
    @testset "include detection" begin
