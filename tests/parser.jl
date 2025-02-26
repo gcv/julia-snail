@@ -23,11 +23,11 @@ import Base64
    end
 
    @testset "block detection" begin
-      @test [:list, (), 1, 19, "f1"] == JuliaSnail.CST.blockat(s1, 3)
-      @test [:list, tuple("Alpha"), 14, 32, "f1"] == JuliaSnail.CST.blockat(s2, 27)
-      @test [:list, (), 37, 55, "f2"] == JuliaSnail.CST.blockat(s2, 50)
-      @test [:list, ("Bravo", "Charlie"), 84, 102, "f3"] == JuliaSnail.CST.blockat(s2, 97)
-      @test [:list, tuple("Geometry"), 17, 47, "area_circle"] == JuliaSnail.CST.blockat(s3, 25)
+      @test [:list, (), 1, 19, "f1"] == JuliaSnail.JStx.blockat(s1, 3)
+      @test [:list, tuple("Alpha"), 14, 32, "f1"] == JuliaSnail.JStx.blockat(s2, 27)
+      @test [:list, (), 37, 55, "f2"] == JuliaSnail.JStx.blockat(s2, 50)
+      @test [:list, ("Bravo", "Charlie"), 84, 102, "f3"] == JuliaSnail.JStx.blockat(s2, 97)
+      @test [:list, tuple("Geometry"), 17, 47, "area_circle"] == JuliaSnail.JStx.blockat(s3, 25)
    end
 
    @testset "code tree" begin
@@ -44,16 +44,8 @@ import Base64
 
    @testset "include detection" begin
       # more tests in implicit-modules.el
-      @test [:list, "a1.jl", [:list, "Alpha"], "a2.jl", [:list, "Alpha"]] == JuliaSnail.CST.includesin(s4)
-      @test [:list, "a1.jl", [:list, "Alpha", "Bravo"]] == JuliaSnail.CST.includesin(s5)
-   end
-
-   @testset "JuliaSyntax equivalence to CST" begin
-      @test [:list, (), 1, 19, "f1"] == JuliaSnail.CST.blockat(s1, 3) == JuliaSnail.JStx.blockat(s1, 3)
-      @test [:list, tuple("Alpha"), 14, 32, "f1"] == JuliaSnail.CST.blockat(s2, 27) == JuliaSnail.JStx.blockat(s2, 27)
-      @test [:list, (), 37, 55, "f2"] == JuliaSnail.CST.blockat(s2, 50) == JuliaSnail.JStx.blockat(s2, 50)
-      @test [:list, ("Bravo", "Charlie"), 84, 102, "f3"] == JuliaSnail.CST.blockat(s2, 97) == JuliaSnail.JStx.blockat(s2, 97)
-      @test [:list, tuple("Geometry"), 17, 47, "area_circle"] == JuliaSnail.CST.blockat(s3, 25) == JuliaSnail.JStx.blockat(s3, 25)
+      @test [:list, "a1.jl", [:list, "Alpha"], "a2.jl", [:list, "Alpha"]] == JuliaSnail.JStx.includesin(s4)
+      @test [:list, "a1.jl", [:list, "Alpha", "Bravo"]] == JuliaSnail.JStx.includesin(s5)
    end
 
    @testset "Special syntax cases" begin
