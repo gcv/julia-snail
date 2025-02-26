@@ -558,14 +558,23 @@ function blockat(encodedbuf, byteloc)
       if JS.kind(node.expr) == JS.K"module"
          description = nothing
          push!(modules, nodename(node.expr))
-      elseif (isnothing(description) &&
-         (JS.kind(node.expr) ∈ [JS.K"abstract", JS.K"function",
-                                JS.K"struct", JS.K"primitive",
-                                JS.K"macro"]))
-         description = nodename(node.expr)
-         start = node.start
-         # Add 1 to stop to match CST behavior which includes the trailing newline
-         stop = node.stop + 1
+      elseif isnothing(description)
+         # Handle both regular function definitions and assignments
+         if JS.kind(node.expr) ∈ [JS.K"abstract", JS.K"function",
+                                JS.K"struct", JS.K"primitive", 
+                                JS.K"macro"]
+            description = nodename(node.expr)
+            start = node.start
+            stop = node.stop + 1
+         elseif JS.kind(node.expr) == JS.K"=" 
+            # Check for function assignment like f() = ...
+            children = JS.children(node.expr)
+            if length(children) >= 1 && JS.kind(children[1]) == JS.K"call"
+               description = string(JS.children(children[1])[1])
+               start = node.start
+               stop = node.stop + 1
+            end
+         end
       end
    end
    # result format equivalent to what Elisp side expects
