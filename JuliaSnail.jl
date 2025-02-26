@@ -472,7 +472,7 @@ end
 
 ### --- JuliaSyntax wrappers
 
-module Syntax
+module JStx
 
 import Base64
 import Base.JuliaSyntax as JS
