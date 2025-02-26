@@ -960,6 +960,13 @@ during evaluation are captured and sent back to the client as Elisp
 s-expressions. Special queries also write back their responses as s-expressions.
 """
 function start(port=10011; addr="127.0.0.1")
+   if VERSION < v"1.10"
+      # JuliaSyntax only ships with 1.10.
+      # This is an exception-throwing error, and it's placed here so users have
+      # a chance to see it before the terminal closes.
+      error("ERROR: Julia Snail now requires Julia 1.10 or higher")
+   end
+
    global running = false
    global server_socket = Sockets.listen(Sockets.IPv4(addr), port)
    let wait_result = timedwait(function(); server_socket.status == Base.StatusActive; end,
