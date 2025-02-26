@@ -74,9 +74,9 @@ import Base64
       @test [:list, (), 238, 267, "Point24"] == JuliaSnail.JStx.blockat(s6, 250)
 
       # Test multiple definitions
-      @test [:list, (), 270, 297, "overloaded"] == JuliaSnail.JStx.blockat(s6, 280)
-      @test [:list, (), 298, 326, "overloaded"] == JuliaSnail.JStx.blockat(s6, 310)
-      @test [:list, (), 327, 359, "overloaded"] == JuliaSnail.JStx.blockat(s6, 340)
+      @test [:list, (), 270, 299, "overloaded"] == JuliaSnail.JStx.blockat(s6, 280)
+      @test [:list, (), 300, 328, "overloaded"] == JuliaSnail.JStx.blockat(s6, 310)
+      @test [:list, (), 329, 361, "overloaded"] == JuliaSnail.JStx.blockat(s6, 340)
    end
 
 end

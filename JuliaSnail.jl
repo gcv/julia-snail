@@ -524,10 +524,14 @@ function nodename(node::JS.SyntaxNode)
       end
 
    elseif kind == JS.K"primitive"
-      return string(children[2])  # First child is "type" keyword
+      if length(children) >= 2
+         return string(children[2])  # First child is "type" keyword
+      end
 
    elseif kind == JS.K"abstract"
-      return string(children[2])  # First child is "type" keyword
+      if length(children) >= 2
+         return string(children[2])  # First child is "type" keyword
+      end
 
    elseif kind == JS.K"macro"
       first = children[1]
