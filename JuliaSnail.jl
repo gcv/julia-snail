@@ -515,7 +515,13 @@ function nodename(node::JS.SyntaxNode)
       end
 
    elseif kind == JS.K"struct"
-      return string(children[2])  # First child is usually visibility (mutable/abstract)
+      # Handle generic type parameters
+      if JS.kind(children[1]) == JS.K"curly"
+         curly_children = JS.children(children[1])
+         return string(curly_children[1])  # The actual type name
+      else
+         return string(children[1])  # No type parameters
+      end
 
    elseif kind == JS.K"primitive"
       return string(children[2])  # First child is "type" keyword
@@ -559,14 +565,15 @@ function blockat(encodedbuf, byteloc)
          description = nothing
          push!(modules, nodename(node.expr))
       elseif isnothing(description)
-         # Handle both regular function definitions and assignments
-         if JS.kind(node.expr) ∈ [JS.K"abstract", JS.K"function",
-                                JS.K"struct", JS.K"primitive", 
-                                JS.K"macro"]
+         if JS.kind(node.expr) ∈ [JS.K"abstract", JS.K"function", JS.K"macro"]
             description = nodename(node.expr)
             start = node.start
             stop = node.stop + 1
-         elseif JS.kind(node.expr) == JS.K"=" 
+         elseif JS.kind(node.expr) ∈ [JS.K"struct", JS.K"primitive"]
+            description = nodename(node.expr)
+            start = node.start
+            stop = node.stop + 1
+         elseif JS.kind(node.expr) == JS.K"="
             # Check for function assignment like f() = ...
             children = JS.children(node.expr)
             if length(children) >= 1 && JS.kind(children[1]) == JS.K"call"
