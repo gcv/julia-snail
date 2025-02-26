@@ -11,17 +11,52 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import Pkg
-
-
 module JuliaSnail
 
+import Markdown
+import Pkg
+import Printf
+import REPL
+import Sockets
+import REPL.REPLCompletions
 
-# XXX: External dependency hack. Snail's own dependencies need to be listed
-# first in LOAD_PATH during initial load, otherwise conflicting versions
-# installed in the Julia global environment cause conflicts. Especially
-# CSTParser, with its unstable API. However, Snail should not be listed first
-# the rest of the time.
+export start, stop
+
+
+### --- package loading support code
+
+"""
+XXX: External dependency hack.
+
+This macro allows Snail, or its extensions, to provide a Project.toml file with
+Julia dependencies _without_ forcing these extensions to be shipped to the Julia
+package registry.
+
+The intent is to activate the package directory containing the Project.toml
+file, make sure it loads all the dependencies it needs, but put the directory
+containing the relevant Project.toml file at the end of the LOAD_PATH. This
+allows Snail's dependencies to be loaded, but not disturb any environments the
+user wants to activate.
+
+This is no longer used for the Snail core. Extensions are welcome to use it for
+now.
+
+Snail's own dependencies need to be listed first in LOAD_PATH during initial
+load, otherwise conflicting versions installed in the Julia global environment
+cause conflicts. However, Snail should not be listed first the rest of the time.
+
+Historical example, from back when Snail relied on CSTParser:
+
+```
+@with_pkg_env (@__DIR__) begin
+   # list all external dependency imports here (from the appropriate Project.toml, either Snail's or an extension's):
+   import CSTParser
+   # check for dependency API compatibility
+   !isdefined(CSTParser, :iscall) &&
+     throw(ArgumentError("CSTParser API not compatible, must install Snail-specific version"))
+end
+```
+"""
 macro with_pkg_env(dir, action)
    :(
    try
@@ -49,23 +84,6 @@ macro with_pkg_env(dir, action)
    end
    )
 end
-
-@with_pkg_env (@__DIR__) begin
-   # list all external dependency imports here (from the appropriate Project.toml, either Snail's or an extension's):
-   import CSTParser
-   # check for dependency API compatibility
-   !isdefined(CSTParser, :iscall) &&
-     throw(ArgumentError("CSTParser API not compatible, must install Snail-specific version"))
-end
-
-
-import Markdown
-import Printf
-import REPL
-import Sockets
-import REPL.REPLCompletions
-
-export start, stop
 
 
 ### --- configuration
@@ -806,257 +824,6 @@ function includesin(encodedbuf, path="")
     end
 
     return isempty(reslist) ? nothing : [:list; reslist]
-end
-
-end
-
-
-### --- CSTParser wrappers
-
-module CST
-
-import Base64
-import CSTParser
-
-"""
-Helper function: wraps the parser interface.
-"""
-function parse(encodedbuf)
-   cst = nothing
-   try
-      buf = String(Base64.base64decode(encodedbuf))
-      cst = CSTParser.parse(buf, true)
-   catch err
-      # probably an IO problem
-      # TODO: Need better error reporting here.
-      println(err)
-      return []
-   end
-   return cst
-end
-
-"""
-Return the path of CSTParser.EXPR objects from the root of the CST to the
-expression at the offset, while retaining the EXPR objects' full locations.
-
-The path is represented as an array of named tuples. The first element
-represents the root node, and the last element is the expression at the offset.
-Each tuple has a start and stop value, showing locations in the original source
-where that node begins and ends.
-
-NB: The locations represent bytes, not characters!
-
-This is necessary because CSTParser does not include full location data, see
-https://github.com/julia-vscode/CSTParser.jl/pull/80.
-"""
-function pathat(cst, offset, pos = 0, path = [(expr=cst, start=1, stop=cst.span+1)])
-   if cst !== nothing && !CSTParser.isnonstdid(cst)
-      for a in cst
-         if pos < offset <= (pos + a.span)
-            return pathat(a, offset, pos, [path; [(expr=a, start=pos+1, stop=pos+a.span+1)]])
-         end
-         # jump forward by fullspan since we need to skip over a's trailing whitespace
-         pos += a.fullspan
-      end
-   elseif (pos < offset <= (pos + cst.fullspan))
-      return [path; [(expr=cst, start=pos+1, stop=offset+1)]]
-   end
-   return path
-end
-
-"""
-Debugging helper: example code for traversing the CST and tracking the location of each node.
-"""
-function print_cst(cst)
-   offset = 0
-   helper = (node) -> begin
-      for a in node
-         if a.args === nothing
-            val = CSTParser.valof(a)
-            # Unicode byte fix
-            if String == typeof(val)
-               diff = sizeof(val) - length(val)
-               a.span -= diff
-               a.fullspan -= diff
-            end
-            println(offset, ":", offset+a.span, "\t", val)
-            offset += a.fullspan
-         else
-            helper(a)
-         end
-      end
-   end
-   helper(cst)
-   return offset
-end
-
-"""
-Return the module active at point as a list of their names.
-"""
-function moduleat(encodedbuf, byteloc)
-   cst = parse(encodedbuf)
-   path = pathat(cst, byteloc)
-   modules = []
-   for node in path
-      if CSTParser.defines_module(node.expr)
-         push!(modules, CSTParser.valof(CSTParser.get_name(node.expr)))
-      end
-   end
-   return [:list; modules]
-end
-
-"""
-Return information about the block at point.
-"""
-function blockat(encodedbuf, byteloc)
-   cst = parse(encodedbuf)
-   path = pathat(cst, byteloc)
-   modules = []
-   description = nothing
-   start = nothing
-   stop = nothing
-   for node in path
-      if CSTParser.defines_module(node.expr)
-         description = nothing
-         push!(modules, CSTParser.valof(CSTParser.get_name(node.expr)))
-      elseif (isnothing(description) &&
-              (CSTParser.defines_abstract(node.expr) ||
-               CSTParser.defines_datatype(node.expr) ||
-               CSTParser.defines_function(node.expr) ||
-               CSTParser.defines_macro(node.expr) ||
-               CSTParser.defines_mutable(node.expr) ||
-               CSTParser.defines_primitive(node.expr) ||
-               CSTParser.defines_struct(node.expr)))
-         description = CSTParser.valof(CSTParser.get_name(node.expr))
-         start = node.start
-         stop = node.stop
-      end
-   end
-   # result format equivalent to what Elisp side expects
-   return isnothing(description) ?
-      nothing :
-      [:list; tuple(modules...); start; stop; description]
-end
-
-"""
-Internal: assemble a human-readable function signature from a CSTParser node.
-"""
-function fnsig_helper(node)
-   fnsig = ""
-   reassemble = (n) -> begin
-      for x in n
-         if x.args === nothing
-            candidate = CSTParser.valof(CSTParser.get_name(x))
-            if candidate !== nothing && length(candidate) > 0
-               if "," == candidate
-                  candidate *= " "
-               end
-               fnsig *= candidate
-            end
-         else
-            reassemble(x)
-         end
-      end
-   end
-   reassemble(node)
-   return fnsig
-end
-
-"""
-For a given buffer, return the overall tree structure of the code.
-
-Result structure: [
-  [type name location extra]
-]
-where type is :function, :macro, etc.; when type is :module, then extra is a
-nested resulting structure.
-"""
-function codetree(encodedbuf)
-   cst = parse(encodedbuf)
-   offset = 1
-   helper = (node, depth = 1) -> begin
-      res = []
-      for a in node
-         if a.args === nothing
-            val = CSTParser.valof(a)
-            # XXX: We want bytes here because we convert back to position
-            # numbers on the Emacs side. So we do not apply the Unicode byte fix
-            # from print_cst.
-            offset += a.fullspan
-         else
-            curroffset = offset
-            aname = CSTParser.valof(CSTParser.get_name(a))
-            helper_res = helper(a, depth + 1)
-            if aname !== nothing
-               if CSTParser.defines_module(a)
-                  push!(res, (:module, aname, curroffset, helper_res))
-               elseif CSTParser.defines_function(a)
-                  fnsig = fnsig_helper(a.args[1])
-                  push!(res, (:function, fnsig, curroffset))
-               elseif CSTParser.defines_struct(a) || CSTParser.defines_mutable(a)
-                  push!(res, (:struct, aname, curroffset))
-               elseif CSTParser.defines_abstract(a) || CSTParser.defines_datatype(a) || CSTParser.defines_primitive(a)
-                  push!(res, (:type, aname, curroffset))
-               elseif CSTParser.defines_macro(a)
-                  push!(res, (:macro, aname, curroffset))
-               end
-            else
-               # XXX: Flatten on the fly. First, avoid empty entries. Second,
-               # use append! since only modules should generate nesting.
-               if length(helper_res) > 0
-                  append!(res, helper_res)
-               end
-            end
-         end
-      end
-      return res
-   end
-   tree = helper(cst)
-   return isempty(tree) ?
-      nothing :
-      [:list; tree]
-end
-
-"""
-For a given buffer, return the files `include()`d in each nested module.
-
-Result structure: {
-  filename -> [module names]
-}
-
-This nasty code relies on internal CSTParser representations of things.
-Unfortunately, CSTParser doesn't provide a clean API for this sort of thing:
-https://github.com/julia-vscode/CSTParser.jl/issues/56
-"""
-function includesin(encodedbuf, path="")
-   cst = parse(encodedbuf)
-   results = Dict()
-   # walk across args, and track the current module
-   # when a node of type "call" is found, check its args[1]
-   helper = (node, modules = []) -> begin
-      for a in node
-         if (CSTParser.iscall(a) &&
-             "include" == CSTParser.valof(a.args[1]))
-            # a.args[2] is the file name being included
-            filename = joinpath(path, CSTParser.valof(a.args[2]))
-            results[filename] = modules
-         elseif CSTParser.defines_module(a)
-            helper(a, [modules; CSTParser.valof(CSTParser.get_name(a))])
-         elseif !isnothing(a.args)
-            helper(a, modules)
-         end
-      end
-   end
-   helper(cst)
-   # convert to a plist for returning back to Emacs
-   reslist = []
-   for (file, modules) in results
-      push!(reslist, file)
-      push!(reslist, [:list; modules])
-   end
-   return isempty(reslist) ?
-      nothing :
-      [:list; reslist]
 end
 
 end
