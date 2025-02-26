@@ -564,7 +564,8 @@ function blockat(encodedbuf, byteloc)
                                 JS.K"macro"]))
          description = nodename(node.expr)
          start = node.start
-         stop = node.stop
+         # Add 1 to stop to match CST behavior which includes the trailing newline
+         stop = node.stop + 1
       end
    end
    # result format equivalent to what Elisp side expects
