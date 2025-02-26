@@ -477,6 +477,14 @@ module JStx
 import Base64
 import Base.JuliaSyntax as JS
 
+"""
+Parse a Base64-encoded buffer containing Julia code using JuliaSyntax.
+
+Returns a parsed syntax tree or nothing if parsing fails.
+
+# Arguments
+- `encodedbuf`: Base64-encoded string containing Julia source code
+"""
 function parse(encodedbuf)
    try
       buf = String(Base64.base64decode(encodedbuf))
@@ -487,6 +495,22 @@ function parse(encodedbuf)
    end
 end
 
+"""
+Return the path from root to the node containing the given byte offset.
+
+Traverses the syntax tree to find nodes containing the offset position,
+building a path of nodes from root to leaf.
+
+# Arguments
+- `node`: Root JuliaSyntax.SyntaxNode to start traversal from
+- `offset`: Byte offset to search for in the syntax tree
+- `path`: Accumulator for the path being built (internal use)
+
+Returns an array of named tuples containing:
+- expr: The syntax node
+- start: Starting byte position
+- stop: Ending byte position
+"""
 function pathat(node::JS.SyntaxNode, offset, path = [(expr=node, start=JS.first_byte(node), stop=JS.last_byte(node))])
    if JS.haschildren(node)
       for child in JS.children(node)
@@ -499,6 +523,23 @@ function pathat(node::JS.SyntaxNode, offset, path = [(expr=node, start=JS.first_
    return path
 end
 
+"""
+Extract the name from a syntax node based on its kind.
+
+Handles various node types including:
+- Modules
+- Functions
+- Structs (including generic parameters)
+- Primitive types
+- Abstract types
+- Macros
+
+Returns the extracted name as a string, or nothing if the node type is not supported
+or does not contain a name.
+
+# Arguments
+- `node`: JuliaSyntax.SyntaxNode to extract name from
+"""
 function nodename(node::JS.SyntaxNode)
    kind = JS.kind(node)
    children = JS.children(node)
@@ -557,6 +598,18 @@ function nodename(node::JS.SyntaxNode)
    return nothing
 end
 
+"""
+Find the module context at a given byte location in code.
+
+Parses the code and returns a list of module names that enclose the given position,
+from outermost to innermost.
+
+# Arguments
+- `encodedbuf`: Base64-encoded string containing Julia source code
+- `byteloc`: Byte offset to find module context for
+
+Returns an Elisp-compatible list starting with :list followed by module names.
+"""
 function moduleat(encodedbuf, byteloc)
    tree = parse(encodedbuf)
    path = pathat(tree, byteloc)
@@ -569,6 +622,25 @@ function moduleat(encodedbuf, byteloc)
    return [:list; modules]
 end
 
+"""
+Find information about the code block at a given byte location.
+
+Parses the code and returns details about the enclosing block (function, struct, etc.)
+at the specified position.
+
+# Arguments
+- `encodedbuf`: Base64-encoded string containing Julia source code  
+- `byteloc`: Byte offset to find block information for
+
+Returns an Elisp-compatible list containing:
+- :list symbol
+- Tuple of enclosing module names
+- Starting byte position
+- Ending byte position
+- Block description (e.g. function name)
+
+Returns nothing if no block is found at the location.
+"""
 function blockat(encodedbuf, byteloc)
    tree = parse(encodedbuf)
    path = pathat(tree, byteloc)
@@ -604,6 +676,28 @@ function blockat(encodedbuf, byteloc)
       [:list; tuple(modules...); start; stop; description]
 end
 
+"""
+Generate a tree representation of code structure.
+
+Parses the code and builds a tree showing the hierarchical structure of:
+- Modules
+- Functions (with signatures)
+- Structs
+- Types (abstract and primitive)
+- Macros
+
+# Arguments
+- `encodedbuf`: Base64-encoded string containing Julia source code
+
+Returns an Elisp-compatible nested list structure starting with :list,
+followed by tuples for each code element containing:
+- Element type (:module, :function, :struct, :type, :macro)
+- Name
+- Byte position
+- Nested elements (for modules)
+
+Returns nothing if no structure is found.
+"""
 function codetree(encodedbuf)
    tree = parse(encodedbuf)
    helper = (node, depth = 1) -> begin
@@ -653,6 +747,19 @@ Result structure: {
 }
 
 Uses JuliaSyntax to parse the code and find include statements within modules.
+Find all include() statements and their enclosing module contexts.
+
+Parses the code and builds a mapping of included files to their module contexts.
+
+# Arguments
+- `encodedbuf`: Base64-encoded string containing Julia source code
+- `path`: Base path to resolve relative include paths against (default: "")
+
+Returns an Elisp-compatible plist alternating between:
+- Full path to included file
+- List of enclosing module names at the include point
+
+Returns nothing if no includes are found.
 """
 function includesin(encodedbuf, path="")
     tree = parse(encodedbuf)
