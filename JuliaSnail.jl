@@ -781,34 +781,38 @@ Returns nothing if no includes are found.
 """
 function includesin(encodedbuf, path="")
     tree = parse(encodedbuf)
-    results = Dict{String,Vector{Symbol}}()
+    results = Dict{String,Vector{String}}()
 
     helper = (node, modules = Symbol[]) -> begin
-        for child in JS.children(node)
-            kind = JS.kind(child)
+        if JS.haschildren(node)
+            for child in JS.children(node)
+                kind = JS.kind(child)
 
-            # Check for include calls
-            if kind == JS.K"call" && length(JS.children(child)) >= 2
-                call_name = JS.children(child)[1]
-                if String(JS.sourcetext(call_name)) == "include"
-                    # Get filename from the first argument
-                    filename_node = JS.children(child)[2]
-                    filename = String(JS.sourcetext(filename_node))
-                    # Remove quotes
-                    filename = replace(filename, r"^\"(.*)\"$" => s"\1")
-                    full_path = joinpath(path, filename)
-                    results[full_path] = copy(modules)
+                # Track module context
+                if kind == JS.K"module"
+                    name = nodename(child)
+                    if name !== nothing
+                        new_modules = [modules; String(name)]
+                        helper(child, new_modules)
+                    end
+                    continue
                 end
-            # Track module context
-            elseif kind == JS.K"module"
-                name = nodename(child)
-                if name !== nothing
-                    helper(child, [modules; Symbol(name)])
-                end
-            end
 
-            # Recurse into other nodes that may contain includes
-            if JS.haschildren(child)
+                # Check for include calls
+                if kind == JS.K"call" && length(JS.children(child)) >= 2
+                    call_name = JS.children(child)[1]
+                    if String(JS.sourcetext(call_name)) == "include"
+                        # Get filename from the first argument
+                        filename_node = JS.children(child)[2]
+                        filename = String(JS.sourcetext(filename_node))
+                        # Remove quotes
+                        filename = replace(filename, r"^\"(.*)\"$" => s"\1")
+                        # Store with current module context
+                        results[filename] = String.(copy(modules))
+                    end
+                end
+
+                # Recurse into other nodes
                 helper(child, modules)
             end
         end
