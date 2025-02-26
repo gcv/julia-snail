@@ -493,7 +493,7 @@ Returns nil if the poll timed out, t otherwise."
 (defun julia-snail--capture-basedir (buf)
   (julia-snail--send-to-server
     :Main
-    "normpath(joinpath(VERSION <= v\"0.7-\" ? JULIA_HOME : Sys.BINDIR, Base.DATAROOTDIR, \"julia\", \"base\"))"
+    "normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, \"julia\", \"base\"))"
     :repl-buf buf
     :async nil))
 
