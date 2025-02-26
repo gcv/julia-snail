@@ -781,55 +781,55 @@ Returns an Elisp-compatible plist alternating between:
 Returns nothing if no includes are found.
 """
 function includesin(encodedbuf, path="")
-    tree = parse(encodedbuf)
-    results = Dict{String,Vector{String}}()
+   tree = parse(encodedbuf)
+   results = Dict{String,Vector{String}}()
 
-    helper = (node, modules = Symbol[]) -> begin
-        if JS.haschildren(node)
-            for child in JS.children(node)
-                kind = JS.kind(child)
+   helper = (node, modules = Symbol[]) -> begin
+      if JS.haschildren(node)
+         for child in JS.children(node)
+            kind = JS.kind(child)
 
-                # Track module context
-                if kind == JS.K"module"
-                    name = nodename(child)
-                    if name !== nothing
-                        new_modules = [modules; String(name)]
-                        helper(child, new_modules)
-                    end
-                    continue
-                end
-
-                # Check for include calls
-                if kind == JS.K"call" && length(JS.children(child)) >= 2
-                    call_name = JS.children(child)[1]
-                    if String(JS.sourcetext(call_name)) == "include"
-                        # Get filename from the first argument
-                        filename_node = JS.children(child)[2]
-                        filename = String(JS.sourcetext(filename_node))
-                        # Remove quotes
-                        filename = replace(filename, r"^\"(.*)\"$" => s"\1")
-                        filename = joinpath(path, filename)
-                        # Store with current module context
-                        results[filename] = String.(copy(modules))
-                    end
-                end
-
-                # Recurse into other nodes
-                helper(child, modules)
+            # Track module context
+            if kind == JS.K"module"
+               name = nodename(child)
+               if name !== nothing
+                  new_modules = [modules; String(name)]
+                  helper(child, new_modules)
+               end
+               continue
             end
-        end
-    end
 
-    helper(tree)
+            # Check for include calls
+            if kind == JS.K"call" && length(JS.children(child)) >= 2
+               call_name = JS.children(child)[1]
+               if String(JS.sourcetext(call_name)) == "include"
+                  # Get filename from the first argument
+                  filename_node = JS.children(child)[2]
+                  filename = String(JS.sourcetext(filename_node))
+                  # Remove quotes
+                  filename = replace(filename, r"^\"(.*)\"$" => s"\1")
+                  filename = joinpath(path, filename)
+                  # Store with current module context
+                  results[filename] = String.(copy(modules))
+               end
+            end
 
-    # Convert to plist for Emacs
-    reslist = []
-    for (file, modules) in results
-        push!(reslist, file)
-        push!(reslist, [:list; modules])
-    end
+            # Recurse into other nodes
+            helper(child, modules)
+         end
+      end
+   end
 
-    return isempty(reslist) ? nothing : [:list; reslist]
+   helper(tree)
+
+   # Convert to plist for Emacs
+   reslist = []
+   for (file, modules) in results
+      push!(reslist, file)
+      push!(reslist, [:list; modules])
+   end
+
+   return isempty(reslist) ? nothing : [:list; reslist]
 end
 
 end
@@ -1102,6 +1102,5 @@ function send_to_client(expr, client_socket=nothing)
    end
    println(client_socket, expr)
 end
-
 
 end
