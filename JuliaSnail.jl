@@ -470,6 +470,120 @@ function replcompletion(identifier, mod)
 end
 
 
+### --- JuliaSyntax wrappers
+
+module Syntax
+
+import Base64
+import Base.JuliaSyntax as JS
+
+function parse(encodedbuf)
+   try
+      buf = String(Base64.base64decode(encodedbuf))
+      JS.parseall(JS.SyntaxNode, buf)
+   catch err
+      println(err)
+      return nothing
+   end
+end
+
+function pathat(node::JS.SyntaxNode, offset, path = [(expr=node, start=JS.first_byte(node), stop=JS.last_byte(node))])
+   if JS.haschildren(node)
+      for child in JS.children(node)
+         if JS.first_byte(child) <= offset <= JS.last_byte(child)
+            return pathat(child, offset,
+                          [path; [(expr=child, start=JS.first_byte(child), stop=JS.last_byte(child))]])
+         end
+      end
+   end
+   return path
+end
+
+function nodename(node::JS.SyntaxNode)
+   kind = JS.kind(node)
+   children = JS.children(node)
+
+   if kind == JS.K"module"
+      return string(children[1])
+
+   elseif kind == JS.K"function"
+      first = children[1]
+      if JS.kind(first) == JS.K"call"
+         return string(JS.children(first)[1])
+      else
+         return string(first)
+      end
+
+   elseif kind == JS.K"struct"
+      return string(children[2])  # First child is usually visibility (mutable/abstract)
+
+   elseif kind == JS.K"primitive"
+      return string(children[2])  # First child is "type" keyword
+
+   elseif kind == JS.K"abstract"
+      return string(children[2])  # First child is "type" keyword
+
+   elseif kind == JS.K"macro"
+      first = children[1]
+      if JS.kind(first) == JS.K"call"
+         return string(JS.children(first)[1])
+      else
+         return string(first)
+      end
+   end
+
+   return nothing
+end
+
+function moduleat(encodedbuf, byteloc)
+   tree = parse(encodedbuf)
+   path = pathat(tree, byteloc)
+   modules = []
+   for node in path
+      if JS.kind(node.expr) == JS.K"module"
+         push!(modules, nodename(node.expr))
+      end
+   end
+   return [:list; modules]
+end
+
+function blockat(encodedbuf, byteloc)
+   tree = parse(encodedbuf)
+   path = pathat(tree, byteloc)
+   modules = []
+   description = nothing
+   start = nothing
+   stop = nothing
+   for node in path
+      if JS.kind(node.expr) == JS.K"module"
+         description = nothing
+         push!(modules, nodename(node.expr))
+      elseif (isnothing(description) &&
+         (JS.kind(node.expr) ∈ [JS.K"abstract", JS.K"function",
+                                JS.K"struct", JS.K"primitive",
+                                JS.K"macro"]))
+         description = nodename(node.expr)
+         start = node.start
+         stop = node.stop
+      end
+   end
+   # result format equivalent to what Elisp side expects
+   return isnothing(description) ?
+      nothing :
+      [:list; tuple(modules...); start; stop; description]
+end
+
+function codetree(encodedbuf)
+   # FIXME: Write this.
+end
+
+function includesin(encodedbuf, path="")
+   # FIXME: Write this.
+end
+
+end
+
+
 ### --- CSTParser wrappers
 
 module CST
