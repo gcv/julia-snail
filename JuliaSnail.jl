@@ -808,6 +808,7 @@ function includesin(encodedbuf, path="")
                         filename = String(JS.sourcetext(filename_node))
                         # Remove quotes
                         filename = replace(filename, r"^\"(.*)\"$" => s"\1")
+                        filename = joinpath(path, filename)
                         # Store with current module context
                         results[filename] = String.(copy(modules))
                     end
