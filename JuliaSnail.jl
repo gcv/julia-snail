@@ -569,8 +569,13 @@ function nodename(node::JS.SyntaxNode)
    elseif kind == JS.K"function"
       first = children[1]
       if JS.kind(first) == JS.K"call"
+         # function load(filepath) end
          return string(JS.children(first)[1])
+      elseif JS.kind(first) == JS.K"::"
+         # function load(filepath)::DF.DataFrame end
+         return string(first[1][1])
       else
+         # TODO: This is likely wrong in some cases.
          return string(first)
       end
 
@@ -1090,8 +1095,8 @@ function send_to_client(expr, client_socket=nothing)
          # force the user to choose the client socket
          options = map(
             function(cs)
-            gsn = Sockets.getpeername(cs)
-            Printf.@sprintf("%s:%d", gsn[1], gsn[2])
+               gsn = Sockets.getpeername(cs)
+               Printf.@sprintf("%s:%d", gsn[1], gsn[2])
             end,
             client_sockets
          )

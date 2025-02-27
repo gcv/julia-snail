@@ -35,3 +35,13 @@ function overloaded(x,y) x+y end
 macro sayhello(name)
    return :( println("Hello, ", $name) )
 end
+
+# Function with type tags
+function load(filepath)::DF.DataFrame
+end
+
+function load2(filepath)
+end
+
+function load3(filepath::String)::String
+end

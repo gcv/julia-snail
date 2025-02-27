@@ -74,6 +74,11 @@ import Base64
 
       # Test macro
       @test [:list, (), 517, 582, "sayhello"] == JuliaSnail.JStx.blockat(s6, 523)
+
+      # Test function with return type
+      @test [:list, (), 610, 651, "load"] == JuliaSnail.JStx.blockat(s6, 619)
+      @test [:list, (), 653, 681, "load2"] == JuliaSnail.JStx.blockat(s6, 662)
+      @test [:list, (), 683, 727, "load3"] == JuliaSnail.JStx.blockat(s6, 692)
    end
 
 end
