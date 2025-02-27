@@ -630,7 +630,7 @@ from outermost to innermost.
 Returns an Elisp-compatible list starting with :list followed by module names.
 """
 function moduleat(encodedbuf, byteloc)
-   tree = parse(encodedbuf)
+   tree = JS.parseall(JS.SyntaxNode, encodedbuf; ignore_errors=true)
    path = pathat(tree, byteloc)
    modules = []
    for node in path
@@ -661,7 +661,7 @@ Returns an Elisp-compatible list containing:
 Returns nothing if no block is found at the location.
 """
 function blockat(encodedbuf, byteloc)
-   tree = parse(encodedbuf)
+   tree = JS.parseall(JS.SyntaxNode, encodedbuf; ignore_errors=true)
    path = pathat(tree, byteloc)
    modules = []
    description = nothing
