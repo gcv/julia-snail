@@ -507,7 +507,7 @@ Returns a parsed syntax tree or nothing if parsing fails.
 function parse(encodedbuf)
    try
       buf = String(Base64.base64decode(encodedbuf))
-      JS.parseall(JS.SyntaxNode, buf)
+      JS.parseall(JS.SyntaxNode, buf; ignore_errors=true)
    catch err
       println(err)
       return nothing
@@ -630,7 +630,7 @@ from outermost to innermost.
 Returns an Elisp-compatible list starting with :list followed by module names.
 """
 function moduleat(encodedbuf, byteloc)
-   tree = JS.parseall(JS.SyntaxNode, encodedbuf; ignore_errors=true)
+   tree = parse(encodedbuf)
    path = pathat(tree, byteloc)
    modules = []
    for node in path
@@ -648,7 +648,7 @@ Parses the code and returns details about the enclosing block (function, struct,
 at the specified position.
 
 # Arguments
-- `encodedbuf`: Base64-encoded string containing Julia source code  
+- `encodedbuf`: Base64-encoded string containing Julia source code
 - `byteloc`: Byte offset to find block information for
 
 Returns an Elisp-compatible list containing:
@@ -661,7 +661,7 @@ Returns an Elisp-compatible list containing:
 Returns nothing if no block is found at the location.
 """
 function blockat(encodedbuf, byteloc)
-   tree = JS.parseall(JS.SyntaxNode, encodedbuf; ignore_errors=true)
+   tree = parse(encodedbuf)
    path = pathat(tree, byteloc)
    modules = []
    description = nothing
