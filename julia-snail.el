@@ -329,6 +329,12 @@ nil means disable Snail-specific imenu integration (fall back on julia-mode impl
 
 (defvar-local julia-snail--imenu-cache nil)
 
+(defvar julia-snail--parser-module-cache (make-hash-table :test #'equal)
+  "Cache for module-at-point lookups. Keys are (buffer-hash . line-number) pairs.")
+
+(defvar julia-snail--parser-module-cache-counter 0
+  "Counter for cache cleanup. Incremented on each cache miss.")
+
 (defvar julia-snail--compilation-regexp-alist
   '(;; matches "while loading /tmp/Foo.jl, in expression starting on line 2"
     (julia-load-error . ("while loading \\([^ ><()\t\n,'\";:]+\\), in expression starting on line \\([0-9]+\\)" 1 2))
@@ -1153,15 +1159,54 @@ evaluated in the context of MODULE."
 
 ;;; --- parser interface
 
+(defun julia-snail--clean-module-cache ()
+  "Remove expired entries from the module cache."
+  (let ((current-time (float-time)))
+    (cl-loop for key being the hash-keys of julia-snail--parser-module-cache
+             using (hash-values value)
+             when (> (- current-time (car value)) 5.0)
+             do (remhash key julia-snail--parser-module-cache))))
+
 (defun julia-snail--parser-module-at (buf pt)
-  (let* ((byteloc (position-bytes pt))
-         (encoded (julia-snail--encode-base64 buf))
-         (res (julia-snail--send-to-server
-                :Main
-                (format "JuliaSnail.JStx.moduleat(\"%s\", %d)" encoded byteloc)
-                :async nil)))
-    (if (eq res :nothing)
-        nil
+  "Return the Julia module at point PT in buffer BUF.
+Uses a cache that expires entries after 5 seconds, and keyed to
+BUF and the line number at PT. This cache structure helps this
+function withstand heavy use by completion frameworks (Company,
+Corfu): they call repeatedly out to the Julia completion system,
+which needs to know the current module. The current module will
+not have changed as the user is typing on the same line, but the
+`module-at` machinery will be called a lot. There's room for
+improvement here. For example, instead of expiring the cache 5
+seconds later, it can just expire when the user moves to a
+different line."
+  (let* ((line-num (line-number-at-pos pt buf))
+         (cache-key (cons buf line-num))
+         (cached-entry (gethash cache-key julia-snail--parser-module-cache))
+         (current-time (float-time))
+         (byteloc (position-bytes pt))
+         res)
+    ;; use cached entry if it exists and hasn't expired (5 second TTL)
+    (if (and cached-entry
+             (< (- current-time (car cached-entry)) 5.0))
+        ;; return cached value
+        (cdr cached-entry)
+      ;; cache miss or expired entry: perform the lookup
+      (setq res (let* ((encoded (julia-snail--encode-base64 buf))
+                       (result (julia-snail--send-to-server
+                                 :Main
+                                 (format "JuliaSnail.JStx.moduleat(\"%s\", %d)" encoded byteloc)
+                                 :async nil)))
+                  (if (eq result :nothing)
+                      nil
+                    result)))
+      ;; store the result in the cache with current timestamp:
+      (puthash cache-key (cons current-time res) julia-snail--parser-module-cache)
+      ;; increment counter and clean expired entries every 50 calls:
+      (cl-incf julia-snail--parser-module-cache-counter)
+      (when (>= julia-snail--parser-module-cache-counter 50)
+        (setq julia-snail--parser-module-cache-counter 0)
+        (julia-snail--clean-module-cache))
+      ;; done
       res)))
 
 (defun julia-snail--parser-block-at (buf pt)
