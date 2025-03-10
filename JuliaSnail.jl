@@ -259,7 +259,11 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum,
       println()
       @info "Module $modpath\n$result"
    end
-   Base.MainInclude.ans = result # update the REPL's magic `ans` variable
+   # update the REPL's magic `ans` variable (if it is available, which it should
+   # be in versions of Julia >1.8 or maybe >1.9)
+   if isdefined(Base, :MainInclude) && isdefined(Base.MainInclude, :ans)
+      Base.MainInclude.ans = result
+   end
    if isnothing(popup_params)
       Main.JuliaSnail.elexpr(true)
    else
