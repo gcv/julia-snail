@@ -1444,23 +1444,24 @@ different line."
        (julia-snail--imenu-helper (cdr tree) modules)))))
 
 (defun julia-snail--imenu-included-module-helper (normal-tree)
-  ;; XXX: This fugly kludge transforms imenu trees in a way that injects modules
-  ;; cached through include()ed files at the root:
+  ;; This function transforms imenu trees in a way that injects modules cached
+  ;; through include()ed files at the root:
   ;;
   ;; if included-modules is ("Alpha" "Bravo")
   ;; and normal-tree is ((function "f1" ...))
   ;; then this returns (("Alpha" ("Bravo" (function "f1" ...))))
-  ;;
-  ;; There must be a cleaner way to implement this logic.
   (let ((included-modules (julia-snail--module-for-file (buffer-file-name (buffer-base-buffer)))))
-    (cl-labels ((some-helper
-                 (incls norms first-time)
-                 (if (null incls)
-                     norms
-                   (let* ((next (some-helper (cdr incls) norms nil))
-                          (tail (cons (car incls) (if first-time(list next) next))))
-                     (if first-time (list tail) tail)))))
-      (some-helper included-modules normal-tree t))))
+    (if (null included-modules)
+        ;; no included modules, return original tree
+        normal-tree
+      ;; recursively build the nested tree:
+      (cl-labels ((build-nested-tree
+                    (modules content)
+                    (if (null modules)
+                        content
+                      (list (cons (car modules)
+                                  (build-nested-tree (cdr modules) content))))))
+        (build-nested-tree included-modules normal-tree)))))
 
 (cl-defun julia-snail-imenu ()
   ;; exit early if Snail's imenu integration is turned off, or no Snail session is running
