@@ -1,5 +1,0 @@
-[deps]
-CSTParser = "00ebfdb7-1f24-5e51-bd34-a7502290713f"
-
-[compat]
-CSTParser = "~3.4.2"

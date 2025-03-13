@@ -52,7 +52,7 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
 - **Multimedia and plotting:** Snail can display Julia graphics in graphical Emacs instances using packages like [Plots](http://juliaplots.org) and [Gadfly](http://gadflyjl.org).
 - **Cross-referencing:** Snail is integrated with the built-in Emacs [xref](https://www.gnu.org/software/emacs/manual/html_node/emacs/Xref.html) system. When a Snail session is active, it supports jumping to definitions of functions and macros loaded in the session.
 - **Completion:** Snail is also integrated with the built-in Emacs [completion-at-point](https://www.gnu.org/software/emacs/manual/html_node/elisp/Completion-in-Buffers.html) facility. Provided it is configured with the `company-capf` backend, [company-mode](http://company-mode.github.io/) completion will also work (this should be the case by default).
-- **Parser:** Snail uses [CSTParser](https://github.com/julia-vscode/CSTParser.jl), a full-featured Julia parser, to infer the structure of source files and to enable features which require an understanding of code context, especially the module in which a particular piece of code lives. This enables awareness of the current module for completion and cross-referencing purposes.
+- **Parser:** Snail uses [JuliaSyntax](https://github.com/JuliaLang/JuliaSyntax.jl) to infer the structure of source files and to enable features which require an understanding of code context, especially the module in which a particular piece of code lives. This enables awareness of the current module for completion and cross-referencing purposes.
 
 
 ## Demo
@@ -62,9 +62,12 @@ https://user-images.githubusercontent.com/10327/128589405-7368bb50-0ef3-4003-b5d
 
 ## Installation
 
-Julia versions >1.6.0 should all work with Snail.
+Snail now requires Julia version >1.10.0.
 
-Snail’s Julia-side dependencies will automatically be installed when it starts, and will stay out of your way using Julia’s [`LOAD_PATH` mechanism](https://docs.julialang.org/en/v1/base/constants/#Base.LOAD_PATH).
+> [!IMPORTANT]
+> [Previous versions of Snail](https://github.com/gcv/julia-snail/tree/1.3.2) supported Julia >1.6.0, and should continue to be used in environments that cannot upgrade Julia. Note that older versions can no longer be installed using MELPA or MELPA Stable, and have to be installed either manually or using a Git-enabled Emacs package manager, such as [Elpaca](https://github.com/progfolio/elpaca).
+
+Core Snail has no Julia-side dependencies. Any Snail extensions that use Julia dependencies will automatically them on startup, and will stay out of your way using Julia’s [`LOAD_PATH` mechanism](https://docs.julialang.org/en/v1/base/constants/#Base.LOAD_PATH).
 
 On the Emacs side, you must install one of the supported high-performance terminal emulators to use with the Julia REPL: either `vterm` or [Eat](https://codeberg.org/akib/emacs-eat).
 
