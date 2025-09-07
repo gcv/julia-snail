@@ -443,6 +443,7 @@ MODULE can be:
      (with-syntax-table stab
        (modify-syntax-entry ?. "_")
        (modify-syntax-entry ?@ "_")
+       (modify-syntax-entry ?! "_")
        (modify-syntax-entry ?= " ")
        (modify-syntax-entry ?$ " ")
        ,@body)))
