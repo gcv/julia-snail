@@ -470,7 +470,21 @@ Completions are provided by the built-in REPL.REPLCompletions.
 """
 function replcompletion(identifier, mod)
    cs, _, _ = REPLCompletions.completions(identifier, lastindex(identifier), mod)
-   return [:list; REPLCompletions.completion_text.(cs)]
+   # XXX: The REPLCompletions API changed in Julia 1.12.
+   if VERSION < v"1.12.0-DEV"
+      return [:list; REPLCompletions.completion_text.(cs)]
+   else # Julia 1.12+
+      completions = map(cs) do c
+         # Special case required for completing "\circ" and replacing with symbol,
+         # see https://github.com/gcv/julia-snail/issues/184
+         if c isa REPLCompletions.BslashCompletion
+            REPLCompletions.named_completion(c)
+         else
+            REPLCompletions.completion_text(c)
+         end
+      end
+      return [:list; completions]
+   end
 end
 
 
