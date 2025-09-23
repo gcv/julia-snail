@@ -13,15 +13,51 @@
 
 import Pkg
 
-
 module JuliaSnail
 
+import Markdown
+import Printf
+import REPL
+import Sockets
+import REPL.REPLCompletions
 
-# XXX: External dependency hack. Snail's own dependencies need to be listed
-# first in LOAD_PATH during initial load, otherwise conflicting versions
-# installed in the Julia global environment cause conflicts. Especially
-# CSTParser, with its unstable API. However, Snail should not be listed first
-# the rest of the time.
+export start, stop
+
+
+### --- package loading support code
+
+"""
+XXX: External dependency hack.
+
+This macro allows Snail, or its extensions, to provide a Project.toml file with
+Julia dependencies _without_ forcing these extensions to be shipped to the Julia
+package registry.
+
+The intent is to activate the package directory containing the Project.toml
+file, make sure it loads all the dependencies it needs, but put the directory
+containing the relevant Project.toml file at the end of the LOAD_PATH. This
+allows Snail's dependencies to be loaded, but not disturb any environments the
+user wants to activate.
+
+This is no longer used for the Snail core. Extensions are welcome to use it for
+now.
+
+Snail's own dependencies need to be listed first in LOAD_PATH during initial
+load, otherwise conflicting versions installed in the Julia global environment
+cause conflicts. However, Snail should not be listed first the rest of the time.
+
+Historical example, from back when Snail relied on CSTParser:
+
+```
+@with_pkg_env (@__DIR__) begin
+   # list all external dependency imports here (from the appropriate Project.toml, either Snail's or an extension's):
+   import CSTParser
+   # check for dependency API compatibility
+   !isdefined(CSTParser, :iscall) &&
+     throw(ArgumentError("CSTParser API not compatible, must install Snail-specific version"))
+end
+```
+"""
 macro with_pkg_env(dir, action)
    :(
    try
@@ -49,23 +85,6 @@ macro with_pkg_env(dir, action)
    end
    )
 end
-
-@with_pkg_env (@__DIR__) begin
-   # list all external dependency imports here (from the appropriate Project.toml, either Snail's or an extension's):
-   import CSTParser
-   # check for dependency API compatibility
-   !isdefined(CSTParser, :iscall) &&
-     throw(ArgumentError("CSTParser API not compatible, must install Snail-specific version"))
-end
-
-
-import Markdown
-import Printf
-import REPL
-import Sockets
-import REPL.REPLCompletions
-
-export start, stop
 
 
 ### --- configuration
@@ -488,125 +507,209 @@ function replcompletion(identifier, mod)
 end
 
 
-### --- CSTParser wrappers
+### --- JuliaSyntax wrappers
 
-module CST
+module JStx
 
 import Base64
-import CSTParser
+import Base.JuliaSyntax as JS
 
 """
-Helper function: wraps the parser interface.
+Parse a Base64-encoded buffer containing Julia code using JuliaSyntax.
+
+Returns a parsed syntax tree or nothing if parsing fails.
+
+# Arguments
+- `encodedbuf`: Base64-encoded string containing Julia source code
 """
 function parse(encodedbuf)
-   cst = nothing
    try
       buf = String(Base64.base64decode(encodedbuf))
-      cst = CSTParser.parse(buf, true)
+      JS.parseall(JS.SyntaxNode, buf; ignore_errors=true)
    catch err
-      # probably an IO problem
-      # TODO: Need better error reporting here.
       println(err)
-      return []
+      return nothing
    end
-   return cst
 end
 
 """
-Return the path of CSTParser.EXPR objects from the root of the CST to the
-expression at the offset, while retaining the EXPR objects' full locations.
+Return the path from root to the node containing the given byte offset.
 
-The path is represented as an array of named tuples. The first element
-represents the root node, and the last element is the expression at the offset.
-Each tuple has a start and stop value, showing locations in the original source
-where that node begins and ends.
+Traverses the syntax tree to find nodes containing the offset position,
+building a path of nodes from root to leaf.
 
-NB: The locations represent bytes, not characters!
+# Arguments
+- `node`: Root JuliaSyntax.SyntaxNode to start traversal from
+- `offset`: Byte offset to search for in the syntax tree
+- `path`: Accumulator for the path being built (internal use)
 
-This is necessary because CSTParser does not include full location data, see
-https://github.com/julia-vscode/CSTParser.jl/pull/80.
+Returns an array of named tuples containing:
+- expr: The syntax node
+- start: Starting byte position
+- stop: Ending byte position
 """
-function pathat(cst, offset, pos = 0, path = [(expr=cst, start=1, stop=cst.span+1)])
-   if cst !== nothing && !CSTParser.isnonstdid(cst)
-      for a in cst
-         if pos < offset <= (pos + a.span)
-            return pathat(a, offset, pos, [path; [(expr=a, start=pos+1, stop=pos+a.span+1)]])
+function pathat(node::JS.SyntaxNode, offset, path = [(expr=node, start=JS.first_byte(node), stop=JS.last_byte(node))])
+   if JS.haschildren(node)
+      for child in JS.children(node)
+         if JS.first_byte(child) <= offset <= JS.last_byte(child)
+            return pathat(child, offset,
+                          [path; [(expr=child, start=JS.first_byte(child), stop=JS.last_byte(child))]])
          end
-         # jump forward by fullspan since we need to skip over a's trailing whitespace
-         pos += a.fullspan
       end
-   elseif (pos < offset <= (pos + cst.fullspan))
-      return [path; [(expr=cst, start=pos+1, stop=offset+1)]]
    end
    return path
 end
 
 """
-Debugging helper: example code for traversing the CST and tracking the location of each node.
+Extract the name from a syntax node based on its kind.
+
+Handles various node types including:
+- Modules
+- Functions
+- Structs (including generic parameters)
+- Primitive types
+- Abstract types
+- Macros
+
+Returns the extracted name as a string, or nothing if the node type is not supported
+or does not contain a name.
+
+# Arguments
+- `node`: JuliaSyntax.SyntaxNode to extract name from
 """
-function print_cst(cst)
-   offset = 0
-   helper = (node) -> begin
-      for a in node
-         if a.args === nothing
-            val = CSTParser.valof(a)
-            # Unicode byte fix
-            if String == typeof(val)
-               diff = sizeof(val) - length(val)
-               a.span -= diff
-               a.fullspan -= diff
-            end
-            println(offset, ":", offset+a.span, "\t", val)
-            offset += a.fullspan
-         else
-            helper(a)
-         end
+function nodename(node::JS.SyntaxNode)
+   kind = JS.kind(node)
+   children = JS.children(node)
+
+   if kind == JS.K"module"
+      return string(children[1])
+
+   elseif kind == JS.K"function"
+      first = children[1]
+      if JS.kind(first) == JS.K"call"
+         # function load(filepath) end
+         return string(JS.children(first)[1])
+      elseif JS.kind(first) == JS.K"::"
+         # function load(filepath)::DF.DataFrame end
+         return string(first[1][1])
+      else
+         # TODO: This is likely wrong in some cases.
+         return string(first)
+      end
+
+   elseif kind == JS.K"struct"
+      # Handle generic type parameters
+      if JS.kind(children[1]) == JS.K"curly"
+         curly_children = JS.children(children[1])
+         return string(curly_children[1])  # The actual type name
+      else
+         return string(children[1])  # No type parameters
+      end
+
+   elseif kind == JS.K"primitive"
+      # Support both these cases:
+      # primitive type Point24 24 end
+      # primitive type Int8 <: Integer 8 end
+      grandchildren = JS.children(children[1])
+      if length(grandchildren) > 0
+         return string(grandchildren[1])
+      else
+         return string(children[1])
+      end
+
+   elseif kind == JS.K"abstract"
+      # Support both these cases:
+      # abstract type AbstractPoint1 end
+      # abstract type AbstractPoint2 <: Number end
+      grandchildren = JS.children(children[1])
+      if length(grandchildren) > 0
+         return string(grandchildren[1])
+      else
+         return string(children[1])
+      end
+
+   elseif kind == JS.K"macro"
+      first = children[1]
+      if JS.kind(first) == JS.K"call"
+         return string(JS.children(first)[1])
+      else
+         return string(first)
       end
    end
-   helper(cst)
-   return offset
+
+   return nothing
 end
 
 """
-Return the module active at point as a list of their names.
+Find the module context at a given byte location in code.
+
+Parses the code and returns a list of module names that enclose the given position,
+from outermost to innermost.
+
+# Arguments
+- `encodedbuf`: Base64-encoded string containing Julia source code
+- `byteloc`: Byte offset to find module context for
+
+Returns an Elisp-compatible list starting with :list followed by module names.
 """
 function moduleat(encodedbuf, byteloc)
-   cst = parse(encodedbuf)
-   path = pathat(cst, byteloc)
+   tree = parse(encodedbuf)
+   path = pathat(tree, byteloc)
    modules = []
    for node in path
-      if CSTParser.defines_module(node.expr)
-         push!(modules, CSTParser.valof(CSTParser.get_name(node.expr)))
+      if JS.kind(node.expr) == JS.K"module"
+         push!(modules, nodename(node.expr))
       end
    end
    return [:list; modules]
 end
 
 """
-Return information about the block at point.
+Find information about the code block at a given byte location.
+
+Parses the code and returns details about the enclosing block (function, struct, etc.)
+at the specified position.
+
+# Arguments
+- `encodedbuf`: Base64-encoded string containing Julia source code
+- `byteloc`: Byte offset to find block information for
+
+Returns an Elisp-compatible list containing:
+- :list symbol
+- Tuple of enclosing module names
+- Starting byte position
+- Ending byte position
+- Block description (e.g. function name)
+
+Returns nothing if no block is found at the location.
 """
 function blockat(encodedbuf, byteloc)
-   cst = parse(encodedbuf)
-   path = pathat(cst, byteloc)
+   tree = parse(encodedbuf)
+   path = pathat(tree, byteloc)
    modules = []
    description = nothing
    start = nothing
    stop = nothing
    for node in path
-      if CSTParser.defines_module(node.expr)
+      if JS.kind(node.expr) == JS.K"module"
          description = nothing
-         push!(modules, CSTParser.valof(CSTParser.get_name(node.expr)))
-      elseif (isnothing(description) &&
-              (CSTParser.defines_abstract(node.expr) ||
-               CSTParser.defines_datatype(node.expr) ||
-               CSTParser.defines_function(node.expr) ||
-               CSTParser.defines_macro(node.expr) ||
-               CSTParser.defines_mutable(node.expr) ||
-               CSTParser.defines_primitive(node.expr) ||
-               CSTParser.defines_struct(node.expr)))
-         description = CSTParser.valof(CSTParser.get_name(node.expr))
-         start = node.start
-         stop = node.stop
+         push!(modules, nodename(node.expr))
+      elseif isnothing(description)
+         if JS.kind(node.expr) ∈ [JS.K"function", JS.K"macro",
+                                  JS.K"struct",
+                                  JS.K"abstract", JS.K"primitive"]
+            description = nodename(node.expr)
+            start = node.start
+            stop = node.stop + 1
+         elseif JS.kind(node.expr) == JS.K"="
+            # Check for function assignment like f() = ...
+            children = JS.children(node.expr)
+            if length(children) >= 1 && JS.kind(children[1]) == JS.K"call"
+               description = string(JS.children(children[1])[1])
+               start = node.start
+               stop = node.stop + 1
+            end
+         end
       end
    end
    # result format equivalent to what Elisp side expects
@@ -616,82 +719,66 @@ function blockat(encodedbuf, byteloc)
 end
 
 """
-Internal: assemble a human-readable function signature from a CSTParser node.
-"""
-function fnsig_helper(node)
-   fnsig = ""
-   reassemble = (n) -> begin
-      for x in n
-         if x.args === nothing
-            candidate = CSTParser.valof(CSTParser.get_name(x))
-            if candidate !== nothing && length(candidate) > 0
-               if "," == candidate
-                  candidate *= " "
-               end
-               fnsig *= candidate
-            end
-         else
-            reassemble(x)
-         end
-      end
-   end
-   reassemble(node)
-   return fnsig
-end
+Generate a tree representation of code structure.
 
-"""
-For a given buffer, return the overall tree structure of the code.
+Parses the code and builds a tree showing the hierarchical structure of:
+- Modules
+- Functions (with signatures)
+- Structs
+- Types (abstract and primitive)
+- Macros
 
-Result structure: [
-  [type name location extra]
-]
-where type is :function, :macro, etc.; when type is :module, then extra is a
-nested resulting structure.
+# Arguments
+- `encodedbuf`: Base64-encoded string containing Julia source code
+
+Returns an Elisp-compatible nested list structure starting with :list,
+followed by tuples for each code element containing:
+- Element type (:module, :function, :struct, :type, :macro)
+- Name
+- Byte position
+- Nested elements (for modules)
+
+Returns nothing if no structure is found.
 """
 function codetree(encodedbuf)
-   cst = parse(encodedbuf)
-   offset = 1
+   tree = parse(encodedbuf)
    helper = (node, depth = 1) -> begin
       res = []
-      for a in node
-         if a.args === nothing
-            val = CSTParser.valof(a)
-            # XXX: We want bytes here because we convert back to position
-            # numbers on the Emacs side. So we do not apply the Unicode byte fix
-            # from print_cst.
-            offset += a.fullspan
+      for child in JS.children(node)
+         kind = JS.kind(child)
+         name = nodename(child)
+         if name !== nothing
+            if kind == JS.K"module"
+               push!(res, (:module, name, JS.first_byte(child), helper(child, depth + 1)))
+            elseif kind == JS.K"function"
+               # Reconstruct function signature from the call node
+               if JS.haschildren(child) && JS.kind(JS.children(child)[1]) == JS.K"call"
+                  call_node = JS.children(child)[1]
+                  sig = String(JS.sourcetext(call_node))
+                  push!(res, (:function, sig, JS.first_byte(child)))
+               else
+                  push!(res, (:function, name * "()", JS.first_byte(child)))
+               end
+            elseif kind ∈ (JS.K"struct", JS.K"mutable")
+               push!(res, (:struct, name, JS.first_byte(child)))
+            elseif kind ∈ (JS.K"abstract", JS.K"primitive")
+               push!(res, (:type, name, JS.first_byte(child)))
+            elseif kind == JS.K"macro"
+               push!(res, (:macro, name, JS.first_byte(child)))
+            end
          else
-            curroffset = offset
-            aname = CSTParser.valof(CSTParser.get_name(a))
-            helper_res = helper(a, depth + 1)
-            if aname !== nothing
-               if CSTParser.defines_module(a)
-                  push!(res, (:module, aname, curroffset, helper_res))
-               elseif CSTParser.defines_function(a)
-                  fnsig = fnsig_helper(a.args[1])
-                  push!(res, (:function, fnsig, curroffset))
-               elseif CSTParser.defines_struct(a) || CSTParser.defines_mutable(a)
-                  push!(res, (:struct, aname, curroffset))
-               elseif CSTParser.defines_abstract(a) || CSTParser.defines_datatype(a) || CSTParser.defines_primitive(a)
-                  push!(res, (:type, aname, curroffset))
-               elseif CSTParser.defines_macro(a)
-                  push!(res, (:macro, aname, curroffset))
-               end
-            else
-               # XXX: Flatten on the fly. First, avoid empty entries. Second,
-               # use append! since only modules should generate nesting.
-               if length(helper_res) > 0
-                  append!(res, helper_res)
-               end
+            # Flatten results from nested nodes that aren't modules
+            if JS.haschildren(child)
+               append!(res, helper(child, depth + 1))
             end
          end
       end
       return res
    end
-   tree = helper(cst)
-   return isempty(tree) ?
+   tree_result = helper(tree)
+   return isempty(tree_result) ?
       nothing :
-      [:list; tree]
+      [:list; tree_result]
 end
 
 """
@@ -701,49 +788,71 @@ Result structure: {
   filename -> [module names]
 }
 
-This nasty code relies on internal CSTParser representations of things.
-Unfortunately, CSTParser doesn't provide a clean API for this sort of thing:
-https://github.com/julia-vscode/CSTParser.jl/issues/56
+Uses JuliaSyntax to parse the code and find include statements within modules.
+Find all include() statements and their enclosing module contexts.
+
+Parses the code and builds a mapping of included files to their module contexts.
+
+# Arguments
+- `encodedbuf`: Base64-encoded string containing Julia source code
+- `path`: Base path to resolve relative include paths against (default: "")
+
+Returns an Elisp-compatible plist alternating between:
+- Full path to included file
+- List of enclosing module names at the include point
+
+Returns nothing if no includes are found.
 """
 function includesin(encodedbuf, path="")
-   cst = parse(encodedbuf)
-   results = Dict()
-   # walk across args, and track the current module
-   # when a node of type "call" is found, check its args[1]
-   helper = (node, modules = []) -> begin
-      for a in node
-         if (CSTParser.iscall(a) &&
-             "include" == CSTParser.valof(a.args[1]))
-            # a.args[2] is the file name being included
-            filename = joinpath(path, CSTParser.valof(a.args[2]))
-            results[filename] = modules
-         elseif CSTParser.defines_module(a)
-            helper(a, [modules; CSTParser.valof(CSTParser.get_name(a))])
-         elseif !isnothing(a.args)
-            helper(a, modules)
+   tree = parse(encodedbuf)
+   results = Dict{String,Vector{String}}()
+
+   helper = (node, modules = Symbol[]) -> begin
+      if JS.haschildren(node)
+         for child in JS.children(node)
+            kind = JS.kind(child)
+
+            # Track module context
+            if kind == JS.K"module"
+               name = nodename(child)
+               if name !== nothing
+                  new_modules = [modules; String(name)]
+                  helper(child, new_modules)
+               end
+               continue
+            end
+
+            # Check for include calls
+            if kind == JS.K"call" && length(JS.children(child)) >= 2
+               call_name = JS.children(child)[1]
+               if String(JS.sourcetext(call_name)) == "include"
+                  # Get filename from the first argument
+                  filename_node = JS.children(child)[2]
+                  filename = String(JS.sourcetext(filename_node))
+                  # Remove quotes
+                  filename = replace(filename, r"^\"(.*)\"$" => s"\1")
+                  filename = joinpath(path, filename)
+                  # Store with current module context
+                  results[filename] = String.(copy(modules))
+               end
+            end
+
+            # Recurse into other nodes
+            helper(child, modules)
          end
       end
    end
-   helper(cst)
-   # convert to a plist for returning back to Emacs
+
+   helper(tree)
+
+   # Convert to plist for Emacs
    reslist = []
    for (file, modules) in results
       push!(reslist, file)
       push!(reslist, [:list; modules])
    end
-   return isempty(reslist) ?
-      nothing :
-      [:list; reslist]
-end
 
-# XXX: Dirty hackery to improve perceived startup performance follows. Running
-# this function in a separate thread should, in theory, force a bunch of things
-# to JIT-compile in the background before the user notices.
-# Thank you very much, time-to-first-plot problem!
-function forcecompile()
-  # call these functions before the user does
-  includesin(Base64.base64encode("module Alpha\ninclude(\"a.jl\")\nend"))
-  moduleat(Base64.base64encode("module Alpha\nend"), 1)
+   return isempty(reslist) ? nothing : [:list; reslist]
 end
 
 end
@@ -874,6 +983,13 @@ during evaluation are captured and sent back to the client as Elisp
 s-expressions. Special queries also write back their responses as s-expressions.
 """
 function start(port=10011; addr="127.0.0.1")
+   if VERSION < v"1.10"
+      # JuliaSyntax only ships with 1.10.
+      # This is an exception-throwing error, and it's placed here so users have
+      # a chance to see it before the terminal closes.
+      error("ERROR: Julia Snail now requires Julia 1.10 or higher")
+   end
+
    global running = false
    global server_socket = Sockets.listen(Sockets.IPv4(addr), port)
    let wait_result = timedwait(function(); server_socket.status == Base.StatusActive; end,
@@ -891,17 +1007,6 @@ function start(port=10011; addr="127.0.0.1")
          println(stderr, "ERROR: Snail will not work correctly.")
       end
    end
-   # XXX: It would be great to do this forcecompile trick in a Thread.@spawn
-   # block. Unfortunately, as of Julia 1.6.1 this does not work. First, it's
-   # meaningless unless Julia is started with JULIA_NUM_THREADS or --threads set
-   # to some number >1 (not the default). Second, and worse, for some reason,
-   # the spawned thread _still_ blocks the main thread. Non-working code below:
-   # if VERSION >= v"1.3" && Threads.nthreads() > 1
-   #    Threads.@spawn begin
-   #       CST.forcecompile()
-   #    end
-   # end
-   CST.forcecompile()
    # main loop:
    @async begin
       while running
@@ -1008,8 +1113,8 @@ function send_to_client(expr, client_socket=nothing)
          # force the user to choose the client socket
          options = map(
             function(cs)
-            gsn = Sockets.getpeername(cs)
-            Printf.@sprintf("%s:%d", gsn[1], gsn[2])
+               gsn = Sockets.getpeername(cs)
+               Printf.@sprintf("%s:%d", gsn[1], gsn[2])
             end,
             client_sockets
          )
@@ -1027,6 +1132,5 @@ function send_to_client(expr, client_socket=nothing)
    end
    println(client_socket, expr)
 end
-
 
 end

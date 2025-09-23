@@ -42,7 +42,7 @@
         (js-with-julia-session repl-buf
           (julia-snail)
           (with-current-buffer source-buf
-            (let ((includes (julia-snail--cst-includes (get-buffer (current-buffer)))))
+            (let ((includes (julia-snail--parser-includes (get-buffer (current-buffer)))))
               (should
                (equal
                 '("MyModule")

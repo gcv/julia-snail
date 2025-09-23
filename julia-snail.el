@@ -329,6 +329,12 @@ nil means disable Snail-specific imenu integration (fall back on julia-mode impl
 
 (defvar-local julia-snail--imenu-cache nil)
 
+(defvar julia-snail--parser-module-cache (make-hash-table :test #'equal)
+  "Cache for module-at-point lookups. Keys are (buffer-hash . line-number) pairs.")
+
+(defvar julia-snail--parser-module-cache-counter 0
+  "Counter for cache cleanup. Incremented on each cache miss.")
+
 (defvar julia-snail--compilation-regexp-alist
   '(;; matches "while loading /tmp/Foo.jl, in expression starting on line 2"
     (julia-load-error . ("while loading \\([^ ><()\t\n,'\";:]+\\), in expression starting on line \\([0-9]+\\)" 1 2))
@@ -494,7 +500,7 @@ Returns nil if the poll timed out, t otherwise."
 (defun julia-snail--capture-basedir (buf)
   (julia-snail--send-to-server
     :Main
-    "normpath(joinpath(VERSION <= v\"0.7-\" ? JULIA_HOME : Sys.BINDIR, Base.DATAROOTDIR, \"julia\", \"base\"))"
+    "normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, \"julia\", \"base\"))"
     :repl-buf buf
     :async nil))
 
@@ -804,8 +810,8 @@ returns \"/home/username/file.jl\"."
                 (setq julia-snail--process netstream)
                 (set-process-filter julia-snail--process #'julia-snail--server-response-filter)
                 ;; TODO: Implement a sanity check on the Julia environment. Not
-                ;; sure how. But a failed dependency load (like CSTParser) will
-                ;; leave Snail in a bad state.
+                ;; sure how. But a failed Julia dependency load will leave Snail
+                ;; in a bad state.
                 (message "Successfully connected to Snail server in Julia REPL")
                 ;; Query base directory, and cache
                 (puthash process-buf (julia-snail--capture-basedir repl-buf)
@@ -1152,36 +1158,75 @@ evaluated in the context of MODULE."
   (julia-snail--response-base reqid))
 
 
-;;; --- CST parser interface
+;;; --- parser interface
 
-(defun julia-snail--cst-module-at (buf pt)
+(defun julia-snail--clean-module-cache ()
+  "Remove expired entries from the module cache."
+  (let ((current-time (float-time)))
+    (cl-loop for key being the hash-keys of julia-snail--parser-module-cache
+             using (hash-values value)
+             when (> (- current-time (car value)) 5.0)
+             do (remhash key julia-snail--parser-module-cache))))
+
+(defun julia-snail--parser-module-at (buf pt)
+  "Return the Julia module at point PT in buffer BUF.
+Uses a cache that expires entries after 5 seconds, and keyed to
+BUF and the line number at PT. This cache structure helps this
+function withstand heavy use by completion frameworks (Company,
+Corfu): they call repeatedly out to the Julia completion system,
+which needs to know the current module. The current module will
+not have changed as the user is typing on the same line, but the
+`module-at` machinery will be called a lot. There's room for
+improvement here. For example, instead of expiring the cache 5
+seconds later, it can just expire when the user moves to a
+different line."
+  (let* ((line-num (line-number-at-pos pt buf))
+         (cache-key (cons buf line-num))
+         (cached-entry (gethash cache-key julia-snail--parser-module-cache))
+         (current-time (float-time))
+         (byteloc (position-bytes pt))
+         res)
+    ;; use cached entry if it exists and hasn't expired (5 second TTL)
+    (if (and cached-entry
+             (< (- current-time (car cached-entry)) 5.0))
+        ;; return cached value
+        (cdr cached-entry)
+      ;; cache miss or expired entry: perform the lookup
+      (setq res (let* ((encoded (julia-snail--encode-base64 buf))
+                       (result (julia-snail--send-to-server
+                                 :Main
+                                 (format "JuliaSnail.JStx.moduleat(\"%s\", %d)" encoded byteloc)
+                                 :async nil)))
+                  (if (eq result :nothing)
+                      nil
+                    result)))
+      ;; store the result in the cache with current timestamp:
+      (puthash cache-key (cons current-time res) julia-snail--parser-module-cache)
+      ;; increment counter and clean expired entries every 50 calls:
+      (cl-incf julia-snail--parser-module-cache-counter)
+      (when (>= julia-snail--parser-module-cache-counter 50)
+        (setq julia-snail--parser-module-cache-counter 0)
+        (julia-snail--clean-module-cache))
+      ;; done
+      res)))
+
+(defun julia-snail--parser-block-at (buf pt)
   (let* ((byteloc (position-bytes pt))
          (encoded (julia-snail--encode-base64 buf))
          (res (julia-snail--send-to-server
                 :Main
-                (format "JuliaSnail.CST.moduleat(\"%s\", %d)" encoded byteloc)
+                (format "JuliaSnail.JStx.blockat(\"%s\", %d)" encoded byteloc)
                 :async nil)))
     (if (eq res :nothing)
         nil
       res)))
 
-(defun julia-snail--cst-block-at (buf pt)
-  (let* ((byteloc (position-bytes pt))
-         (encoded (julia-snail--encode-base64 buf))
-         (res (julia-snail--send-to-server
-                :Main
-                (format "JuliaSnail.CST.blockat(\"%s\", %d)" encoded byteloc)
-                :async nil)))
-    (if (eq res :nothing)
-        nil
-      res)))
-
-(defun julia-snail--cst-includes (buf)
+(defun julia-snail--parser-includes (buf)
   (let* ((encoded (julia-snail--encode-base64 buf))
          (pwd (file-name-directory (julia-snail--efn (buffer-file-name buf))))
          (res (julia-snail--send-to-server
                 :Main
-                (format "JuliaSnail.CST.includesin(\"%s\", \"%s\")" encoded pwd)
+                (format "JuliaSnail.JStx.includesin(\"%s\", \"%s\")" encoded pwd)
                 :async nil))
          (includes (make-hash-table :test #'equal)))
     (unless (eq res :nothing)
@@ -1190,11 +1235,11 @@ evaluated in the context of MODULE."
     ;; TODO: Maybe there's a situation in which returning :error is appropriate?
     includes))
 
-(defun julia-snail--cst-code-tree (buf)
+(defun julia-snail--parser-code-tree (buf)
   (let* ((encoded (julia-snail--encode-base64 buf))
          (res (julia-snail--send-to-server
                 :Main
-                (format "JuliaSnail.CST.codetree(\"%s\")" encoded)
+                (format "JuliaSnail.JStx.codetree(\"%s\")" encoded)
                 :async nil)))
     res))
 
@@ -1231,7 +1276,7 @@ evaluated in the context of MODULE."
 (defun julia-snail--module-at-point (&optional partial-module)
   "Return the current Julia module at point as an Elisp list, including PARTIAL-MODULE if given."
   (let ((partial-module (or partial-module
-                            (julia-snail--cst-module-at (current-buffer) (point))))
+                            (julia-snail--parser-module-at (current-buffer) (point))))
         (module-for-file (julia-snail--module-for-file (buffer-file-name (buffer-base-buffer)))))
     (or (if module-for-file
             (append module-for-file partial-module)
@@ -1400,23 +1445,24 @@ evaluated in the context of MODULE."
        (julia-snail--imenu-helper (cdr tree) modules)))))
 
 (defun julia-snail--imenu-included-module-helper (normal-tree)
-  ;; XXX: This fugly kludge transforms imenu trees in a way that injects modules
-  ;; cached through include()ed files at the root:
+  ;; This function transforms imenu trees in a way that injects modules cached
+  ;; through include()ed files at the root:
   ;;
   ;; if included-modules is ("Alpha" "Bravo")
   ;; and normal-tree is ((function "f1" ...))
   ;; then this returns (("Alpha" ("Bravo" (function "f1" ...))))
-  ;;
-  ;; There must be a cleaner way to implement this logic.
   (let ((included-modules (julia-snail--module-for-file (buffer-file-name (buffer-base-buffer)))))
-    (cl-labels ((some-helper
-                 (incls norms first-time)
-                 (if (null incls)
-                     norms
-                   (let* ((next (some-helper (cdr incls) norms nil))
-                          (tail (cons (car incls) (if first-time(list next) next))))
-                     (if first-time (list tail) tail)))))
-      (some-helper included-modules normal-tree t))))
+    (if (null included-modules)
+        ;; no included modules, return original tree
+        normal-tree
+      ;; recursively build the nested tree:
+      (cl-labels ((build-nested-tree
+                    (modules content)
+                    (if (null modules)
+                        content
+                      (list (cons (car modules)
+                                  (build-nested-tree (cdr modules) content))))))
+        (build-nested-tree included-modules normal-tree)))))
 
 (cl-defun julia-snail-imenu ()
   ;; exit early if Snail's imenu integration is turned off, or no Snail session is running
@@ -1435,7 +1481,7 @@ evaluated in the context of MODULE."
       (cl-return-from julia-snail-imenu
         (julia-snail--imenu-cache-entry-value julia-snail--imenu-cache))))
   ;; cache miss: ask Julia to parse the file and return the imenu index
-  (let* ((code-tree (julia-snail--cst-code-tree (current-buffer)))
+  (let* ((code-tree (julia-snail--parser-code-tree (current-buffer)))
          (imenu-index-raw (julia-snail--imenu-included-module-helper (julia-snail--imenu-helper code-tree (list))))
          (imenu-index (if (eq :flat julia-snail-imenu-style)
                           (-flatten imenu-index-raw)
@@ -1737,7 +1783,7 @@ activation:
 This occurs in the context of the current module.
 Currently only works on blocks terminated with `end'."
   (interactive)
-  (let* ((q (julia-snail--cst-block-at (current-buffer) (point)))
+  (let* ((q (julia-snail--parser-block-at (current-buffer) (point)))
          (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
          (module (julia-snail--module-at-point (-first-item q)))
          (block-start (byte-to-position (or (-second-item q) -1)))
@@ -1781,7 +1827,7 @@ This will occur in the context of the Main module, just as it would at the REPL.
   (let* ((jsrb-save julia-snail-repl-buffer) ; save for callback context
          (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
          (module (or (julia-snail--module-for-file filename) '("Main")))
-         (includes (julia-snail--cst-includes (current-buffer))))
+         (includes (julia-snail--parser-includes (current-buffer))))
     (when (or (not (buffer-modified-p))
               (y-or-n-p (format "'%s' is not saved, send to Julia anyway? " filename)))
       (julia-snail--send-to-server
@@ -1794,7 +1840,7 @@ This will occur in the context of the Main module, just as it would at the REPL.
                             ;; julia-snail-repl-buffer will have disappeared
                             (let* ((julia-snail-repl-buffer jsrb-save)
                                    (repl-buf (get-buffer julia-snail-repl-buffer)))
-                              ;; NB: At the moment, julia-snail--cst-includes
+                              ;; NB: At the moment, julia-snail--parser-includes
                               ;; does not return :error. However, it might in
                               ;; the future, and this code will then be useful.
                               (if (eq :error includes)
@@ -1823,7 +1869,7 @@ This will occur in the context of the Main module, just as it would at the REPL.
   "Analyze the current buffer's file for include statements"
   (interactive)
   (let* ((filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
-         (includes (julia-snail--cst-includes (current-buffer))))
+         (includes (julia-snail--parser-includes (current-buffer))))
     (when (or (not (buffer-modified-p))
               (y-or-n-p (format "'%s' is not saved, analyze in Julia anyway? " filename)))
       (if (eq :error includes)
@@ -1917,7 +1963,7 @@ autocompletion aware of the available modules."
   (interactive)
   (let* ((filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
          (module (or (julia-snail--module-for-file filename) '("Main")))
-         (includes (julia-snail--cst-includes (current-buffer))))
+         (includes (julia-snail--parser-includes (current-buffer))))
     (julia-snail--module-merge-includes filename includes)
     (message "Caches updated: parent module %s"
              (julia-snail--construct-module-path module))))

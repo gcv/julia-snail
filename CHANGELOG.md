@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking change:** Switched from `CSTParser` to `JuliaSyntax` ([#149](https://github.com/gcv/julia-snail/issues/149)). Because `JuliaSyntax` ships with Julia versions 1.10 and later, and because I don't want to maintain `Project.toml` files in Snail itself, this means support for older Julia versions is discontinued.
 - Standardized on using `locate-library` to locate Snail's installation ([#147](https://github.com/gcv/julia-snail/issues/147)).
 
 

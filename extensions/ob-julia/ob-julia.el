@@ -155,7 +155,7 @@ your org notebook"
          (inner-module (with-temp-buffer
                          (let* ((julia-snail-repl-buffer jsrb-save))
                            (insert contents)
-                           (julia-snail--cst-module-at (current-buffer) pt)))))
+                           (julia-snail--parser-module-at (current-buffer) pt)))))
     (if inner-module
         (append src-module inner-module)
       src-module)))
