@@ -145,7 +145,7 @@
 (make-variable-buffer-local 'julia-snail-repl-buffer)
 
 (defcustom julia-snail-repl-list '()
-  "Association list to store the buffer names and ports."
+  "Association list to store the julia REPL names and ports."
   :tag "Julia REPL list"
   :safe 'listp
   :type 'list)
@@ -816,7 +816,25 @@ returns \"/home/username/file.jl\"."
     (julia-snail--clear-proc-caches process-buf)
     (when process-buf
       (kill-buffer process-buf)))
-  (setq julia-snail--process nil))
+  (setq julia-snail--process nil)
+  ;; Clean up REPL list and counter
+  (let ((repl-buffer-name (buffer-name)))
+    ;; Remove this REPL buffer from the REPL list
+    (setq julia-snail-repl-list
+          (delete (assoc repl-buffer-name julia-snail-repl-list) julia-snail-repl-list))
+    ;; Decrement REPL counter if it's greater than 0
+    (when (> julia-snail-repl-counter 0)
+      (setq julia-snail-repl-counter (1- julia-snail-repl-counter)))
+    ;; Reset julia-snail-repl-buffer in all source buffers that reference this REPL
+    (dolist (buf (buffer-list))
+      (with-current-buffer buf
+        (when (and (boundp 'julia-snail-repl-buffer)
+                   (string= julia-snail-repl-buffer repl-buffer-name))
+          (setq julia-snail-repl-buffer ""))))
+    ;; Port is automatically released when the Julia process dies,
+    ;; but this ensures our tracking is clean
+    (setq julia-snail-port nil
+          julia-snail-repl-buffer "")))
 
 (defun julia-snail--repl-enable ()
   "REPL buffer minor mode initializer."
