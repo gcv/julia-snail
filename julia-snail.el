@@ -380,10 +380,20 @@ Uses function `compilation-shell-minor-mode'.")
 ;;; --- supporting functions
 
 (defun julia-snail--port-in-use-p (port)
-  "Check if PORT is in use on the local machine using ss.
-Return t if the port is in use, nil otherwise."
-  (with-temp-buffer
-    (= 0 (call-process "/bin/bash" nil t nil "-c" (format "ss -tuln | grep \":%d\\s\" > /dev/null" port)))))
+  "Check if PORT is in use on the local machine using built-in Emacs Lisp.
+Attempt to create a network process listening on the given PORT.
+If the port is already in use, an error is raised, and the function returns t.
+Otherwise, the function deletes the network process and returns nil."
+  (let ((process-connection-type nil)
+        (proc (ignore-errors (make-network-process
+                              :name "test"
+                              :server t
+                              :service port))))
+    (if proc
+        (progn
+          (delete-process proc)
+          nil)
+      t)))
 
 (defun julia-snail--find-free-port (start-port)
   "Find a free port starting from START-PORT."
