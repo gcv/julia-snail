@@ -155,7 +155,7 @@
 (make-variable-buffer-local 'julia-snail-repl-buffer)
 
 (defcustom julia-snail-repl-list '()
-  "Association list to store the buffer names and ports."
+  "Association list to store the julia REPL names and ports."
   :tag "Julia REPL list"
   :safe 'listp
   :type 'list)
@@ -896,6 +896,37 @@ returns \"/home/username/file.jl\"."
 
 ;;; --- connection management functions
 
+(defun julia-snail--repl-rename-cleanup (old-name new-name)
+  "Handle REPL buffer rename by updating julia-snail-repl-list and source buffer references.
+OLD-NAME is the previous buffer name, NEW-NAME is the new buffer name."
+  ;; Skip if the buffer is being killed (name is empty) or names are the same
+  (unless (or (string= old-name "")
+              (string= new-name "")
+              (string= old-name new-name))
+    ;; Update julia-snail-repl-list
+    (let ((entry (assoc old-name julia-snail-repl-list)))
+      (when entry
+        (setq julia-snail-repl-list
+              (cons (cons new-name (cdr entry))
+                    (delete entry julia-snail-repl-list)))))
+    ;; Update julia-snail-repl-buffer in all source buffers that reference this REPL
+    (dolist (buf (buffer-list))
+      (with-current-buffer buf
+        (when (and (boundp 'julia-snail-repl-buffer)
+                   (string= julia-snail-repl-buffer old-name))
+          (setq julia-snail-repl-buffer new-name))))))
+
+;; Advice to track buffer renames in REPL buffers
+(defun julia-snail--rename-buffer-advice (orig-fun &rest args)
+  "Advice around `rename-buffer' to track renames of REPL buffers."
+  (let ((old-name (buffer-name)))
+    (prog1
+        (apply orig-fun args)
+      (when (and julia-snail-repl-mode
+                 (boundp 'julia-snail-repl-buffer)
+                 (assoc old-name julia-snail-repl-list))
+        (julia-snail--repl-rename-cleanup old-name (buffer-name))))))
+
 (defun julia-snail--clear-proc-caches (process-buf)
   "Clear connection-specific internal Snail xref, completion, and module caches."
   (when process-buf
@@ -906,13 +937,45 @@ returns \"/home/username/file.jl\"."
   "REPL buffer cleanup."
   (let ((process-buf (get-buffer (julia-snail--process-buffer-name (current-buffer)))))
     (julia-snail--clear-proc-caches process-buf)
+    ;; Clean up process responses for this process
+    (when (and process-buf (gethash process-buf julia-snail--proc-responses))
+      (remhash process-buf julia-snail--proc-responses))
     (when process-buf
       (kill-buffer process-buf)))
-  (setq julia-snail--process nil))
+  (setq julia-snail--process nil)
+  ;; Clean up REPL list and counter
+  (let ((repl-buffer-name (buffer-name)))
+    ;; Remove this REPL buffer from the REPL list
+    (setq julia-snail-repl-list
+          (delete (assoc repl-buffer-name julia-snail-repl-list) julia-snail-repl-list))
+    ;; Decrement REPL counter if it's greater than 0
+    (when (> julia-snail-repl-counter 0)
+      (setq julia-snail-repl-counter (1- julia-snail-repl-counter)))
+    ;; Clean up pending requests for this REPL
+    (maphash (lambda (reqid request-info)
+               (when (and (julia-snail--request-tracker-p request-info)
+                          (string= (julia-snail--request-tracker-repl-buf request-info) repl-buffer-name))
+                 (remhash reqid julia-snail--requests)))
+             julia-snail--requests)
+    ;; Reset julia-snail-repl-buffer in all source buffers that reference this REPL
+    (dolist (buf (buffer-list))
+      (with-current-buffer buf
+        (when (and (boundp 'julia-snail-repl-buffer)
+                   (string= julia-snail-repl-buffer repl-buffer-name))
+          (setq julia-snail-repl-buffer ""))))
+    ;; Port is automatically released when the Julia process dies,
+    ;; but this ensures our tracking is clean
+    (setq julia-snail-port nil
+          julia-snail-repl-buffer "")
+    ;; Clear the go-back target buffer reference
+    (setq julia-snail--repl-go-back-target nil)
+    ;; Clear any popup displays
+    (setq julia-snail--popups nil)))
 
 (defun julia-snail--repl-enable ()
   "REPL buffer minor mode initializer."
   (add-hook 'kill-buffer-hook #'julia-snail--repl-cleanup nil t)
+  (advice-add 'rename-buffer :around #'julia-snail--rename-buffer-advice)
   (let ((repl-buf (current-buffer))
         (process-buf (get-buffer-create (julia-snail--process-buffer-name (current-buffer)))))
     (julia-snail--add-to-perspective process-buf)
@@ -968,6 +1031,7 @@ returns \"/home/username/file.jl\"."
                 ;; NB: buffer-local variable!
                 (setq julia-snail--process netstream)
                 (set-process-filter julia-snail--process #'julia-snail--server-response-filter)
+                (set-process-sentinel julia-snail--process #'julia-snail--server-sentinel)
                 ;; TODO: Implement a sanity check on the Julia environment. Not
                 ;; sure how. But a failed dependency load (like CSTParser) will
                 ;; leave Snail in a bad state.
@@ -1017,6 +1081,7 @@ returns \"/home/username/file.jl\"."
 
 (defun julia-snail--repl-disable ()
   "REPL buffer minor mode cleanup."
+  (advice-remove 'rename-buffer #'julia-snail--rename-buffer-advice)
   (julia-snail--repl-cleanup))
 
 (defun julia-snail--enable ()
@@ -1289,6 +1354,19 @@ evaluated in the context of MODULE."
           ;; program that something went haywire.
           (error
            (throw 'julia-snail--server-filter-error err)))))))
+
+(defun julia-snail--server-sentinel (proc event)
+  "Process sentinel for PROC.
+Cleans up REPL state when the Julia process terminates or crashes."
+  (let ((process-buf (process-buffer proc)))
+    (when (and process-buf (buffer-live-p process-buf))
+      ;; Find the REPL buffer associated with this process buffer
+      (let* ((repl-buf-name (replace-regexp-in-string " process$" "" (buffer-name process-buf)))
+             (repl-buf (get-buffer repl-buf-name)))
+        (when (and repl-buf (buffer-live-p repl-buf))
+          (with-current-buffer repl-buf
+            (message "Julia process %s; cleaning up REPL %s" event repl-buf-name)
+            (julia-snail--repl-cleanup)))))))
 
 
 ;;; --- Snail server response handling functions
