@@ -174,7 +174,28 @@ another."
   :type '(choice (const :tag "Reuse buffer and replace image" :single-reuse)
                  (const :tag "New buffer for each image" :single-new)
                  (const :tag "Append images to buffer" :multi)))
+
 (make-variable-buffer-local 'julia-snail-multimedia-buffer-style)
+
+(defcustom julia-snail-multimedia-export-enable nil
+  "If true, when an image is displayed within emacs,
+automatically export it to a file inside of
+julia-snail-multimedia-export-path. Unique and
+sequential filenames are used so the images can be
+accessed externally in the same order they were displayed."
+  :tag "Enable automatic multimedia exports"
+  :group 'julia-snail
+  :type 'boolean)
+(make-variable-buffer-local 'julia-snail-multimedia-export-enable)
+
+(defcustom julia-snail-multimedia-export-path "."
+  "If multimedia export is enabled, write all
+displayed images to this path."
+  :tag "Multimedia export path"
+  :group 'julia-snail
+  :safe 'stringp
+  :type 'string)
+(make-variable-buffer-local 'julia-snail-multimedia-export-path)
 
 (defcustom julia-snail-completions-doc-enable t
   "If company-mode is installed, this flag determines if its documentation integration should be enabled."
@@ -1579,9 +1600,33 @@ evaluated in the context of MODULE."
   nil
 )
 
-
 ;;; --- multimedia support
 ;;; Adapted from a PR by https://github.com/dahtah (https://github.com/gcv/julia-snail/pull/21).
+
+(defun julia-snail-mm-export-unique-filename (file-name)
+  "Generate a unique filename with incrementing numeric prefix.
+FILE-NAME is the base filename to use. Counting works across all extensions."
+  (let* ((dir (or (file-name-directory file-name) default-directory))
+         (base (file-name-nondirectory file-name))
+         (existing-files (directory-files dir nil "^[0-9]\\{3\\}_"))
+         (max-counter -1))
+    ;; Find the highest existing counter across all files
+    (dolist (file existing-files)
+      (when (string-match "^\\([0-9]\\{3\\}\\)_" file)
+        (let ((counter (string-to-number (match-string 1 file))))
+          (when (> counter max-counter)
+            (setq max-counter counter)))))
+    ;; Return next available filename
+    (expand-file-name
+     (format "%03d_%s" (mod (1+ max-counter) 1000) base)
+     dir)))
+
+(defun get-current-image-type ()
+  "Get the type of the current image (svg, png, etc.)."
+  (when (derived-mode-p 'image-mode)
+    (let ((image (image-get-display-property)))
+      (when image
+        (plist-get (cdr image) :type)))))
 
 (defun julia-snail-multimedia-display (img)
   (let* ((repl-buf (get-buffer julia-snail-repl-buffer))
@@ -1604,6 +1649,14 @@ evaluated in the context of MODULE."
         ;; use image-mode
         (insert decoded-img)
         (image-mode))
+      (when (buffer-local-value 'julia-snail-multimedia-export-enable repl-buf)
+        (cl-assert (memq style '(:single-reuse :single-new)) t "multimedia export only works with :single-reuse and :single-new")
+        (write-region nil nil
+         (julia-snail-mm-export-unique-filename
+          (file-name-concat
+           (buffer-local-value 'julia-snail-multimedia-export-path repl-buf)
+           (format "mm.%s" (get-current-image-type)))))
+        )
       (when (eq :multi style)
         ;; insert images as objects
         ;; switching from previously-used :single-reuse requires special cleanup
