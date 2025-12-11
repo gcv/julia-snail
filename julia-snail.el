@@ -584,7 +584,7 @@ Returns nil if the poll timed out, t otherwise."
         (cl-loop for f in julia-snail--julia-files do
                  (if (file-directory-p f)
                      (make-directory (concat snail-remote-dir f))
-                   (copy-file f (concat snail-remote-dir (file-name-directory f)) t)))))
+                   (copy-file (file-truename f) (concat snail-remote-dir (file-name-directory f)) t)))))
     snail-remote-dir))
 
 (defun julia-snail--launch-command ()
