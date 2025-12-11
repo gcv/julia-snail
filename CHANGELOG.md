@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `repl-history` extension: support Eat terminals ([#154](https://github.com/gcv/julia-snail/issues/154)).
 - Update REPL completion to deal with the Julia 1.12 API ([#184](https://github.com/gcv/julia-snail/issues/184)).
+- Follow symlinks when copying Julia files to remote ([#190](https://github.com/gcv/julia-snail/issues/190)).
 
 
 ### Added
