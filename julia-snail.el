@@ -95,8 +95,15 @@
                  (repeat :tag "List of strings" string)))
 (make-variable-buffer-local 'julia-snail-extra-args)
 
-(defcustom julia-snail-port 10011
+(defcustom julia-snail-default-port 10011
   "Default Snail server port for Emacs to connect to."
+  :tag "Default snail server port (local)"
+  :group 'julia-snail
+  :safe 'integerp
+  :type 'integer)
+
+(defcustom julia-snail-port nil
+  "Snail server port of the buffer to connect to the REPL."
   :tag "Snail server port (local)"
   :group 'julia-snail
   :safe 'integerp
@@ -112,13 +119,36 @@
                  (integer)))
 (make-variable-buffer-local 'julia-snail-remote-port)
 
-(defcustom julia-snail-repl-buffer "*julia*"
+(defcustom julia-snail-repl-counter 0
+  "Counter of how many Julia REPL exist"
+  :tag "Counter for Julia REPL buffer"
+  :group 'julia-snail
+  :safe 'integerp
+  :type 'integer)
+
+(defcustom julia-snail-default-repl-name "julia"
+  "Default buffer name to use for a Julia REPL."
+  :tag "Julia REPL buffer name"
+  :group 'julia-snail
+  :safe 'stringp
+  :type 'string)
+
+;; At the moment, this variable is just a placeholder for the REPL
+;; buffer name that will later on be set here. Not sure how to better
+;; init an empty string variable
+(defcustom julia-snail-repl-buffer ""
   "Default buffer to use for Julia REPL interaction."
   :tag "Julia REPL buffer"
   :group 'julia-snail
   :safe 'stringp
   :type 'string)
 (make-variable-buffer-local 'julia-snail-repl-buffer)
+
+(defcustom julia-snail-repl-list '()
+  "Association list to store the julia REPL names and ports."
+  :tag "Julia REPL list"
+  :safe 'listp
+  :type 'list)
 
 (defcustom julia-snail-terminal-type
   (if (locate-library "vterm") :vterm :eat) ; default to :vterm for historical compatibility
@@ -349,6 +379,29 @@ Uses function `compilation-shell-minor-mode'.")
 
 ;;; --- supporting functions
 
+(defun julia-snail--port-in-use-p (port)
+  "Check if PORT is in use on the local machine using built-in Emacs Lisp.
+Attempt to create a network process listening on the given PORT.
+If the port is already in use, an error is raised, and the function returns t.
+Otherwise, the function deletes the network process and returns nil."
+  (let ((process-connection-type nil)
+        (proc (ignore-errors (make-network-process
+                              :name "test"
+                              :server t
+                              :service port))))
+    (if proc
+        (progn
+          (delete-process proc)
+          nil)
+      t)))
+
+(defun julia-snail--find-free-port (start-port)
+  "Find a free port starting from START-PORT."
+  (let ((port start-port))
+    (while (julia-snail--port-in-use-p port)
+      (setq port (1+ port)))
+    port))
+
 (defun julia-snail--copy-buffer-local-vars (from-buf)
   "Copy Snail-related buffer-local variables from FROM-BUF to the current buffer."
   (dolist (blv (buffer-local-variables from-buf))
@@ -363,8 +416,8 @@ Uses function `compilation-shell-minor-mode'.")
   "Return the process buffer name for REPL-BUF."
   (let ((real-buf (get-buffer repl-buf)))
     (unless real-buf
-      (error "No REPL buffer found"))
-    (format "%s process" (buffer-name (get-buffer real-buf)))))
+      (julia-snail-switch-or-create-repl))
+    (format "%s process" (buffer-name (get-buffer julia-snail-repl-buffer)))))
 
 (cl-defun julia-snail--message-buffer (repl-buf name message &key (markdown nil))
   "Return a buffer named NAME linked to REPL-BUF containing MESSAGE."
@@ -528,6 +581,9 @@ Returns nil if the poll timed out, t otherwise."
         (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
         (module (if current-prefix-arg :Main (julia-snail--module-at-point)))
         (line-num (line-number-at-pos block-start)))
+    ;; If the repl-buffer is not set yet, ask to create or switch to one
+    (if (not (get-buffer julia-snail-repl-buffer))
+        (julia-snail-switch-or-create-repl))
     (julia-snail--flash-region block-start block-end)
     (if (and allow-send-to-repl
              (consp current-prefix-arg) (> (car current-prefix-arg) 4))
@@ -587,7 +643,7 @@ Returns nil if the poll timed out, t otherwise."
                    (copy-file (file-truename f) (concat snail-remote-dir (file-name-directory f)) t)))))
     snail-remote-dir))
 
-(defun julia-snail--launch-command ()
+(defun julia-snail--launch-command (port)
   (let* ((extra-args (if (listp julia-snail-extra-args)
                          (mapconcat 'identity julia-snail-extra-args " ")
                        julia-snail-extra-args))
@@ -607,8 +663,8 @@ Returns nil if the poll timed out, t otherwise."
           (string-equal "scp" remote-method)
           (string-equal "scpx" remote-method))
       (format "ssh -t -L %1$s:localhost:%2$s %3$s %4$s %5$s -L %6$s"
-              julia-snail-port
-              (or julia-snail-remote-port julia-snail-port)
+              port
+              (or julia-snail-remote-port port)
               (concat
                (if remote-user (concat remote-user "@") "")
                remote-host)
@@ -629,7 +685,8 @@ Returns nil if the poll timed out, t otherwise."
 (defun julia-snail--start (source-buf)
   "Underlying command for julia-snail invocation.
 Supports multiple terminal implementations."
-  (let* ((launch-command (julia-snail--launch-command))
+  (let* ((port (julia-snail--find-free-port julia-snail-default-port)) ;; find a new port
+         (launch-command (julia-snail--launch-command port))
          ;; XXX: Set the error color to red to work around breakage relating to
          ;; some color themes and terminal combinations, see
          ;; https://github.com/gcv/julia-snail/issues/11
@@ -641,27 +698,43 @@ Supports multiple terminal implementations."
          (default-directory (if (file-remote-p default-directory)
                                 (expand-file-name "~")
                               default-directory)))
-    (let ((terml-buf
-           ;; first, start a REPL process in a new buffer
-           (cond
-            ;; vterm
-            ((eq :vterm julia-snail-terminal-type)
-             (let ((vterm-shell launch-command)
-                   (terml-buf (generate-new-buffer julia-snail-repl-buffer)))
-               (pop-to-buffer terml-buf)
-               (with-current-buffer terml-buf
-                 (vterm-mode))
-               terml-buf))
-            ;; eat
-            ((eq :eat julia-snail-terminal-type)
-             (let ((terml-buf (eat launch-command t))
-                   (repl-buffer-name julia-snail-repl-buffer))
-               (with-current-buffer terml-buf
-                 (rename-buffer repl-buffer-name))
-               terml-buf))
-            ;; unsupported value
-            (t
-             (user-error "unsupported value for julia-snail-terminal-type: %s" julia-snail-terminal-type)))))
+    (setq julia-snail-repl-counter (1+ julia-snail-repl-counter)) ;; increment the REPL counter
+    (let* (
+           ;; set a buffer name including a counter
+           (new-repl-buffer-name (format "*%s:%s*" julia-snail-default-repl-name julia-snail-repl-counter))
+           (terml-buf
+            ;; first, start a REPL process in a new buffer
+            (cond
+             ;; vterm
+             ((eq :vterm julia-snail-terminal-type)
+              (let ((vterm-shell launch-command)
+                    (terml-buf (generate-new-buffer new-repl-buffer-name)))
+                ;; Set buffer-local values to associate the buffer with a REPL
+                (setq julia-snail-port port)
+                (setq julia-snail-repl-buffer new-repl-buffer-name)
+                ;; Keep count of the REPL buffer name and port
+                (setq julia-snail-repl-list
+                      (append julia-snail-repl-list `((,new-repl-buffer-name . ,port))))
+                (pop-to-buffer terml-buf)
+                (with-current-buffer terml-buf
+                  (vterm-mode))
+                terml-buf))
+             ;; eat
+             ((eq :eat julia-snail-terminal-type)
+              (let ((terml-buf (eat launch-command t))
+                    (repl-buffer-name new-repl-buffer-name))
+                ;; Set buffer-local values to associate the buffer with a REPL
+                (setq julia-snail-port port)
+                (setq julia-snail-repl-buffer new-repl-buffer-name)
+                ;; Keep count of the REPL buffer name and port
+                (setq julia-snail-repl-list
+                      (append julia-snail-repl-list `((,new-repl-buffer-name . ,port))))
+                (with-current-buffer terml-buf
+                  (rename-buffer repl-buffer-name))
+                terml-buf))
+             ;; unsupported value
+             (t
+              (user-error "unsupported value for julia-snail-terminal-type: %s" julia-snail-terminal-type)))))
       ;; then deal with some setup on that buffer
       (with-current-buffer terml-buf
         (when source-buf
@@ -743,7 +816,25 @@ returns \"/home/username/file.jl\"."
     (julia-snail--clear-proc-caches process-buf)
     (when process-buf
       (kill-buffer process-buf)))
-  (setq julia-snail--process nil))
+  (setq julia-snail--process nil)
+  ;; Clean up REPL list and counter
+  (let ((repl-buffer-name (buffer-name)))
+    ;; Remove this REPL buffer from the REPL list
+    (setq julia-snail-repl-list
+          (delete (assoc repl-buffer-name julia-snail-repl-list) julia-snail-repl-list))
+    ;; Decrement REPL counter if it's greater than 0
+    (when (> julia-snail-repl-counter 0)
+      (setq julia-snail-repl-counter (1- julia-snail-repl-counter)))
+    ;; Reset julia-snail-repl-buffer in all source buffers that reference this REPL
+    (dolist (buf (buffer-list))
+      (with-current-buffer buf
+        (when (and (boundp 'julia-snail-repl-buffer)
+                   (string= julia-snail-repl-buffer repl-buffer-name))
+          (setq julia-snail-repl-buffer ""))))
+    ;; Port is automatically released when the Julia process dies,
+    ;; but this ensures our tracking is clean
+    (setq julia-snail-port nil
+          julia-snail-repl-buffer "")))
 
 (defun julia-snail--repl-enable ()
   "REPL buffer minor mode initializer."
@@ -953,7 +1044,7 @@ When :async is t (default), return the request id. When :async is
 nil, wait for the result and return it."
   (declare (indent defun))
   (unless repl-buf
-    (user-error "No Julia REPL buffer %s found; run julia-snail" julia-snail-repl-buffer))
+    (julia-snail-switch-or-create-repl))
   (let* ((process-buf (get-buffer (julia-snail--process-buffer-name repl-buf)))
          (originating-buf (current-buffer))
          (module-ns (julia-snail--construct-module-path module))
@@ -1672,14 +1763,33 @@ evaluated in the context of MODULE."
 
 ;;; --- commands
 
+;; ;;;###autoload
+;; (defun julia-snail ()
+;;   "Start a Julia REPL and connect to it, or switch if one already exists.
+;; The following buffer-local variables control it:
+;; - `julia-snail-repl-buffer' (default: *julia*)
+;; - `julia-snail-port' (default: 10011)
+;; To create multiple REPLs, give these variables distinct values (e.g.:
+;; *julia my-project-1* and 10012)."
+;;   (interactive)
+;;   (let ((source-buf (current-buffer))
+;;         (repl-buf (get-buffer julia-snail-repl-buffer)))
+;;     (if repl-buf
+;;         ;; Julia session exists
+;;         (progn
+;;           (with-current-buffer repl-buf
+;;             (setq julia-snail--repl-go-back-target source-buf))
+;;           (pop-to-buffer repl-buf))
+;;       ;; run a new Julia REPL in a terminal and load the Snail server file
+;;       (julia-snail--start source-buf))))
+
+
 ;;;###autoload
+;; (defun julia-snail-multiple-repls ()
 (defun julia-snail ()
-  "Start a Julia REPL and connect to it, or switch if one already exists.
-The following buffer-local variables control it:
-- `julia-snail-repl-buffer' (default: *julia*)
-- `julia-snail-port' (default: 10011)
-To create multiple REPLs, give these variables distinct values (e.g.:
-*julia my-project-1* and 10012)."
+  "Start a new Julia REPLs if there is not yet one. If there is one, ask
+the user if we should connect to it or create a new REPL. If the buffer
+is already associated with a REPL, pop to it."
   (interactive)
   (let ((source-buf (current-buffer))
         (repl-buf (get-buffer julia-snail-repl-buffer)))
@@ -1689,8 +1799,31 @@ To create multiple REPLs, give these variables distinct values (e.g.:
           (with-current-buffer repl-buf
             (setq julia-snail--repl-go-back-target source-buf))
           (pop-to-buffer repl-buf))
-      ;; run a new Julia REPL in a terminal and load the Snail server file
-      (julia-snail--start source-buf))))
+      (if (not julia-snail-repl-list)
+          ;; No REPL buffers in list, run a new Julia REPL in a
+          ;; terminal and load the Snail server file
+          (julia-snail--start source-buf)
+        ;; else: There are REPLs, let the user choose one (or create a new one)
+        (julia-snail-switch-or-create-repl)))))
+
+(defun julia-snail-switch-or-create-repl ()
+  "Ask the user if the current buffer should be associated with a new or
+already present REPL buffer."
+  (interactive)
+  (let ((chosen-repl-name
+         (completing-read
+          "Create new or switch to REPL: "
+          (cons '("new") julia-snail-repl-list))))
+    (if (string= chosen-repl-name "new")
+        ;; User wants a new REPL buffer
+        (julia-snail--start (current-buffer))
+      ;; else: User has chosen some REPL, associate the current
+      ;; buffer with it and pop to it
+      (save-excursion
+        (progn
+          (setq julia-snail-repl-buffer chosen-repl-name)
+          (setq julia-snail-port (cdr (assoc chosen-repl-name julia-snail-repl-list)))
+          (pop-to-buffer chosen-repl-name))))))
 
 (defun julia-snail-send-line ()
   "Send the line at point to the Julia REPL and evaluate it.
@@ -1778,6 +1911,9 @@ Currently only works on blocks terminated with `end'."
   "Send the current buffer's file into the Julia REPL, and include() it.
 This will occur in the context of the Main module, just as it would at the REPL."
   (interactive)
+  ;; If the repl-buffer is not set yet, ask to create or switch to one
+  (if (not (get-buffer julia-snail-repl-buffer))
+      (julia-snail-switch-or-create-repl))
   (let* ((jsrb-save julia-snail-repl-buffer) ; save for callback context
          (filename (julia-snail--efn (buffer-file-name (buffer-base-buffer))))
          (module (or (julia-snail--module-for-file filename) '("Main")))
