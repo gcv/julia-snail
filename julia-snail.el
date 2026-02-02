@@ -638,6 +638,9 @@ Supports multiple terminal implementations."
          ;; default-directory to the user's home because if (1) a remote REPL is
          ;; being started, default-directory may be remote, and (2) Tramp may
          ;; notice this, mess with the path, and run ssh incorrectly.
+         ;; But also ensure we can set the default-directory to the
+         ;; proper value after creating the terminal buffer.
+         (orig-dir default-directory)
          (default-directory (if (file-remote-p default-directory)
                                 (expand-file-name "~")
                               default-directory)))
@@ -666,7 +669,8 @@ Supports multiple terminal implementations."
       (with-current-buffer terml-buf
         (when source-buf
           (julia-snail--copy-buffer-local-vars source-buf)
-          (setq julia-snail--repl-go-back-target source-buf))
+          (setq julia-snail--repl-go-back-target source-buf)
+          (cd orig-dir))
         (julia-snail-repl-mode)))))
 
 (defun julia-snail--efn (path &optional starting-dir)
@@ -838,6 +842,13 @@ returns \"/home/username/file.jl\"."
                 "set!(:repl_display_eval_results, true)"
                 :repl-buf repl-buf
                 :async nil))
+            ;; ensure the `default-directory' is correct in case of
+            ;; remote REPLs
+            (julia-snail--send-to-server
+              :Main
+              (format "cd(\"%s\")" (julia-snail--efn default-directory))
+              :repl-buf repl-buf
+              :async nil)
             ;; other initializations can go here
             ;; all done!
             (message "Snail initialization complete. Happy hacking!")
