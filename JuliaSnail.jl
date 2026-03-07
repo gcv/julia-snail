@@ -43,18 +43,18 @@ bootstrap_required(err) =
 macro with_pkg_env(dir, action)
    :(
    let _snail_prev_project = Base.active_project(),
-       _snail_pkg_env = Main.JuliaSnail.pkg_env_for_bootstrap($dir)
+       _snail_pkg_env = Main.JuliaSnail.pkg_env_for_bootstrap($(esc(dir)))
       try
          insert!(LOAD_PATH, 1, _snail_pkg_env)
          Main.Pkg.activate(_snail_pkg_env)
-         $action
+         $(esc(action))
       catch err
          if Main.JuliaSnail.bootstrap_required(err) && isfile(joinpath(_snail_pkg_env, "Project.toml"))
             # force dependency installation
             Main.Pkg.activate(_snail_pkg_env)
             Main.Pkg.instantiate()
             Main.Pkg.precompile()
-            $action
+            $(esc(action))
          else
             rethrow(err)
          end
