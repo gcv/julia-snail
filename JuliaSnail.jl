@@ -278,7 +278,11 @@ function eval_tmpfile(tmpfile, modpath, realfile, linenum,
       println()
       @info "Module $modpath\n$result"
    end
-   Base.MainInclude.ans = result # update the REPL's magic `ans` variable
+   # update the REPL's magic `ans` variable (if it is available, which it should
+   # be in versions of Julia >1.8 or maybe >1.9)
+   if isdefined(Base, :MainInclude) && isdefined(Base.MainInclude, :ans)
+      Base.MainInclude.ans = result
+   end
    if isnothing(popup_params)
       Main.JuliaSnail.elexpr(true)
    else
@@ -485,7 +489,21 @@ Completions are provided by the built-in REPL.REPLCompletions.
 """
 function replcompletion(identifier, mod)
    cs, _, _ = REPLCompletions.completions(identifier, lastindex(identifier), mod)
-   return [:list; REPLCompletions.completion_text.(cs)]
+   # XXX: The REPLCompletions API changed in Julia 1.12.
+   if VERSION < v"1.12.0-DEV"
+      return [:list; REPLCompletions.completion_text.(cs)]
+   else # Julia 1.12+
+      completions = map(cs) do c
+         # Special case required for completing "\circ" and replacing with symbol,
+         # see https://github.com/gcv/julia-snail/issues/184
+         if c isa REPLCompletions.BslashCompletion
+            REPLCompletions.named_completion(c)
+         else
+            REPLCompletions.completion_text(c)
+         end
+      end
+      return [:list; completions]
+   end
 end
 
 

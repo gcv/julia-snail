@@ -206,6 +206,13 @@ another."
                  (const :tag "Until next buffer change" :change)
                  (const :tag "Off" nil)))
 
+(defcustom julia-snail-copy-eval-results-to-kill-ring nil
+  "If true, copy inline evaluation results to the kill ring automatically."
+  :tag "Copy inline evaluation results to kill ring automatically"
+  :group 'julia-snail
+  :safe 'booleanp
+  :type 'boolean)
+
 (defcustom julia-snail-popup-display-face nil
   "Face used to display popups. If nil, try to make popups look reasonable."
   :group 'julia-snail
@@ -326,6 +333,8 @@ nil means disable Snail-specific imenu integration (fall back on julia-mode impl
 (defvar-local julia-snail--repl-go-back-target nil)
 
 (defvar-local julia-snail--popups (list))
+
+(defvar-local julia-snail--last-eval-result nil)
 
 (defvar-local julia-snail--imenu-cache nil)
 
@@ -449,6 +458,7 @@ MODULE can be:
      (with-syntax-table stab
        (modify-syntax-entry ?. "_")
        (modify-syntax-entry ?@ "_")
+       (modify-syntax-entry ?! "_")
        (modify-syntax-entry ?= " ")
        (modify-syntax-entry ?$ " ")
        ,@body)))
@@ -552,6 +562,8 @@ Returns nil if the poll timed out, t otherwise."
                                     (cadr popup-params))
                             :async nil))
                       "error")))
+          (when (equal err :nothing)
+            (julia-snail--record-eval-result str))
           (julia-snail--popup-display popup-block-end str :use-cleanup-kludge (eq :command julia-snail-popup-display-eval-results)))
       ;; evaluate through the Snail server:
       (julia-snail--send-to-server-via-tmp-file
@@ -561,7 +573,9 @@ Returns nil if the poll timed out, t otherwise."
         line-num
         :popup-display-params (julia-snail--popup-params block-end)
         :callback-success (lambda (_request-info &optional data)
-                            (julia-snail--popup-display popup-block-end (julia-snail--popup-extract-string data))
+                            (let ((str (julia-snail--popup-extract-string data)))
+                              (julia-snail--record-eval-result str)
+                              (julia-snail--popup-display popup-block-end str))
                             (message "%s; module %s"
                                      message-prefix
                                      (julia-snail--construct-module-path module)))))))
@@ -589,7 +603,7 @@ Returns nil if the poll timed out, t otherwise."
         (cl-loop for f in julia-snail--julia-files do
                  (if (file-directory-p f)
                      (make-directory (concat snail-remote-dir f))
-                   (copy-file f (concat snail-remote-dir (file-name-directory f)) t)))))
+                   (copy-file (file-truename f) (concat snail-remote-dir (file-name-directory f)) t)))))
     snail-remote-dir))
 
 (defun julia-snail--launch-command ()
@@ -643,6 +657,9 @@ Supports multiple terminal implementations."
          ;; default-directory to the user's home because if (1) a remote REPL is
          ;; being started, default-directory may be remote, and (2) Tramp may
          ;; notice this, mess with the path, and run ssh incorrectly.
+         ;; But also ensure we can set the default-directory to the
+         ;; proper value after creating the terminal buffer.
+         (orig-dir default-directory)
          (default-directory (if (file-remote-p default-directory)
                                 (expand-file-name "~")
                               default-directory)))
@@ -671,7 +688,8 @@ Supports multiple terminal implementations."
       (with-current-buffer terml-buf
         (when source-buf
           (julia-snail--copy-buffer-local-vars source-buf)
-          (setq julia-snail--repl-go-back-target source-buf))
+          (setq julia-snail--repl-go-back-target source-buf)
+          (cd orig-dir))
         (julia-snail-repl-mode)))))
 
 (defun julia-snail--efn (path &optional starting-dir)
@@ -843,6 +861,13 @@ returns \"/home/username/file.jl\"."
                 "set!(:repl_display_eval_results, true)"
                 :repl-buf repl-buf
                 :async nil))
+            ;; ensure the `default-directory' is correct in case of
+            ;; remote REPLs
+            (julia-snail--send-to-server
+              :Main
+              (format "cd(%s)" (json-encode-string (julia-snail--efn default-directory)))
+              :repl-buf repl-buf
+              :async nil)
             ;; other initializations can go here
             ;; all done!
             (message "Snail initialization complete. Happy hacking!")
@@ -1517,6 +1542,14 @@ different line."
       (when (and (listp eval-data) (car eval-data))
         (cadr eval-data)))))
 
+(defun julia-snail--record-eval-result (str)
+  "Store STR as the latest inline evaluation result for the current buffer."
+  (when (and (stringp str)
+             (> (length (s-trim str)) 0))
+    (setq julia-snail--last-eval-result str)
+    (when julia-snail-copy-eval-results-to-kill-ring
+      (kill-new str))))
+
 (defvar julia-snail--popup-cleanup-skip-kludge nil)
 
 (cl-defun julia-snail--popup-display (pt str &key (use-cleanup-kludge nil))
@@ -1802,12 +1835,22 @@ Currently only works on blocks terminated with `end'."
         line-num
         :popup-display-params (julia-snail--popup-params block-end)
         :callback-success (lambda (_request-info &optional data)
-                            (julia-snail--popup-display block-end (julia-snail--popup-extract-string data))
+                            (let ((str (julia-snail--popup-extract-string data)))
+                              (julia-snail--record-eval-result str)
+                              (julia-snail--popup-display block-end str))
                             (message "Top-level form evaluated: %s; module %s"
                                      (if top-level-form-name
                                          top-level-form-name
                                        "unknown")
                                      (julia-snail--construct-module-path module)))))))
+
+(defun julia-snail-copy-last-eval-result ()
+  "Copy the latest inline evaluation result for the current buffer to the kill ring."
+  (interactive)
+  (unless julia-snail--last-eval-result
+    (user-error "No inline evaluation result available"))
+  (kill-new julia-snail--last-eval-result)
+  (message "Copied latest inline evaluation result"))
 
 (defun julia-snail-send-dwim ()
   "Send region, block, or line to Julia REPL."
@@ -2004,6 +2047,7 @@ autocompletion aware of the available modules."
     (define-key map (kbd "C-c C-z") #'julia-snail)
     (define-key map (kbd "C-c C-a") #'julia-snail-package-activate)
     (define-key map (kbd "C-c C-d") #'julia-snail-doc-lookup)
+    (define-key map (kbd "C-c C-w") #'julia-snail-copy-last-eval-result)
     (define-key map (kbd "C-c C-c") #'julia-snail-send-top-level-form)
     (define-key map (kbd "C-M-x") #'julia-snail-send-top-level-form)
     (define-key map (kbd "C-c C-r") #'julia-snail-send-region)
@@ -2028,6 +2072,7 @@ autocompletion aware of the available modules."
     ["Switch to REPL" julia-snail]
     ["Activate package" julia-snail-package-activate]
     ["Lookup documentation" julia-snail-doc-lookup]
+    ["Copy last inline result" julia-snail-copy-last-eval-result]
     ["Update module cache" julia-snail-update-module-cache]
     "---"
     ["Evaluate line" julia-snail-send-line]

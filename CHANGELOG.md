@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `repl-history` extension: support Eat terminals ([#154](https://github.com/gcv/julia-snail/issues/154)).
+- Update REPL completion to deal with the Julia 1.12 API ([#184](https://github.com/gcv/julia-snail/issues/184)).
+- Follow symlinks when copying Julia files to remote ([#190](https://github.com/gcv/julia-snail/issues/190)).
+- Remote REPLs now start in the source buffer's working directory ([#192](https://github.com/gcv/julia-snail/pull/192)).
 
 
 ### Added
@@ -19,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update the REPL's `ans` variable after evaluating something through Snail.
 - `debug` extension added, which integrates `DebugAdapter` and `dape` for REPL debugging.
 - `julia-snail-analyze-includes`: a new approach for handling nested modules.
+- Add `julia-snail-copy-last-eval-result` and `julia-snail-copy-eval-results-to-kill-ring` for copying inline evaluation results.
 
 
 ### Changed
