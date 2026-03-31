@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update the REPL's `ans` variable after evaluating something through Snail.
 - `debug` extension added, which integrates `DebugAdapter` and `dape` for REPL debugging.
 - `julia-snail-analyze-includes`: a new approach for handling nested modules.
+- Add `julia-snail-copy-last-eval-result` and `julia-snail-copy-eval-results-to-kill-ring` for copying inline evaluation results.
 
 
 ### Changed
