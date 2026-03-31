@@ -846,7 +846,7 @@ returns \"/home/username/file.jl\"."
             ;; remote REPLs
             (julia-snail--send-to-server
               :Main
-              (format "cd(\"%s\")" (julia-snail--efn default-directory))
+              (format "cd(%s)" (json-encode-string (julia-snail--efn default-directory)))
               :repl-buf repl-buf
               :async nil)
             ;; other initializations can go here
