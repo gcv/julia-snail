@@ -745,7 +745,7 @@ function blockat(encodedbuf, byteloc)
          push!(modules, nodename(node.expr))
       elseif isnothing(description)
          if JS.kind(node.expr) ∈ [JS.K"function", JS.K"macro",
-                                  JS.K"struct",
+                                  JS.K"struct", JS.K"mutable",
                                   JS.K"abstract", JS.K"primitive"]
             description = nodename(node.expr)
             start = node.start
@@ -856,7 +856,7 @@ function includesin(encodedbuf, path="")
    tree = parse(encodedbuf)
    results = Dict{String,Vector{String}}()
 
-   helper = (node, modules = Symbol[]) -> begin
+   helper = (node, modules = String[]) -> begin
       if JS.haschildren(node)
          for child in JS.children(node)
             kind = JS.kind(child)

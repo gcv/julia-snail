@@ -9,6 +9,7 @@ import Base64
    s4 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s4.jl"), String))
    s5 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s5.jl"), String))
    s6 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s6.jl"), String))
+   s7 = Base64.base64encode(read(joinpath(@__DIR__, "files", "s7.jl"), String))
 
    @testset "module detection" begin
       @test [:list] == JuliaSnail.JStx.moduleat(s1, 0)
@@ -79,6 +80,22 @@ import Base64
       @test [:list, (), 610, 651, "load"] == JuliaSnail.JStx.blockat(s6, 619)
       @test [:list, (), 653, 681, "load2"] == JuliaSnail.JStx.blockat(s6, 662)
       @test [:list, (), 683, 727, "load3"] == JuliaSnail.JStx.blockat(s6, 692)
+   end
+
+   @testset "Mutable struct and baremodule" begin
+      @test [:list, "Bare"] == JuliaSnail.JStx.moduleat(s7, 40)
+
+      result = JuliaSnail.JStx.blockat(s7, 40)
+      @test !isnothing(result)
+      @test result[2] == tuple("Bare")
+      @test result[5] == "MPoint"
+
+      tree = JuliaSnail.JStx.codetree(s7)
+      @test !isnothing(tree)
+      @test tree[1] == :list
+      @test tree[2][1] == :module
+      @test tree[2][2] == "Bare"
+      @test tree[2][4] == Any[(:struct, "MPoint", 18)]
    end
 
 end
