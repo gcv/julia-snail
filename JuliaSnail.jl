@@ -18,10 +18,36 @@ module JuliaSnail
 import Markdown
 import Printf
 import REPL
+import SHA
 import Sockets
 import REPL.REPLCompletions
 
 export start, stop
+
+
+const juliasyntax_project = """
+[deps]
+JuliaSyntax = "70703baa-626e-46a2-a12c-08ffd08c73b4"
+
+[compat]
+JuliaSyntax = "~1.0.2"
+"""
+
+function runtime_dir(root=@__DIR__)
+   base = joinpath(tempdir(), "julia-snail-" * bytes2hex(SHA.sha256(abspath(root))))
+   mkpath(base)
+   base
+end
+
+function ensure_juliasyntax_env!()
+   envdir = joinpath(runtime_dir(), "juliasyntax")
+   mkpath(envdir)
+   project = joinpath(envdir, "Project.toml")
+   if !isfile(project) || read(project, String) != juliasyntax_project
+      write(project, juliasyntax_project)
+   end
+   envdir
+end
 
 
 ### --- package loading support code
@@ -39,8 +65,8 @@ containing the relevant Project.toml file at the end of the LOAD_PATH. This
 allows Snail's dependencies to be loaded, but not disturb any environments the
 user wants to activate.
 
-This is no longer used for the Snail core. Extensions are welcome to use it for
-now.
+This is used by Snail's fallback JuliaSyntax bootstrap on older Julia versions.
+Extensions are also welcome to use it for their own Julia-side dependencies.
 
 Snail's own dependencies need to be listed first in LOAD_PATH during initial
 load, otherwise conflicting versions installed in the Julia global environment
@@ -59,31 +85,44 @@ end
 ```
 """
 macro with_pkg_env(dir, action)
+   (dir, action) = esc.((dir, action))
    :(
-   try
-      insert!(LOAD_PATH, 1, $dir)
-      $action
-   catch err
-      if isa(err, ArgumentError)
-         if isfile(joinpath($dir, "Project.toml"))
-            # force dependency installation
-            Main.Pkg.activate($dir)
-            Main.Pkg.instantiate()
-            Main.Pkg.precompile()
-            # activate what was the first entry before Snail was pushed to the head of LOAD_PATH
-            Main.Pkg.activate(LOAD_PATH[2])
+   let snail_env_dir = $dir,
+       snail_env_instantiated = false
+      while true
+         # Snail's dependencies need to be listed first in LOAD_PATH during initial
+         # load, otherwise conflicting versions installed in the Julia global
+         # environment can leak in.
+         insert!(LOAD_PATH, 1, snail_env_dir)
+         try
+            $action
+            break
+         catch err
+            if !snail_env_instantiated && isa(err, ArgumentError) && isfile(joinpath(snail_env_dir, "Project.toml"))
+               # force dependency installation
+               Main.Pkg.activate(snail_env_dir)
+               Main.Pkg.instantiate()
+               Main.Pkg.precompile()
+               # activate what was the first entry before Snail was pushed to the head of LOAD_PATH
+               if length(LOAD_PATH) >= 2
+                  Main.Pkg.activate(LOAD_PATH[2])
+               end
+               # Retry the action once after dependency installation.
+               snail_env_instantiated = true
+            else
+               rethrow(err)
+            end
+         finally
+            # Remove Snail's environment from the head of LOAD_PATH and put it at
+            # the tail. At this point its own dependencies should be loaded, while
+            # the user's preferred project remains the primary environment.
+            deleteat!(LOAD_PATH, 1)
+            if isfile(joinpath(snail_env_dir, "Project.toml")) && !(snail_env_dir in LOAD_PATH)
+               push!(LOAD_PATH, snail_env_dir)
+            end
          end
       end
-   finally
-      # Remove Snail from the head of the LOAD_PATH and put it at the tail. At this
-      # point, all of its own dependencies should be loaded and the user's
-      # preferred project should be active.
-      deleteat!(LOAD_PATH, 1)
-      if isfile(joinpath($dir, "Project.toml"))
-         push!(LOAD_PATH, $dir)
-      end
-   end
-   )
+   end)
 end
 
 
@@ -512,7 +551,17 @@ end
 module JStx
 
 import Base64
-import Base.JuliaSyntax as JS
+
+@static if VERSION >= v"1.10"
+   import Base.JuliaSyntax
+   const JS = Base.JuliaSyntax
+else
+   const envdir = Main.JuliaSnail.ensure_juliasyntax_env!()
+   Main.JuliaSnail.@with_pkg_env envdir begin
+      import JuliaSyntax
+   end
+   const JS = JuliaSyntax
+end
 
 """
 Parse a Base64-encoded buffer containing Julia code using JuliaSyntax.
@@ -983,13 +1032,6 @@ during evaluation are captured and sent back to the client as Elisp
 s-expressions. Special queries also write back their responses as s-expressions.
 """
 function start(port=10011; addr="127.0.0.1")
-   if VERSION < v"1.10"
-      # JuliaSyntax only ships with 1.10.
-      # This is an exception-throwing error, and it's placed here so users have
-      # a chance to see it before the terminal closes.
-      error("ERROR: Julia Snail now requires Julia 1.10 or higher")
-   end
-
    global running = false
    global server_socket = Sockets.listen(Sockets.IPv4(addr), port)
    let wait_result = timedwait(function(); server_socket.status == Base.StatusActive; end,
