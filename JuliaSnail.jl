@@ -660,7 +660,7 @@ function nodename(node::JS.SyntaxNode)
       # primitive type Point24 24 end
       # primitive type Int8 <: Integer 8 end
       grandchildren = JS.children(children[1])
-      if length(grandchildren) > 0
+      if !isnothing(grandchildren) && length(grandchildren) > 0
          return string(grandchildren[1])
       else
          return string(children[1])
@@ -671,7 +671,7 @@ function nodename(node::JS.SyntaxNode)
       # abstract type AbstractPoint1 end
       # abstract type AbstractPoint2 <: Number end
       grandchildren = JS.children(children[1])
-      if length(grandchildren) > 0
+      if !isnothing(grandchildren) && length(grandchildren) > 0
          return string(grandchildren[1])
       else
          return string(children[1])
