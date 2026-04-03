@@ -16,6 +16,24 @@ import Pkg
 
 module JuliaSnail
 
+function pkg_env_for_bootstrap(dir)
+   if iswritable(dir)
+      return dir
+   end
+   env_name = "julia-snail-" * string(hash(abspath(dir)), base=16)
+   cache = joinpath(first(Base.DEPOT_PATH), "environments", env_name)
+   mkpath(cache)
+   cp(joinpath(dir, "Project.toml"), joinpath(cache, "Project.toml"); force=true)
+   let manifest_src = joinpath(dir, "Manifest.toml")
+      isfile(manifest_src) && cp(manifest_src, joinpath(cache, "Manifest.toml"); force=true)
+   end
+   cache
+end
+
+bootstrap_required(err) =
+   isa(err, ArgumentError) ||
+   (isa(err, LoadError) && isa(err.error, ArgumentError))
+
 
 # XXX: External dependency hack. Snail's own dependencies need to be listed
 # first in LOAD_PATH during initial load, otherwise conflicting versions
@@ -24,27 +42,33 @@ module JuliaSnail
 # the rest of the time.
 macro with_pkg_env(dir, action)
    :(
-   try
-      insert!(LOAD_PATH, 1, $dir)
-      $action
-   catch err
-      if isa(err, ArgumentError)
-         if isfile(joinpath($dir, "Project.toml"))
+   let _snail_prev_project = Base.active_project(),
+       _snail_pkg_env = Main.JuliaSnail.pkg_env_for_bootstrap($(esc(dir)))
+      try
+         insert!(LOAD_PATH, 1, _snail_pkg_env)
+         Main.Pkg.activate(_snail_pkg_env)
+         $(esc(action))
+      catch err
+         if Main.JuliaSnail.bootstrap_required(err) && isfile(joinpath(_snail_pkg_env, "Project.toml"))
             # force dependency installation
-            Main.Pkg.activate($dir)
+            Main.Pkg.activate(_snail_pkg_env)
             Main.Pkg.instantiate()
             Main.Pkg.precompile()
-            # activate what was the first entry before Snail was pushed to the head of LOAD_PATH
-            Main.Pkg.activate(LOAD_PATH[2])
+            $(esc(action))
+         else
+            rethrow(err)
          end
-      end
-   finally
-      # Remove Snail from the head of the LOAD_PATH and put it at the tail. At this
-      # point, all of its own dependencies should be loaded and the user's
-      # preferred project should be active.
-      deleteat!(LOAD_PATH, 1)
-      if isfile(joinpath($dir, "Project.toml"))
-         push!(LOAD_PATH, $dir)
+      finally
+         # Remove Snail from the head of the LOAD_PATH and put it at the tail. At this
+         # point, all of its own dependencies should be loaded and the user's
+         # preferred project should be active.
+         deleteat!(LOAD_PATH, 1)
+         if isfile(joinpath(_snail_pkg_env, "Project.toml"))
+            push!(LOAD_PATH, _snail_pkg_env)
+         end
+         if !isnothing(_snail_prev_project)
+            Main.Pkg.activate(dirname(_snail_prev_project))
+         end
       end
    end
    )
