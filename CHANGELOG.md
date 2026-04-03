@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- Switched the parser backend to `JuliaSyntax`, using `Base.JuliaSyntax` on Julia 1.10 and later and a Snail-managed `JuliaSyntax.jl` environment on older Julia versions ([#149](https://github.com/gcv/julia-snail/issues/149)).
+
+
+## [1.3.3] — 2026-04-02
+
 ### Fixed
 
 - `repl-history` extension: support Eat terminals ([#154](https://github.com/gcv/julia-snail/issues/154)).
@@ -27,7 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Switched the parser backend to `JuliaSyntax`, using `Base.JuliaSyntax` on Julia 1.10 and later and a Snail-managed `JuliaSyntax.jl` environment on older Julia versions ([#149](https://github.com/gcv/julia-snail/issues/149)).
 - Standardized on using `locate-library` to locate Snail's installation ([#147](https://github.com/gcv/julia-snail/issues/147)).
 
 
