@@ -580,7 +580,7 @@ Returns nil if the poll timed out, t otherwise."
                                    buffer-file-coding-system))))
     (base64-encode-string s)))
 
-(defun julia-snail--copy-snail-to-remote-host ()
+(defun julia-snail--stage-julia-runtime ()
   (let* (;; checksum all relevant files as one, copy into a directory
          ;; keyed off the checksum if it doesn't already exist (basically cache
          ;; the current version of the Julia code (.jl and .toml files)
@@ -589,16 +589,23 @@ Returns nil if the poll timed out, t otherwise."
                               (when (file-regular-p f)
                                 (insert-file-contents-literally f)))
                      (secure-hash 'sha256 (current-buffer))))
-         (snail-remote-dir (concat (file-name-as-directory (temporary-file-directory))
-                                   (concat "julia-snail-" checksum "/"))))
-    (unless (file-exists-p snail-remote-dir)
-      (make-directory snail-remote-dir)
+         (staged-runtime-dir (concat (file-name-as-directory (temporary-file-directory))
+                                     (concat "julia-snail-" checksum "/")))
+         (staged-server-file (concat staged-runtime-dir "JuliaSnail.jl")))
+    (unless (file-exists-p staged-server-file)
+      (when (file-exists-p staged-runtime-dir)
+        (delete-directory staged-runtime-dir t))
+      (make-directory staged-runtime-dir t)
       (let ((default-directory (file-name-directory (locate-library "julia-snail"))))
         (cl-loop for f in julia-snail--julia-files do
                  (if (file-directory-p f)
-                     (make-directory (concat snail-remote-dir f))
-                   (copy-file (file-truename f) (concat snail-remote-dir (file-name-directory f)) t)))))
-    snail-remote-dir))
+                     (make-directory (concat staged-runtime-dir f) t)
+                    (copy-file (file-truename f) (concat staged-runtime-dir (file-name-directory f)) t)))))
+    staged-runtime-dir))
+
+(defun julia-snail--local-runtime-needs-staging-p ()
+  "Return non-nil when the installed Julia runtime directory is not writable."
+  (not (file-writable-p (file-name-directory julia-snail--server-file))))
 
 (defun julia-snail--launch-command ()
   (let* ((extra-args (if (listp julia-snail-extra-args)
@@ -607,13 +614,19 @@ Returns nil if the poll timed out, t otherwise."
 	 (remote-method (file-remote-p default-directory 'method))
          (remote-user (file-remote-p default-directory 'user))
          (remote-host (file-remote-p default-directory 'host))
-	 (remote-dir-server-file (if (equal nil remote-method)
-				     ""
-				   (concat (file-remote-p (julia-snail--copy-snail-to-remote-host) 'localname) "JuliaSnail.jl"))))
+	 (staged-runtime-dir (when (or remote-method
+                                      (julia-snail--local-runtime-needs-staging-p))
+                              (julia-snail--stage-julia-runtime)))
+         (server-file (if staged-runtime-dir
+                          (let ((staged-server-file (concat staged-runtime-dir "JuliaSnail.jl")))
+                            (if remote-method
+                                (file-remote-p staged-server-file 'localname)
+                              staged-server-file))
+                        julia-snail--server-file)))
     (cond
      ;; local REPL
      ((equal nil remote-method)
-      (format "%s -i %s -L %s" julia-snail-executable extra-args julia-snail--server-file))
+      (format "%s -i %s -L %s" julia-snail-executable extra-args server-file))
      ;; remote REPL
      ((or (string-equal "ssh" remote-method)
           (string-equal "sshx" remote-method)
@@ -625,16 +638,16 @@ Returns nil if the poll timed out, t otherwise."
               (concat
                (if remote-user (concat remote-user "@") "")
                remote-host)
-              julia-snail-executable
-              extra-args
-              remote-dir-server-file))
+               julia-snail-executable
+               extra-args
+               server-file))
      ;; container REPL
      ((string-equal "docker" remote-method)
       (format "docker exec -it %s %s %s -L %s"
 	      remote-host
 	      julia-snail-executable
 	      extra-args
-	      remote-dir-server-file))
+	      server-file))
      ;; unsupported method
      (t
       (user-error "Unsupported Tramp method %s" remote-method)))))
