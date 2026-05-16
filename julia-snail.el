@@ -580,6 +580,33 @@ Returns nil if the poll timed out, t otherwise."
                                    buffer-file-coding-system))))
     (base64-encode-string s)))
 
+(defun julia-snail--file-checksum (file)
+  (with-temp-buffer
+    (insert-file-contents-literally file)
+    (secure-hash 'sha256 (current-buffer))))
+
+(defun julia-snail--staged-runtime-private-p (staged-runtime-dir)
+  (let ((modes (file-modes staged-runtime-dir)))
+    (and modes
+         (zerop (logand modes #o077)))))
+
+(defun julia-snail--staged-runtime-current-p (staged-runtime-dir)
+  (condition-case nil
+      (and (julia-snail--staged-runtime-private-p staged-runtime-dir)
+           (cl-loop for f in julia-snail--julia-files
+                    for local-f in julia-snail--julia-files-local
+                    for staged-f = (concat staged-runtime-dir f)
+                    always
+                    (cond
+                     ((file-directory-p local-f)
+                      (file-directory-p staged-f))
+                     ((file-regular-p local-f)
+                      (and (file-regular-p staged-f)
+                           (string-equal (julia-snail--file-checksum local-f)
+                                         (julia-snail--file-checksum staged-f))))
+                     (t nil))))
+    (error nil)))
+
 (defun julia-snail--stage-julia-runtime ()
   (let* (;; checksum all relevant files as one, copy into a directory
          ;; keyed off the checksum if it doesn't already exist (basically cache
@@ -590,12 +617,12 @@ Returns nil if the poll timed out, t otherwise."
                                 (insert-file-contents-literally f)))
                      (secure-hash 'sha256 (current-buffer))))
          (staged-runtime-dir (concat (file-name-as-directory (temporary-file-directory))
-                                     (concat "julia-snail-" checksum "/")))
-         (staged-server-file (concat staged-runtime-dir "JuliaSnail.jl")))
-    (unless (file-exists-p staged-server-file)
+                                     (concat "julia-snail-" checksum "/"))))
+    (unless (julia-snail--staged-runtime-current-p staged-runtime-dir)
       (when (file-exists-p staged-runtime-dir)
         (delete-directory staged-runtime-dir t))
       (make-directory staged-runtime-dir t)
+      (set-file-modes staged-runtime-dir #o700)
       (let ((default-directory (file-name-directory (locate-library "julia-snail"))))
         (cl-loop for f in julia-snail--julia-files do
                  (if (file-directory-p f)

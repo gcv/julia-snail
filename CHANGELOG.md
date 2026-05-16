@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Support starting Snail from read-only installations, such as Nix store paths, by staging the Julia runtime in a writable checksum-keyed cache before bootstrap ([#193](https://github.com/gcv/julia-snail/pull/193), fixes [#117](https://github.com/gcv/julia-snail/issues/117)).
+- Staged runtime cache hits now require a private cache directory and runtime files that match the installed copies; stale or tampered staged files are rebuilt before use.
 
 
 ## [1.3.3] — 2026-04-02
