@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Switched the parser backend to `JuliaSyntax`, using `Base.JuliaSyntax` on Julia 1.10 and later and a Snail-managed `JuliaSyntax.jl` environment on older Julia versions ([#149](https://github.com/gcv/julia-snail/issues/149)).
 
 
+### Added
+
+- Support for ghostel for REPL terminal emulation ([#196](https://github.com/gcv/julia-snail/pull/196)).
+
+
 ## [1.3.3] — 2026-04-02
 
 ### Fixed

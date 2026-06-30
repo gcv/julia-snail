@@ -44,7 +44,7 @@
 (require 'thingatpt)
 (require 'xref)
 
-;; XXX: One of vterm or eat must be manually installed before Snail starts.
+;; XXX: One of vterm, eat, or ghostel must be manually installed before Snail starts.
 ;; Picking one or the other involves tradeoffs best left to the user, and
 ;; therefore neither is added to the Package-Requires header. Briefly, vterm
 ;; supports older versions of Emacs (down to 26) but has more complicated module
@@ -52,8 +52,9 @@
 ;; two emulate terminals differently, and so one may be preferable to the other
 ;; for other reasons.
 (when (not (or (locate-library "vterm")
-               (locate-library "eat")))
-  (user-error "Neither vterm nor eat dependencies detected; please install one or the other"))
+               (locate-library "eat")
+               (locate-library "ghostel")))
+  (user-error "Neither vterm, eat, nor ghostel dependencies detected; please install one"))
 
 (when (locate-library "vterm")
   (require 'vterm))
@@ -69,6 +70,15 @@
 (declare-function eat-term-send-string "eat.el")
 (declare-function eat-self-input "eat.el")
 (defvar eat-terminal)
+
+(when (locate-library "ghostel")
+  (require 'ghostel))
+(declare-function ghostel "ghostel.el")
+(declare-function ghostel-send-string "ghostel.el")
+(declare-function ghostel-send-key "ghostel.el")
+(declare-function ghostel-readonly-end-of-line "ghostel.el")
+(defvar ghostel-shell)
+(defvar ghostel-buffer-name)
 
 
 ;;; --- customizations
@@ -121,14 +131,20 @@
 (make-variable-buffer-local 'julia-snail-repl-buffer)
 
 (defcustom julia-snail-terminal-type
-  (if (locate-library "vterm") :vterm :eat) ; default to :vterm for historical compatibility
+  ;; default to :vterm for historical compatibility
+  (cond
+   ((locate-library "vterm") :vterm)
+   ((locate-library "eat") :eat)
+   ((locate-library "ghostel") :ghostel)
+   (t :vterm))
   "Which Emacs terminal emulator to use for the Julia REPL."
   :tag "Terminal type"
   :group 'julia-snail
-  :options '(:eat :vterm)
-  :safe (lambda (v) (memq v '(:eat :vterm)))
+  :options '(:eat :vterm :ghostel)
+  :safe (lambda (v) (memq v '(:eat :vterm :ghostel)))
   :type '(choice (const :tag "Eat" :eat)
-                 (const :tag "vterm" :vterm)))
+                 (const :tag "vterm" :vterm)
+                 (const :tag "ghostel" :ghostel)))
 ;;(make-variable-buffer-local 'julia-snail-terminal-type) ; XXX: Let's not make this a buffer-local switch. Too messy.
 
 (defcustom julia-snail-show-error-window t
@@ -721,6 +737,19 @@ Supports multiple terminal implementations."
                (with-current-buffer terml-buf
                  (rename-buffer repl-buffer-name))
                terml-buf))
+            ;; ghostel
+            ((eq :ghostel julia-snail-terminal-type)
+             (let* ((command-and-args (split-string-and-unquote launch-command))
+                    (command (executable-find (seq-first command-and-args)))
+                    (args (seq-rest command-and-args))
+                    (buffer (generate-new-buffer julia-snail-repl-buffer)))
+               (pop-to-buffer buffer)
+               (ghostel-exec buffer command args)
+               ;; Prevent ghostel's title tracking logic from messing up our
+               ;; buffer name.
+               (with-current-buffer buffer
+                 (setq-local ghostel-buffer-name-function nil))
+               buffer))
             ;; unsupported value
             (t
              (user-error "unsupported value for julia-snail-terminal-type: %s" julia-snail-terminal-type)))))
@@ -955,6 +984,9 @@ returns \"/home/username/file.jl\"."
    ;; vterm
    ((eq 'vterm-mode major-mode)
     (vterm-send-string str))
+   ;; ghostel
+   ((eq 'ghostel-mode major-mode)
+    (ghostel-send-string str))
    ;; error and debugging
    (t
     (error "function called out of context; (with-current-buffer repl-buf ...) required"))))
@@ -971,12 +1003,23 @@ returns \"/home/username/file.jl\"."
    ;; vterm
    ((eq 'vterm-mode major-mode)
     (vterm-send-return))
+   ;; ghostel
+   ((eq 'ghostel-mode major-mode)
+    (ghostel-send-key "return"))
    ;; error and debugging
    (t
     (error "function called out of context; (with-current-buffer repl-buf ...) required"))))
 
 
 ;;; --- Julia REPL and Snail server interaction functions
+
+(defun julia-snail--looking-back-string (str)
+  "Return t if the buffer contents preceding point matches `str'. The same
+as `looking-back', but for string matches instead of regular expression
+matches."
+  (string-equal str
+                (buffer-substring-no-properties (- (point) (length str))
+                                                (point))))
 
 (cl-defun julia-snail--send-to-repl
     (str
@@ -1002,7 +1045,7 @@ wait for the REPL prompt to return, otherwise return immediately."
       ;; wait for the inclusion to succeed (i.e., the prompt prints)
       (julia-snail--wait-while
        (with-current-buffer repl-buf
-         (not (string-equal "julia>" (current-word))))
+         (not (julia-snail--looking-back-string "julia> ")))
        polling-interval
        polling-timeout))))
 
@@ -2021,6 +2064,18 @@ This will occur in the context of the Main module, just as it would at the REPL.
    ((eq 'vterm-mode major-mode)
     (kill-ring-save (point) (vterm-end-of-line))
     (vterm-send-key "k" nil nil t))
+   ;; ghostel
+   ((eq 'ghostel-mode major-mode)
+    (if buffer-read-only
+        ;; When a ghostel buffer is in emacs input mode or copy input mode, the
+        ;; buffer is marked as read only, and C-k is bound to the usual
+        ;; `kill-line', so we'll do the same here.
+        (kill-line)
+      ;; Otherwise, it is in a terminal-like mode, so we put content on the yank
+      ;; ring and then send the C-k key.
+      (progn
+        (kill-ring-save (point) (line-end-position))
+        (ghostel-send-key "k" "ctrl"))))
    ;; error and debugging
    (t
     (error "function called out of context; (with-current-buffer repl-buf ...) required"))))
@@ -2174,7 +2229,9 @@ The following keys are set:
   :init-value nil
   :lighter (:eval (julia-snail--mode-lighter))
   :keymap julia-snail-repl-mode-map
-  (when (or (eq 'vterm-mode major-mode) (eq 'eat-mode major-mode))
+  (when (or (eq 'vterm-mode major-mode)
+            (eq 'eat-mode major-mode)
+            (eq 'ghostel-mode major-mode))
     (if julia-snail-repl-mode
         (julia-snail--repl-enable)
       (julia-snail--repl-disable))))

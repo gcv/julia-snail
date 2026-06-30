@@ -4,7 +4,7 @@
 
 Snail is a development environment and REPL interaction package for Julia in the spirit of Common Lisp’s [SLIME](https://common-lisp.net/project/slime/) and Clojure’s [CIDER](https://cider.mx). It enables convenient and dynamic REPL-driven development.
 
-Snail works on platforms which support [libvterm](https://github.com/neovim/libvterm) or [Eat](https://codeberg.org/akib/emacs-eat), which currently means Unix-like systems. It should also work on Windows using [WSL](https://docs.microsoft.com/en-us/windows/wsl/about).
+Snail works on platforms which support [libvterm](https://github.com/neovim/libvterm), [Eat](https://codeberg.org/akib/emacs-eat), or [ghostel](https://github.com/dakra/ghostel), which currently means Unix-like systems. It should also work on Windows using [WSL](https://docs.microsoft.com/en-us/windows/wsl/about).
 
 Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELOG.md) for release notes.
 
@@ -46,7 +46,7 @@ Refer to the [changelog](https://github.com/gcv/julia-snail/blob/master/CHANGELO
 
 ## Features
 
-- **REPL display:** Snail uses advanced terminal emulators ([libvterm](https://github.com/neovim/libvterm) with [Emacs bindings](https://github.com/akermu/emacs-libvterm) or [Eat](https://codeberg.org/akib/emacs-eat)) to display Julia’s native REPL. As a result, the REPL has good performance and far fewer display glitches than attempting to run the REPL in an Emacs-native `term.el` buffer.
+- **REPL display:** Snail uses advanced terminal emulators ([libvterm](https://github.com/neovim/libvterm) with [Emacs bindings](https://github.com/akermu/emacs-libvterm), [Eat](https://codeberg.org/akib/emacs-eat)), or [ghostel](https://github.com/dakra/ghostel) to display Julia’s native REPL. As a result, the REPL has good performance and far fewer display glitches than attempting to run the REPL in an Emacs-native `term.el` buffer.
 - **REPL interaction:** Snail provides a bridge between Julia code and a Julia process running in a REPL. The bridge allows Emacs to interact with and introspect the Julia image. Among other things, this allows loading entire files and individual functions into running Julia processes.
 - **Remote REPLs:** Julia sessions on remote machines work transparently with Snail using SSH and Emacs Tramp.
 - **Multimedia and plotting:** Snail can display Julia graphics in graphical Emacs instances using packages like [Plots](http://juliaplots.org) and [Gadfly](http://gadflyjl.org).
@@ -66,7 +66,7 @@ Snail supports Julia 1.6 and later.
 
 Core Snail has no always-on Julia-side dependencies. On Julia versions <1.10, or when using extensions that have Julia dependencies, Snail will bootstrap those dependencies on startup and keep them out of your way using Julia’s [`LOAD_PATH` mechanism](https://docs.julialang.org/en/v1/base/constants/#Base.LOAD_PATH).
 
-On the Emacs side, you must install one of the supported high-performance terminal emulators to use with the Julia REPL: either `vterm` or [Eat](https://codeberg.org/akib/emacs-eat).
+On the Emacs side, you must install one of the supported high-performance terminal emulators to use with the Julia REPL: `vterm`, [Eat](https://codeberg.org/akib/emacs-eat), or [ghostel](https://github.com/dakra/ghostel).
 
 
 ### `vterm`
@@ -101,6 +101,11 @@ Eat requires Emacs 28.1 or later. Install and configure it. The following `use-p
   (makunbound 'eat--prevent-use-package-config-recursion)
   )
 ```
+
+### Ghostel
+
+1. Install [ghostel](https://github.com/dakra/ghostel) using your Emacs package manager. It is available from [MELPA](https://melpa.org/#/ghostel), so use something like `(package-install 'ghostel)` or `(use-package ghostel :ensure t)`.
+2. Verify that `ghostel` works by running `M-x ghostel` to start a shell. It should display a nice terminal buffer. You may find it useful to customize and configure `ghostel`.
 
 
 ### Snail
@@ -140,6 +145,18 @@ To use Eat instead of `vterm`, set `julia-snail-terminal-type` to `:eat`:
   (julia-snail-terminal-type :eat)
   :hook
   (julia-mode . julia-snail-mode))
+```
+
+To use ghostel instead, set `julia-snail-terminal-type` to `:ghostel`:
+
+```elisp
+(use-package julia-snail
+  :ensure t
+  :custom
+  (julia-snail-terminal-type :ghostel)
+  :hook
+  (julia-mode . julia-snail-mode)
+  :after ghostel)
 ```
 
 
