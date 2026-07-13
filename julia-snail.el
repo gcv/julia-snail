@@ -1394,8 +1394,10 @@ different line."
 ;;; --- xref implementation
 
 (defun julia-snail-xref-backend ()
-  "Emacs xref API."
-  'xref-julia-snail)
+  "Emacs xref API: return the Snail xref backend when Snail is usable."
+  (and julia-snail-mode
+       (get-buffer julia-snail-repl-buffer)
+       'xref-julia-snail))
 
 (cl-defmethod xref-backend-identifier-at-point ((_backend (eql xref-julia-snail)))
   "Emacs xref API."
